@@ -1,0 +1,36 @@
+/* The page before and the page after, at the end of a Journal post or a Docs page (spec 4.6): side by side where there is
+   room, one under the other where there is not. Alone, a neighbour takes the whole row, so Previous stays at the left
+   and Next at the right. The links are the reading column's prose links (base.css). */
+.pager {
+  container-type: inline-size;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-5);
+  margin: var(--space-6) 0 0;
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--hair);
+}
+
+.pager__item {
+  flex: 1 1 14rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.pager__item--next {
+  text-align: right;
+}
+
+.pager__label {
+  display: block;
+  margin-bottom: var(--space-1);
+}
+
+/* Where the two no longer fit side by side (two 14rem items and the 2.5rem gap: 30.5rem of the pager's own width, which is
+   the column's and not the screen's, so the component catalog's narrow frames on a wide screen read as a phone does), both read
+   from the left. */
+@container (width < 30.5rem) {
+  .pager__item--next {
+    text-align: left;
+  }
+}

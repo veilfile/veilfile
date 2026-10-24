@@ -1,0 +1,10 @@
+{% extends "layouts/chapter.html" %}
+{# Page: not allowed (spec 4.9), for a view that raised PermissionDenied. Context: none. #}
+{# Never print the exception or anything else of the request (a test reads this file for those names). #}
+{% block title %}Not allowed | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block preload_heading %}{% endblock %}
+{% block chapter %}
+<h1 class="chapter__title">Not allowed.</h1>
+<p>You do not have access to this page. If you expected to, <a href="{% url 'login' %}">sign in</a> with the account that does.</p>
+{% endblock %}

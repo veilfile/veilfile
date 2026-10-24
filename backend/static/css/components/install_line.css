@@ -1,0 +1,82 @@
+/* The install line (spec 4.2): tabs over one hairline box with Copy, and the line each tab reveals
+   after Copy, its space held from the start so nothing moves. The command scrolls inside its box.
+   The three panels share one grid cell, so the line is as tall as the tallest (the MCP line wraps)
+   whichever tab is chosen, and wherever the line sits it does not change height. */
+.install-line,
+.install-line__panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--space-3);
+  max-width: 100%;
+}
+
+.install-line__panel {
+  grid-area: 2 / 1;
+  align-content: start; /* a shorter panel keeps its rows to their content: stretched, its box would grow */
+}
+
+.install-line__panel[hidden] {
+  visibility: hidden; /* still takes its place in the cell; hidden from the eye, Tab and screen readers */
+}
+
+.install-line__tabs {
+  grid-area: 1 / 1;
+  display: flex;
+  gap: 1.6em;
+}
+
+.install-line__box {
+  display: flex;
+  align-items: center;
+  gap: 2.2em;
+  max-width: 100%;
+  padding: .95em 1.2em .95em 1.3em;
+  border: 1px solid var(--hair);
+  background: var(--box);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 1.15vw, 14px);
+  color: var(--ink);
+}
+
+.install-line__box code {
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font: inherit;
+}
+
+/* Copy says Copy, Copied or Selected: it keeps the width of the longest (eight letters, each its
+   advance plus the label's .2em tracking, and the .8em padding either side) so the box never jumps. */
+.install-line__copy {
+  min-width: calc(8ch + 3.2em);
+  text-align: center;
+}
+
+.install-line__prompt {
+  margin-right: .7em;
+  color: var(--muted);
+}
+
+.install-line__then {
+  max-width: 34ch;
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 1.1vw, 13px);
+  line-height: 1.5;
+  text-align: center;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity var(--fade) ease;
+}
+
+.install-line__then.is-shown {
+  opacity: 1;
+}
+
+.install-line__then code {
+  font: inherit;
+  color: var(--ink);
+}

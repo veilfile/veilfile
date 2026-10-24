@@ -1,0 +1,19 @@
+{% extends "layouts/form.html" %}
+{# Page: confirm revoking a key (spec 4.8). A GET only shows this form; the POST revokes and goes back to Keys with "Key revoked.". #}
+{% block title %}Revoke key | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Revoke this API key?</h1>
+<p>Agents using it will fail.</p>
+<dl>
+<dt>Name</dt>
+<dd>{{ key.name }}</dd>
+<dt>Prefix</dt>
+<dd><code>{{ key.key_prefix }}</code></dd>
+</dl>
+<form method="post">
+{% csrf_token %}
+<button class="action interactive" type="submit">Revoke key</button>
+</form>
+<p class="form-links"><a class="label interactive" href="{% url 'app-keys' %}">Keep this key</a></p>
+{% endblock %}

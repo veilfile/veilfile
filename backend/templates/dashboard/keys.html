@@ -1,0 +1,48 @@
+{% extends "layouts/app.html" %}
+{% load dashboard shell %}
+{# Page: Keys (spec 4.8). The list shows revoked keys too. The create form carries a one-time token (dashboard/forms.py); a refused or resent POST answers this page again with its own status and sentence, and never with a key. #}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block app_main %}
+<h1>Keys</h1>
+<p>Keys start with <code>vlf_</code>. Give each agent the variable name, not the value; revoke individually when a run ends.</p>
+{% if refusal %}
+{% include "components/form_errors.html" with message=refusal.message focus=True only %}
+{% if refusal.kind == "unverified" %}<p class="form-links"><a class="label interactive" href="{% url 'email-verification' %}">Verify your email</a></p>
+{% elif refusal.kind == "cap" %}<p class="form-links"><a class="label interactive" href="{% url 'app-billing' %}">Billing</a></p>
+{% endif %}
+{% endif %}
+{% focus_field form "name" as focus %}
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="token" value="{{ token }}">
+{% include "components/field.html" with id="id_name" name="name" label="Key name" value=form.name.value autocomplete="off" help="Optional. A name that tells you which agent uses it, such as ci-runner." errors=form.name.errors focus=focus extra='spellcheck="false" autocapitalize="none"' only %}
+<button class="action interactive" type="submit">Create key</button>
+</form>
+{% if rows %}
+<table class="rows">
+<caption>API keys</caption>
+<thead>
+<tr>
+<th scope="col">Name</th>
+<th scope="col">Prefix</th>
+<th scope="col">Created</th>
+<th scope="col">Last used</th>
+<th scope="col">State</th>
+<th scope="col"><span class="visually-hidden">Actions</span></th>
+</tr>
+</thead>
+<tbody>
+{% for key in rows %}<tr>
+<td data-label="Name">{{ key.name }}</td>
+<td data-label="Prefix"><code>{{ key.key_prefix }}</code></td>
+<td data-label="Created">{{ key.created_at|utc_time }}</td>
+<td data-label="Last used">{% if key.last_used_at %}{{ key.last_used_at|utc_time }}{% else %}Never{% endif %}</td>
+<td data-label="State">{% if key.is_active %}Active{% else %}Revoked{% endif %}</td>
+{% if key.is_active %}<td data-label="Actions"><a class="label interactive" href="{% url 'app-key-revoke' key.id %}">Revoke<span class="visually-hidden"> {{ key.name }}</span></a></td>{% else %}<td data-label="Actions"></td>{% endif %}
+</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}
+<p>No keys yet. Create one above to get started.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "layouts/chapter.html" %}
+{% block chapter %}
+{# Words: edit the text between here and the end marker; keep every tag, class and template tag as it is. #}
+<h1 class="chapter__title">The life of a file</h1>
+<dl class="chapter__steps">
+<dt>Made</dt>
+<dd>Your agent pushes a file through the command line, the API, or MCP.</dd>
+<dt>Veiled</dt>
+<dd>It gets back an unguessable link. The 256-bit token in the address is the only key. There is no public list of files, and nothing is indexed.</dd>
+<dt>Seen</dt>
+<dd>Share the link with whoever should see it. Uploads are checked for anything shaped like a secret, and flagged.</dd>
+<dt>Let go</dt>
+<dd>When its days run out, the link stops working at once, and the file is deleted from storage soon after.</dd>
+</dl>
+<p class="chapter__more">The technical version is in the Docs: <a href="{% url 'docs-page' 'how-it-works' %}">how it works, in full</a>.</p>
+{# End of words. #}
+{% endblock %}

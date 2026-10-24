@@ -1,0 +1,6 @@
+{# Component: controls. The appearance switch (Ink, Auto, Paper) and the motion switch, whose visible word is FX ("FX · on") and whose accessible name is "FX: motion": it holds the visible label (WCAG 2.5.3) and says what the switch does, while aria-pressed carries on or off and the visible "· on" is hidden from the name; shell.js keeps them in step with the saved choice. #}
+{# Inputs: show, "appearance" or "motion" for that one control alone (the shell puts the appearance switch bottom left and the motion switch bottom right); left out, both, side by side as a group. #}
+<div class="controls"{% if not show %} role="group" aria-label="Display"{% endif %}>
+{% if show != "motion" %}<button class="label interactive" type="button" aria-label="Appearance: Auto" data-appearance-toggle>Auto</button>
+{% endif %}{% if show != "appearance" %}<button class="label interactive" type="button" aria-pressed="true" aria-label="FX: motion" data-motion-toggle>FX <span aria-hidden="true" data-motion-state>· on</span></button>
+{% endif %}</div>

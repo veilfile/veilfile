@@ -1,0 +1,31 @@
+{% extends "layouts/app.html" %}
+{% load dashboard %}
+{# Page: Connected apps (spec 4.8): the OAuth apps a person has authorized. The name is the app's own words (any client can register under any name), so it is printed escaped and next to the host the app returns to. #}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block app_main %}
+<h1>Connected apps</h1>
+<p>MCP clients you authorized with OAuth, such as Claude Code. They can upload, list, and revoke artifacts, but cannot manage API keys. Revoking an API key does not disconnect them.</p>
+{% if rows %}
+<table class="rows">
+<caption>Connected apps</caption>
+<thead>
+<tr>
+<th scope="col">App</th>
+<th scope="col">Returns to</th>
+<th scope="col">Last authorized</th>
+<th scope="col"><span class="visually-hidden">Actions</span></th>
+</tr>
+</thead>
+<tbody>
+{% for app in rows %}<tr>
+<td data-label="App">{{ app.name }}</td>
+<td data-label="Returns to">{% if app.redirect_host %}{{ app.redirect_host }}{% else %}Not given{% endif %}</td>
+<td data-label="Last authorized">{{ app.last_authorized_at|utc_time }}</td>
+<td data-label="Actions"><a class="label interactive" href="{% url 'app-app-disconnect' app.id %}">Disconnect<span class="visually-hidden"> {{ app.name }}</span></a></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}
+<p>No connected apps.</p>
+{% endif %}
+{% endblock %}

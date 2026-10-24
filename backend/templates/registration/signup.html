@@ -1,0 +1,20 @@
+{% extends "layouts/form.html" %}
+{% load shell %}
+{# Page: sign up (spec 4.7). It posts to its own address, so ?plan= and ?next= ride along. The plan sentence comes from the view, which is where a plan's price is written (AGENTS.md, Pricing changes). #}
+{% block title %}Sign up | Veilfile{% endblock %}
+{% block form_page %}
+<h1>Sign up</h1>
+<p>{% if plan_blurb %}{{ plan_blurb }}{% else %}Create your account. A workspace is provisioned automatically.{% endif %}</p>
+{% focus_field form "username" "email" "password1" "password2" as focus %}
+{% focus_summary form "username" "email" "password1" "password2" as summary %}
+{% include "components/form_errors.html" with errors=form.non_field_errors focus=summary only %}
+<form method="post">
+{% csrf_token %}
+{% include "components/field.html" with id="id_username" name="username" label="Username" type="text" value=form.username.value autocomplete="username" required=True extra='autocapitalize="none" spellcheck="false"' errors=form.username.errors focus=focus only %}
+{% include "components/field.html" with id="id_email" name="email" label="Email" type="email" value=form.email.value autocomplete="email" required=True help="We verify this address before issuing API keys. It is how we reach you about your account." errors=form.email.errors focus=focus only %}
+{% include "components/field.html" with id="id_password1" name="password1" label="Password" type="password" autocomplete="new-password" required=True help=form.password1.help_text errors=form.password1.errors focus=focus only %}
+{% include "components/field.html" with id="id_password2" name="password2" label="Confirm password" type="password" autocomplete="new-password" required=True errors=form.password2.errors focus=focus only %}
+<button class="action interactive" type="submit">Create account</button>
+</form>
+<p class="form-links">Already have an account? <a class="label interactive" href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Log in</a></p>
+{% endblock %}

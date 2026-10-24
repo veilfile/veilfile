@@ -1,0 +1,8 @@
+{# Component: sections. The list of a page's sections, each a link to its heading (spec 4.6). #}
+{# Inputs: sections, a sequence of objects with id and title (blog.render.Section); nothing is shown for fewer than two. #}
+{% if sections|length > 1 %}<nav class="sections" aria-label="Contents">
+<ol class="sections__list" role="list">
+{% for section in sections %}<li><a href="#{{ section.id }}">{{ section.title }}</a></li>
+{% endfor %}</ol>
+</nav>
+{% endif %}

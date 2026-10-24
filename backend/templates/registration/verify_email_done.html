@@ -1,0 +1,9 @@
+{% extends "layouts/form.html" %}
+{# The verification link worked (spec 4.7). #}
+{% block title %}Email verified | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block form_page %}
+<h1>Email verified</h1>
+<p>Your email address is verified. You can now create API keys.</p>
+<p><a class="action interactive" href="/app/">Go to dashboard</a></p>
+{% endblock %}

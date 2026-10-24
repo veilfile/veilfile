@@ -1,0 +1,7 @@
+{% extends "shell.html" %}
+{% load static %}
+{# Layout: chapter. The threshold and the chapters: one block, centred in the page (spec 6.2). #}
+{% block preload_display %}<link rel="preload" href="{% static 'fonts/cormorant-garamond/italic-300-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+{% block preload_heading %}<link rel="preload" href="{% static 'fonts/cormorant-garamond/italic-400-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+{% block body_class %}layout-chapter{% endblock %}
+{% block main %}<div class="chapter">{% block chapter %}{% endblock %}</div>{% endblock %}

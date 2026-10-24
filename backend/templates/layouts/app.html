@@ -1,0 +1,8 @@
+{% extends "shell.html" %}
+{% load static %}
+{# Layout: app. The dashboard's five sections: one column that starts at the top and scrolls with the page, and a family of its own, so moving between sections changes in place (spec 4.8, 6.2). A page fills app_main with its one <h1> and its sections; the title is the shell's entry (pages/context_processors.py). #}
+{% block preload_display %}<link rel="preload" href="{% static 'fonts/cormorant-garamond/italic-300-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block body_class %}layout-app{% endblock %}
+{% block main %}<div class="app">{% for message in messages %}<p class="notice" role="status">{{ message }}</p>
+{% endfor %}{% block app_main %}{% endblock %}</div>{% endblock %}

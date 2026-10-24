@@ -1,0 +1,7 @@
+{# Component: pager. The page before and the page after, at the end of a reading page (spec 4.6). #}
+{# Inputs: previous and next, each None or an object with url and title; nothing is shown when both are None. #}
+{% if previous or next %}<nav class="pager" aria-label="More to read">
+{% if previous %}<p class="pager__item pager__item--previous"><span class="pager__label label">Previous</span> <a href="{{ previous.url }}" rel="prev">{{ previous.title }}</a></p>
+{% endif %}{% if next %}<p class="pager__item pager__item--next"><span class="pager__label label">Next</span> <a href="{{ next.url }}" rel="next">{{ next.title }}</a></p>
+{% endif %}</nav>
+{% endif %}

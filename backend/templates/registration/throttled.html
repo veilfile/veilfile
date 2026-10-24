@@ -1,0 +1,13 @@
+{% extends "layouts/form.html" %}
+{# Page: too many attempts (429, spec 4.9). One page for any address asked about, so it holds no form, no token and nothing of the visitor: LoginThrottleTests holds two responses byte for byte. #}
+{% block title %}{{ title }} | Veilfile{% endblock %}
+{# Context: title, message, retry_wait and sign_in_links, all fixed by the throttle that refuses (drop_core/throttle.py), never taken from the visitor, the account or the address. #}
+{% block form_page %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ message }} Wait about {{ retry_wait }}, then try again.</p>
+{% if sign_in_links %}
+<p class="form-links"><a class="label interactive" href="{% url 'login' %}">Log in</a> <span class="form-links__item"><span aria-hidden="true">·</span> <a class="label interactive" href="{% url 'password_reset' %}">Forgot password?</a></span></p>
+{% else %}
+<p class="form-links"><a class="label interactive" href="/app/">Back to dashboard</a></p>
+{% endif %}
+{% endblock %}

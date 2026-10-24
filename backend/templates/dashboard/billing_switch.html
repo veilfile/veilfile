@@ -1,0 +1,17 @@
+{% extends "layouts/form.html" %}
+{# Page: confirm a plan switch (spec 4.8). The figures come from the view, which reads plans.py (AGENTS.md, Pricing changes); the two sentences are the React dashboard's switchConfirmText. #}
+{% block title %}Switch plan | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Switch to {{ target.name }} (${{ target.price }}/mo)?</h1>
+{% if upgrade %}
+<p>You'll be charged now for the prorated difference for the rest of this billing period, then ${{ target.price }}/mo from your next renewal. If that payment doesn't go through, you stay on {{ current.name }}.</p>
+{% else %}
+<p>The unused part of your current period becomes a credit on your next invoices, and {{ target.name }} limits apply right away. Existing API keys and links are not removed.</p>
+{% endif %}
+<form method="post">
+{% csrf_token %}
+<button class="action interactive" type="submit">Switch to {{ target.name }}</button>
+</form>
+<p class="form-links">Not now? <a class="label interactive" href="{% url 'app-billing' %}">Back to billing</a></p>
+{% endblock %}

@@ -1,0 +1,38 @@
+/* The Files list (spec 4.8): a stacked row for each file (the `rows` pattern, base.css), its link's Copy and Revoke while the link
+   works, and the way to older files. This sheet is linked from shell.html and not from the Files page: an in-place change brings
+   no stylesheet with it, and the page is reached that way from the other sections. */
+
+/* A file name is whatever an agent called it, up to 512 characters with no place to break: it wraps wherever it must. */
+.files__name {
+  overflow-wrap: anywhere;
+}
+
+/* A file whose link has stopped working is quieter than one that works. */
+.files__row[data-state="expired"],
+.files__row[data-state="held"] {
+  color: var(--muted);
+}
+
+.files__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+
+/* Copy needs a script. Without one the page has Revoke and nothing to copy with. */
+:root:not(.js) .files__copy {
+  display: none;
+}
+
+.files__pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin: var(--space-4) 0 0;
+}
+
+/* Alone, Older files stays at the right, where the way on is. The selector weighs what base.css's .label.interactive does, which
+   sets the margin the link's hit area is laid out with, and this sheet comes after it. */
+.files__pager .files__older {
+  margin-left: auto;
+}

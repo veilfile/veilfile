@@ -1,0 +1,55 @@
+/* OAuth consent (spec 4.7): the app that is asking, what it can do, and the two answers. The form layout draws the narrow column, the
+   heading and the row of two equal actions (layouts/form.html, base.css: .form-actions, .action); this file is only what this page adds.
+   Colours come from tokens.css. */
+.consent {
+  min-width: 0;
+  overflow-wrap: anywhere; /* an app's name can be 255 characters with no space in it, and a host a long one: the page never scrolls sideways */
+  font-synthesis-weight: none;
+}
+
+.consent :where(p, ul) {
+  margin: 0 0 var(--space-3);
+}
+
+.consent :where(strong) {
+  font-weight: 500; /* the heaviest face Newsreader has */
+}
+
+.consent :where(code) {
+  font-family: var(--font-mono);
+  font-size: .8em;
+}
+
+/* The app that is asking, between two hairlines. Its name is its own claim, so it is set in the mono face, as a quotation of
+   someone else's words, and the sentence under it says nobody checked it. */
+.consent__app {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) 0;
+  border-block: 1px solid var(--hair);
+}
+
+.consent__app > :last-child {
+  margin-bottom: 0;
+}
+
+.consent__label {
+  margin: 0 0 var(--space-1);
+}
+
+.consent .consent__name {
+  font-family: var(--font-mono);
+  font-size: 1.1em;
+  line-height: 1.4;
+}
+
+.grant__head {
+  margin-bottom: var(--space-2);
+}
+
+.grant ul {
+  padding: 0 0 0 1.8em; /* room for the markers, which are the browser's */
+}
+
+.grant li {
+  margin: 0 0 var(--space-1);
+}

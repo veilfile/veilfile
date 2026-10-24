@@ -1,0 +1,15 @@
+{% extends "layouts/form.html" %}
+{% load static %}
+{# Form page: the result of an approval (spec 4.7). The words are the old page's until the voice pass (PR 7). The mark is drawn in CSS: the check mark character this page had is in none of the site's fonts. #}
+{% block title %}Terminal approved | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/pages/device.css' %}">{% endblock %}
+{% block form_page %}
+<span class="device-mark" aria-hidden="true"></span>
+<h1>Terminal approved</h1>
+<p>Approved. Return to your terminal: it receives its key on its next check, within a few seconds. You can close this window.</p>
+{% if replace_key %}
+<p>When it does, <strong>{{ replace_key.name }}</strong> (<code>{{ replace_key.key_prefix }}…</code>) is revoked.</p>
+{% endif %}
+<p>If the terminal already stopped waiting, no key is created. Run veilfile login again.</p>
+{% endblock %}

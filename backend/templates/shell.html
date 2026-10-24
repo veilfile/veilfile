@@ -1,0 +1,80 @@
+{% load static shell %}<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script id="veilfile-shell-boot">
+(function () {
+  var root = document.documentElement, theme = null, motion = null;
+  try { theme = localStorage.getItem("veilfile-theme"); motion = localStorage.getItem("veilfile-motion"); } catch (error) {}
+  if (theme !== "light" && theme !== "dark") theme = "system";
+  if (motion !== "on" && motion !== "off") motion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "off" : "on";
+  try { if (sessionStorage.getItem("veilfile-veil-off") === "slow") { motion = "off"; root.setAttribute("data-veil-off", "slow"); } } catch (error) {}
+  root.setAttribute("data-theme", theme);
+  root.setAttribute("data-motion", motion);
+  if ("noModule" in HTMLScriptElement.prototype) root.classList.add("js");
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ shell_page.title|default:"Veilfile" }}{% endblock %}</title>
+{% if shell_page.canonical %}{% if shell_page.description %}<meta name="description" content="{{ shell_page.description }}" data-page-meta>
+{% endif %}<link rel="canonical" href="{{ shell_page.canonical }}" data-page-meta>
+<meta property="og:type" content="{% if shell_page.article %}article{% else %}website{% endif %}" data-page-meta>
+<meta property="og:site_name" content="Veilfile" data-page-meta>
+<meta property="og:title" content="{{ shell_page.title }}" data-page-meta>
+{% if shell_page.description %}<meta property="og:description" content="{{ shell_page.description }}" data-page-meta>
+{% endif %}<meta property="og:url" content="{{ shell_page.canonical }}" data-page-meta>
+<meta property="og:image" content="{{ shell_page.image }}" data-page-meta>
+{% if shell_page.article.published %}<meta property="article:published_time" content="{{ shell_page.article.published|date:'Y-m-d' }}" data-page-meta>
+{% endif %}<meta name="twitter:card" content="summary_large_image" data-page-meta>
+{% structured_data %}<link rel="alternate" type="application/rss+xml" title="Veilfile Journal" href="{% url 'blog-feed' %}">
+<link rel="alternate" type="text/plain" title="Veilfile agent docs (llms.txt)" href="{% url 'llms-txt' %}">
+{% endif %}{% block meta %}{% endblock %}
+<link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml" sizes="any">
+<link rel="icon" href="{% static 'img/favicon-32.png' %}" sizes="32x32" type="image/png">
+<link rel="icon" href="{% static 'img/favicon-16.png' %}" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
+{# Pages with no reading text (the threshold) empty this block and skip the download. #}
+{% block preload_reading %}<link rel="preload" href="{% static 'fonts/newsreader/normal-400-500-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+<link rel="preload" href="{% static 'fonts/ibm-plex-mono/normal-400-latin.woff2' %}" as="font" type="font/woff2" crossorigin>
+{# A page that shows display text (Cormorant Garamond) preloads it here; others skip the download. #}
+{% block preload_display %}{% endblock %}
+{# A page whose headings are set in Cormorant Garamond italic 400 (a chapter's, a plan's, a section's) preloads that face here; About, the threshold and a post with no sections do not use it. #}
+{% block preload_heading %}{% endblock %}
+<link rel="stylesheet" href="{% static 'css/fonts.css' %}">
+<link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+<link rel="stylesheet" href="{% static 'css/base.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/mark.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/lockup.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/menu.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/controls.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/plan.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/install_line.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/code_block.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/sections.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/pager.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/entries.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/field.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/form_errors.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/file_list.css' %}">
+<link rel="stylesheet" href="{% static 'css/components/meter.css' %}">
+{% block styles %}{% endblock %}
+{# If shell.js cannot load, drop back to the no-JavaScript layout: links shown, switches hidden. #}
+<script type="module" src="{% static 'js/shell.js' %}" onerror="document.documentElement.classList.remove('js')"></script>
+<script type="module" src="{% static 'js/behaviors/tabs.js' %}"></script>
+<script type="module" src="{% static 'js/behaviors/copy.js' %}"></script>
+<script type="module" src="{% static 'js/behaviors/come-in.js' %}"></script>
+<script type="module" src="{% static 'js/behaviors/local-time.js' %}"></script>
+</head>
+<body class="{% block body_class %}{% endblock %}" data-veil-src="{% static 'js/veil.js' %}"{% if shell_page.layout %} data-layout="{{ shell_page.layout }}" data-layout-paths="{{ shell_page.layout_paths }}" data-faces="italic 300 1em Cormorant Garamond{% if shell_page.layout != 'app' %}|italic 400 1em Cormorant Garamond{% endif %}|1em Newsreader{% if shell_page.layout == 'reading' %}|italic 1em Newsreader{% endif %}"{% endif %}>
+<a class="skip-link label" href="#main">Skip to content</a>
+<header>
+<div class="shell-corner shell-corner--top-left">{% url 'landing' as home_url %}{% include "components/lockup.html" with home_url=home_url only %}</div>
+<div class="shell-corner shell-corner--top-right">{% shell_menu as menu_groups %}{% shell_sign_out as sign_out %}{% include "components/menu.html" with groups=menu_groups list_id="shell-menu" sign_out=sign_out only %}</div>
+</header>
+<main id="main" class="shell-main">{% block main %}{% endblock %}</main>
+<footer>
+<div class="shell-corner shell-corner--bottom-left">{% include "components/controls.html" with show="appearance" only %}</div>
+<div class="shell-corner shell-corner--bottom-right">{% include "components/controls.html" with show="motion" only %}</div>
+</footer>
+</body>
+</html>

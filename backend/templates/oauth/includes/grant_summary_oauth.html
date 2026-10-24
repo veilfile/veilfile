@@ -1,0 +1,15 @@
+{# Reusable approval-summary block for the OAuth consent page. #}
+{# Keep in step with what an mcp:use token can actually do (drop_core.auth, #}
+{# drop_core.views key/usage endpoints, drop_mcp tools). #}
+<div class="grant">
+<p class="grant__head">Approving lets the app act on your workspace. It can:</p>
+<ul>
+<li>Upload files and create share links, list your artifacts, and revoke them</li>
+<li>See your plan, usage, and account email address</li>
+</ul>
+<p class="grant__head">It cannot create, list, or revoke API keys, disconnect your other apps, or touch billing or your account settings.</p>
+<ul>
+<li>Access lasts until you disconnect it: the app renews its access while in use, and it lapses after about two weeks unused</li>
+<li>Disconnect it any time under <strong>Connected apps</strong> on your dashboard</li>
+</ul>
+</div>

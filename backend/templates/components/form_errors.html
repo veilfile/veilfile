@@ -1,0 +1,8 @@
+{# Component: form_errors. The sentences that belong to a whole form, not to one field (spec 4.7). #}
+{# Inputs: errors, the form's non-field errors (form.non_field_errors) or a list of sentences, never a bare string, which would be walked a letter at a time; message, one fixed sentence of the page's own shown before them; focus, true when the page puts focus on the summary (what {% focus_summary %} of the shell tags returns: the form has an error of its own and no field has one; a page that shows no field's error, such as sign in, passes true), which prints tabindex="-1" and autofocus, because an alert already on the page as it loads is announced inconsistently and focus would stay at the top; absent or false leaves focus where it was, and a field in error has the page's one autofocus. Nothing is drawn when errors and message are both empty or absent. #}
+{% if errors or message %}<div class="form-errors" role="alert"{% if focus %} tabindex="-1" autofocus{% endif %}>
+<span class="form-errors__flag label" aria-hidden="true">Check this</span>
+{% if message %}<p>{{ message }}</p>
+{% endif %}{% for error in errors %}<p>{{ error }}</p>
+{% endfor %}</div>
+{% endif %}

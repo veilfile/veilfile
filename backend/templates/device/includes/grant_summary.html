@@ -1,0 +1,18 @@
+{# Approval-summary block for the device flow consent page. #}
+{# Keep it accurate: it is the user's only description of the key's power. #}
+<div class="device-grant">
+  <p>Approving creates an API key for your workspace. Whoever holds it can:</p>
+  <ul>
+    <li>Upload files and create share links</li>
+    <li>List every artifact in the workspace and download each one through its link</li>
+    <li>Revoke artifacts</li>
+    <li>List the workspace's API keys and revoke any of them</li>
+    <li>Disconnect every app connected to your account (OAuth / MCP clients)</li>
+    <li>See the account email and plan usage</li>
+  </ul>
+  <p class="device-grant__foot">
+    The key does not expire: it works until you revoke it in the dashboard.
+    {% if key_cap %}It counts toward your plan's limit of {{ key_cap }} API key{{ key_cap|pluralize }}.{% endif %}
+    It is sent only to the terminal; this browser never sees it.
+  </p>
+</div>

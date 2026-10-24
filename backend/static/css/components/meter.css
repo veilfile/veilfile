@@ -1,0 +1,72 @@
+/* A meter (spec 4.8): one figure of the dashboard against its limit. A mono label, the numbers in words, and under them a hairline bar: a 1px
+   --hair box on --box, filled with --ink as far as the figure goes. The bar is an SVG whose fill is a width attribute (the viewBox is 1000
+   wide and the fill is the figure in thousandths of the limit), because a page may not carry an inline style, and a native <meter> is drawn
+   through a pseudo-element of each engine that nothing here can look at; the box is a border, which a forced-colours screen keeps. Over its
+   limit the bar stays full, its line goes solid --ink and the figures say Over the limit in words: no colour, weight and a word, as a form's
+   error has. Rules weigh two classes so that a layout's bare element rules (a paragraph's margin) never win. Nothing here moves, sets a
+   z-index or an opacity. */
+.meters {
+  width: 100%;
+  min-width: 0;
+}
+
+.meter {
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  font-variant-numeric: lining-nums;
+  overflow-wrap: anywhere;
+}
+
+.meter:last-child {
+  margin-bottom: 0;
+}
+
+.meter .meter__label {
+  display: block;
+  margin: 0 0 var(--space-1);
+}
+
+.meter .meter__figures {
+  margin: 0 0 var(--space-2);
+  color: var(--ink);
+}
+
+.meter .meter__flag {
+  margin-left: var(--space-2);
+  color: var(--ink);
+}
+
+.meter .meter__bar {
+  box-sizing: border-box;
+  height: .5rem;
+  border: 1px solid var(--hair);
+  background: var(--box);
+}
+
+.meter .meter__bar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  shape-rendering: crispEdges;
+}
+
+.meter .meter__fill {
+  fill: var(--ink);
+}
+
+.meter--over .meter__bar {
+  border-color: var(--ink);
+}
+
+.meter .meter__note {
+  margin: var(--space-2) 0 0;
+  font-size: .9em;
+  color: var(--muted);
+}
+
+/* The system's own text colour for the fill, so it stays seen where the page's colours are replaced. */
+@media (forced-colors: active) {
+  .meter .meter__fill {
+    fill: CanvasText;
+  }
+}

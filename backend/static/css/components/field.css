@@ -1,0 +1,142 @@
+/* A form field (spec 4.7): a mono label above a hairline input, the help line between them and the errors under it. The input's single
+   line is 1px of --muted round a --box field. It is --muted and not --hair because a field's boundary is what identifies it and must
+   meet WCAG 1.4.11 (3:1): --hair is 1.45:1 on Paper, --muted 6.6:1 (4.68:1 at the cloth's worst). Typed text is --ink, which the
+   calmed cloth gives 8:1 or better; the veil of --box only moves the cloth behind it away from the text's colour (lighter in Paper,
+   darker in Ink), so that contrast can rise and cannot fall. Text is 16px or more, or iOS zooms the page when the field takes focus.
+   An error uses no colour: the line goes solid --ink, the sentence under the field is in full --ink and a small mono label above it
+   reads Check this. Focus is the global outline of base.css; the line has no focus colour of its own. Nothing here sets a z-index or
+   an opacity. */
+.field {
+  margin: 0 0 var(--space-4);
+}
+
+.field__label {
+  display: block;
+  margin: 0 0 var(--space-2);
+}
+
+/* The help sits above the input, not under it: the on-screen keyboard covers what is under a focused field on a phone, and a rule
+   for a password is wanted while it is typed. It is plain text, or the short list a form field's help_text makes. */
+.field__help {
+  margin: 0 0 var(--space-2);
+  font-size: .9em;
+  color: var(--muted);
+}
+
+.field__help p,
+.field__help ul,
+.field__help ol {
+  margin: 0;
+}
+
+.field__help ul,
+.field__help ol {
+  padding: 0 0 0 1.2em;
+}
+
+.field__help li {
+  margin: 0;
+}
+
+.field__input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid var(--muted);
+  border-radius: 0;
+  background: var(--box);
+  color: var(--ink);
+  caret-color: var(--ink);
+  font-family: var(--font-reading);
+  font-size: max(16px, var(--reading-size));
+  font-optical-sizing: auto;
+  font-variant-numeric: lining-nums;
+  line-height: 1.6;
+  scroll-margin-top: var(--space-5); /* a focused field stops with its label showing, below the phone's top fade (base.css) */
+  transition: border-color var(--fill-fade) ease;
+}
+
+.field__input::placeholder {
+  color: var(--muted);
+  opacity: 1; /* Firefox dims a placeholder */
+}
+
+/* A code (the device page's): mono, tracked and capitals, as the labels are. */
+.field__input--mono {
+  font-family: var(--font-mono);
+  font-size: max(16px, calc(var(--reading-size) * .9));
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+/* A server error: the line goes from --muted to solid --ink, and stays ink while the field has focus (the global outline of base.css is
+   the focus ring). */
+.field__input[aria-invalid="true"] {
+  border-color: var(--ink);
+}
+
+/* What the browser finds wrong after the visitor has been in the field (a required field left empty, an address that is not one).
+   :user-invalid, never :invalid, which matches a required empty field before anyone has touched it and would make every form load
+   looking wrong. A rule of its own: a browser that does not know the selector drops the whole rule it is in. */
+.field__input:user-invalid {
+  border-color: var(--ink);
+}
+
+/* Browser autofill must not paint its yellow or blue over the cloth. Chromium and Safari set the field's background and text colour
+   with !important, which no author rule beats, so the change is held off instead: a transition with a delay that never ends keeps the
+   field at the background it had, and -webkit-text-fill-color keeps the text --ink. Firefox tints with a filter. One rule for each
+   spelling, because a selector list is dropped whole when one of its selectors is unknown to a browser. */
+.field__input:-webkit-autofill,
+.field__input:-webkit-autofill:hover,
+.field__input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  filter: none;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+.field__input:autofill,
+.field__input:autofill:hover,
+.field__input:autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  caret-color: var(--ink);
+  filter: none;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
+/* With Motion off every transition is off (base.css), and the hold above with them. There is no cloth then, only paper, so the field
+   is painted paper over the browser's tint. Two edge cases are accepted: an autofilled field that has not been edited keeps its old
+   veil across a switch between Paper and Ink until it is edited (the hold keeps the background it had), and with scripts blocked and
+   reduced motion asked for, no data-motion is set to paint it and every transition is off, so the browser's own autofill tint can show. */
+[data-motion="off"] .field__input:-webkit-autofill {
+  box-shadow: inset 0 0 0 100vmax var(--paper);
+}
+
+[data-motion="off"] .field__input:autofill {
+  box-shadow: inset 0 0 0 100vmax var(--paper);
+}
+
+/* The errors under the field: a small mono label, then each sentence in full --ink (not --muted). */
+.field__error {
+  margin: var(--space-2) 0 0;
+  color: var(--ink);
+}
+
+.field__flag {
+  display: block;
+  margin: 0 0 var(--space-1);
+  color: var(--ink);
+}
+
+.field__error p {
+  margin: 0 0 var(--space-1);
+  color: var(--ink);
+}
+
+.field__error p:last-child {
+  margin-bottom: 0;
+}

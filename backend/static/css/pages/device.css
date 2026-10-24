@@ -1,0 +1,78 @@
+/* The device flow's approval and its success (spec 4.7), in the form layout's column. Only what the layout, the field, the check
+   rows, the actions and the notice do not already give them: the code shown large, who asked, what the key can do and the mark of
+   an approved login. Colours come only from tokens.css. The code entry, the denial and the refusal (which the OAuth consent
+   shares) need none of it and do not link this file. The page's one h1 and its paragraphs, lists and terms are the layout's. */
+
+/* What matters most on the approval: only approve a login you started. An ink rule beside it, no box and no colour. */
+.device-warning {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--ink);
+}
+
+/* The code, large, between two hairlines. A visible label above it says what it is: a div with no role cannot carry a name. */
+.device-code {
+  margin: var(--space-4) 0;
+  padding: var(--space-3) 0;
+  border-block: 1px solid var(--hair);
+}
+
+.device-code .label {
+  margin: 0 0 var(--space-2);
+}
+
+.device-code__value {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: clamp(1.5rem, 8vw, 2.25rem); /* nine characters at .3em take 207px at 320px wide, in a column of 288px */
+  line-height: 1.2;
+  letter-spacing: .3em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* Who asked: a term above its value on a phone, side by side from 40rem. A long client string or address wraps. */
+.device-request {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1) var(--space-4);
+  margin: 0 0 var(--space-4);
+}
+
+.device-request dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 40rem) {
+  .device-request {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .device-request dt {
+    margin-top: 0;
+  }
+}
+
+/* What the key can do (device/includes/grant_summary.html): the list and the closing sentence are quieter than the lead. */
+.device-grant {
+  margin: 0 0 var(--space-4);
+}
+
+.device-grant ul,
+.device-grant__foot {
+  color: var(--muted);
+}
+
+/* An approved login's mark, drawn: two borders turned an eighth of the way round. The check mark character this page used
+   to hold is in none of the site's three fonts. It is decoration (aria-hidden): the heading says the same in words. */
+.device-mark {
+  display: block;
+  width: .6rem;
+  height: 1.2rem;
+  margin: var(--space-2) 0 var(--space-4) .5rem;
+  border: solid var(--ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}

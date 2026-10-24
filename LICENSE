@@ -1,0 +1,11 @@
+Copyright (c) 2026 Veilfile. All rights reserved.
+
+The source code in this repository is published so that anyone can read it and check what
+Veilfile does. It is not licensed for any other use. You may not run, copy, modify, merge,
+publish, distribute, sublicense or sell it, in whole or in part, without written permission
+from Veilfile.
+
+Two parts of this repository are licensed differently: the command-line clients in cli/ and
+npm/ are under the MIT License, in cli/LICENSE and npm/LICENSE.
+
+Viewing and forking this repository on GitHub are governed by GitHub's Terms of Service.

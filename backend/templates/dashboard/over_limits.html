@@ -1,0 +1,12 @@
+{# Include: the lines that say a workspace is over what its plan allows, on Overview and Billing (spec 4.8): the React dashboard's OverLimits in its words, and the month's uploads. Nothing is drawn when nothing is over. #}
+{# Inputs: status, the body billing.status answers (plan, caps, active_keys, storage_used_bytes, over_plan_limits) or none; usage, the body usage answers or none, for the month's uploads, which the status has no flag for (a page without it leaves that line out). #}
+{% load dashboard %}{% if status.over_plan_limits or usage.uploads_used > usage.uploads_cap %}<div class="notice" role="status">
+<p><strong>Your workspace is over the {% if status.plan %}{{ status.plan }}{% else %}{{ usage.plan }}{% endif %} plan's limits.</strong></p>
+<ul>
+{% if "keys" in status.over_plan_limits %}<li>{{ status.active_keys }} active API keys; the plan allows {{ status.caps.keys }}. Existing keys keep working, but new keys can't be created until you revoke some or upgrade.</li>
+{% endif %}{% if "storage" in status.over_plan_limits %}<li>{{ status.storage_used_bytes|bytes }} stored; the plan allows {{ status.caps.storage_gb }} GB. Existing links keep working, but new uploads are refused until you're under the cap.</li>
+{% endif %}{% if "ttl" in status.over_plan_limits %}<li>Some links expire later than the plan's {{ status.caps.ttl_days }}-day maximum. They keep their original expiry; new uploads get at most {{ status.caps.ttl_days }} days.</li>
+{% endif %}{% if usage.uploads_used > usage.uploads_cap %}<li>{{ usage.uploads_used }} uploads this month; the plan allows {{ usage.uploads_cap }}. Existing links keep working, but new uploads are refused until the next month begins (UTC).</li>
+{% endif %}</ul>
+</div>
+{% endif %}

@@ -1,0 +1,7 @@
+{% extends "shell.html" %}
+{% load static %}
+{# Layout: reading. The Journal, Docs and the legal documents: one Newsreader column, starting at the top and scrolling with the page (spec 4.6, 6.2). #}
+{% block preload_display %}<link rel="preload" href="{% static 'fonts/cormorant-garamond/italic-300-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+{% block preload_heading %}<link rel="preload" href="{% static 'fonts/cormorant-garamond/italic-400-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+{% block body_class %}layout-reading{% endblock %}
+{% block main %}<div class="reading">{% block reading %}{% endblock %}</div>{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "layouts/reading.html" %}
+{# A Docs page: a way back to the index, its title, the list of its sections, its words, then the pages before and after it (spec 4.6). #}
+{# Italic 400 (a section's heading) is preloaded only when the page has a section. #}
+{% block preload_heading %}{% if "<h2" in body_html %}{{ block.super }}{% endif %}{% endblock %}
+{% block reading %}
+<article>
+<p class="reading__meta"><a href="{% url 'docs-index' %}">Docs</a></p>
+<h1>{{ page.title }}</h1>
+{% include "components/sections.html" with sections=sections only %}
+{{ body_html|safe }}
+</article>
+{% include "components/pager.html" with previous=previous_page next=next_page only %}
+{% endblock %}

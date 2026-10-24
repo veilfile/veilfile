@@ -1,0 +1,36 @@
+{% extends "layouts/app.html" %}
+{# Overview: the return from Stripe, the prompt to verify an email, anything over a limit, the plan, the meters and the account, in that order (spec 4.8). The figures come from dashboard/overview_page.py; the words are here. #}
+{% block app_main %}
+<h1>Overview</h1>
+{% if billing_notice.kind == "success" %}<p class="notice" role="status"><strong>Subscription updated.</strong> It can take a moment for the new plan to appear below. Refresh if it doesn't.</p>
+{% elif billing_notice.kind == "cancelled" %}<p class="notice" role="status">Checkout was cancelled. No charges were made.</p>
+{% elif billing_notice.kind == "error" %}<p class="notice" role="alert"><strong>We couldn't start checkout{% if billing_notice.plan %} for the {{ billing_notice.plan }} plan{% endif %}.</strong> Nothing was charged. Try again from <a href="{% url 'app-billing' %}">Billing</a>.</p>
+{% elif billing_notice.kind == "already_subscribed" %}<p class="notice" role="status">You already have a subscription, so no new checkout was started. <a href="{% url 'app-billing' %}">Switch plans or manage billing</a>.</p>
+{% endif %}
+{% if verify_prompt %}<p class="notice"><strong>Verify your email to create API keys.</strong> {% if verify_prompt.sent_to %}We sent a link to {{ verify_prompt.sent_to }}.{% else %}Add an email address to your account.{% endif %} <a href="{% url 'email-verification' %}">Verify email</a></p>
+{% endif %}
+{% include "dashboard/over_limits.html" with status=status usage=usage only %}
+{% if not status %}<p class="notice" role="status">Plan limits could not be checked just now. Reload the page to check again.</p>
+{% endif %}
+{% if plan %}<section aria-labelledby="overview-plan">
+<h2 id="overview-plan">Plan</h2>
+<p>You are on the <strong>{{ plan|title }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a></p>
+</section>
+{% endif %}
+<section aria-labelledby="overview-usage">
+<h2 id="overview-usage">Usage</h2>
+{% if usage %}<div class="meters">
+{% include "components/meter.html" with id="overview-uploads" label="Successful uploads this month" used=usage.uploads_used cap=usage.uploads_cap note="Counted by calendar month, in UTC." only %}
+{% include "components/meter.html" with id="overview-storage" label="Storage" used=usage.storage_used_bytes cap=usage.storage_cap_bytes unit="bytes" only %}
+{% include "components/meter.html" with id="overview-keys" label="API keys" used=usage.keys_used cap=usage.keys_cap unlimited=True only %}
+{% include "components/meter.html" with id="overview-ttl" label="Links last up to" used=usage.ttl_days unit="day" only %}
+</div>
+{% else %}<p>Usage could not be loaded just now. Reload the page to try again.</p>
+{% endif %}</section>
+<section aria-labelledby="overview-account">
+<h2 id="overview-account">Account</h2>
+{% if email %}<p><strong>{{ email }}</strong> is {% if email_verified %}verified{% else %}not verified{% endif %}.</p>
+{% else %}<p>No email address is set.</p>
+{% endif %}<p class="form-links"><a class="label interactive" href="{% url 'email-verification' %}">{% if email %}Change email{% else %}Add email{% endif %}</a> <a class="label interactive" href="{% url 'password_change' %}">Change password</a></p>
+</section>
+{% endblock %}

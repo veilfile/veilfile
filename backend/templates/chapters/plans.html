@@ -1,0 +1,9 @@
+{% extends "layouts/chapter.html" %}
+{% block chapter %}
+{# Words: edit the text between here and the end marker; keep every tag, class and template tag as it is. #}
+<h1 class="chapter__title">Plans</h1>
+<div class="plans">{% for plan in plans %}{% include "components/plan.html" with plan=plan only %}{% endfor %}</div>
+<p class="chapter__more">Tax included. The price you see is the price you pay.</p>
+<p class="chapter__more">Already subscribed? Switch between Team and Scale in the billing section of <a href="/app/">your dashboard</a>; the change is prorated.</p>
+{# End of words. #}
+{% endblock %}

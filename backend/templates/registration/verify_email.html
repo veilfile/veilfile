@@ -1,0 +1,38 @@
+{% extends "layouts/form.html" %}
+{% load shell %}
+{# Verify email: the address on the account, in its two states, verified or not (spec 4.7). #}
+{% block title %}Verify email | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block form_page %}
+<h1>Verify email</h1>
+{% if verified %}
+<p class="notice" role="status">Your email address is verified.</p>
+<p><a class="action interactive" href="/app/">Back to dashboard</a></p>
+{% else %}
+{% if sent %}<p class="notice" role="status">Verification link sent. Check your inbox.</p>
+{% endif %}
+{% if record %}
+<p>We sent a verification link to {{ record.email }}. Click it to verify. API key creation stays locked until you do.</p>
+{% else %}
+<p>Add an email address to your account. We will send a verification link; API key creation stays locked until you verify.</p>
+{% endif %}
+{% focus_field form "email" "password" as focus %}
+{% focus_summary form "email" "password" as summary %}
+{% include "components/form_errors.html" with errors=form.non_field_errors focus=summary only %}
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="action" value="update_email">
+{% include "components/field.html" with id="id_email" name="email" label="Email" type="email" value=form.email.value autocomplete="email" required=True errors=form.email.errors focus=focus only %}
+{% include "components/field.html" with id="id_password" name="password" label="Current password" type="password" autocomplete="current-password" required=True errors=form.password.errors focus=focus only %}
+<button class="action interactive" type="submit">{% if record %}Update and resend link{% else %}Send verification link{% endif %}</button>
+</form>
+{% if record %}
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="action" value="resend">
+<p class="form-links"><button class="label interactive" type="submit">Resend verification link</button></p>
+</form>
+{% endif %}
+<p class="form-links"><a class="label interactive" href="/app/">Back to dashboard</a></p>
+{% endif %}
+{% endblock %}

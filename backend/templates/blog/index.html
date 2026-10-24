@@ -1,0 +1,6 @@
+{% extends "layouts/reading.html" %}
+{# Page: the Journal's list of posts. Context: entries, one {url, title, description, date} for each published post, newest first. #}
+{% block reading %}
+<h1>Journal</h1>
+{% if entries %}{% include "components/entries.html" with entries=entries only %}{% else %}<p>Nothing here yet.</p>{% endif %}
+{% endblock %}

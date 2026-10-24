@@ -1,0 +1,3 @@
+# Only for tools/vendor_fonts.py, run by hand in a throwaway virtualenv. Never installed in the app.
+fonttools==4.55.3
+brotli==1.1.0

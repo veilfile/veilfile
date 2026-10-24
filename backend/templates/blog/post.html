@@ -1,0 +1,13 @@
+{% extends "layouts/reading.html" %}
+{% load static %}
+{# Page: one Journal post. Context: post, minutes, reading (from render_reading), image_size (width, height) or None, previous and next ({url, title}) or None. #}
+{% block preload_heading %}{% if "<h2" in reading.html %}{{ block.super }}{% endif %}{% endblock %}
+{% block reading %}
+<article>
+<p class="reading__meta"><a href="{% url 'blog-index' %}">Journal</a> · <time datetime="{{ post.date|date:'Y-m-d' }}">{{ post.date|date:'Y-m-d' }}</time> · {{ minutes }} min read</p>
+<h1>{{ post.title }}</h1>
+{% if post.image %}<img class="reading__image" src="{% static post.image %}" alt="{{ post.image_alt }}"{% if image_size %} width="{{ image_size.0 }}" height="{{ image_size.1 }}"{% endif %}>
+{% endif %}{{ reading.html|safe }}
+</article>
+{% include "components/pager.html" with previous=previous next=next only %}
+{% endblock %}

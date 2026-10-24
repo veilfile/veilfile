@@ -1,0 +1,7 @@
+Confirm your Veilfile email address:
+
+{{ verify_url }}
+
+The link expires in {{ expiry_days }} days. If you didn't create a Veilfile account, ignore this email.
+
+veilfile

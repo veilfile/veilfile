@@ -1,0 +1,15 @@
+{% extends "layouts/chapter.html" %}
+{# Page: not found (spec 4.9). Context: gone_link, true for a /a/<token> that leads nowhere (pages.errors.artifact_miss), else nothing. #}
+{# Never print the exception, request_path or anything else of the request: two kinds of miss must read the same, and /a/<token> must not reveal whether a token ever existed (a test reads this file for those names). #}
+{% block title %}{% if gone_link %}Nothing here{% else %}Not found{% endif %} | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block preload_heading %}{% endblock %}
+{% block chapter %}
+{% if gone_link %}
+<h1 class="chapter__title">Nothing here.</h1>
+<p>If this link was shared with you, its moment may have passed.</p>
+{% else %}
+<h1 class="chapter__title">Not found.</h1>
+<p>There is nothing at this address. Check it for a typo, or start from the <a href="{% url 'landing' %}">home page</a>.</p>
+{% endif %}
+{% endblock %}

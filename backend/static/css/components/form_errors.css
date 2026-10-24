@@ -1,0 +1,24 @@
+/* The sentences that belong to a whole form (spec 4.7): a wrong password, a throttled sign in. A 2px line down the left, solid --ink
+   (a notice has the same line in --hair), a small mono label reading Check this, then the sentences in full --ink. No colour and
+   no box. The markup is role="alert". */
+.form-errors {
+  margin: 0 0 var(--space-4);
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--ink);
+  color: var(--ink);
+}
+
+.form-errors__flag {
+  display: block;
+  margin: 0 0 var(--space-1);
+  color: var(--ink);
+}
+
+.form-errors p {
+  margin: 0 0 var(--space-1);
+  color: var(--ink);
+}
+
+.form-errors p:last-child {
+  margin-bottom: 0;
+}

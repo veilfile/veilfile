@@ -1,0 +1,23 @@
+{% extends "layouts/chapter.html" %}
+{% block chapter %}
+{# Words: edit the text between here and the end marker; keep every tag, class and template tag as it is. #}
+<h1 class="chapter__title">Begin</h1>
+<h2 class="chapter__heading">Connect your agent</h2>
+<p>The MCP server is at <code>https://veilfile.com/mcp</code>, and your account needs a verified email to use it. Clients that support MCP sign-in ask you to sign in the first time. The others take an API key instead: create one in <a href="/app/">your dashboard</a> and export it as <code>VEILFILE_API_KEY</code>. The snippets below use the key.</p>
+<h3 class="chapter__label label">Claude Code</h3>
+{% include "components/code_block.html" with id="begin-claude-code" label="Copy the Claude Code command" code=snippets.claude_code only %}
+<h3 class="chapter__label label">Codex</h3>
+{% include "components/code_block.html" with id="begin-codex" label="Copy the Codex command" code=snippets.codex only %}
+<h3 class="chapter__label label">Cursor</h3>
+<p>In <code>~/.cursor/mcp.json</code>:</p>
+{% include "components/code_block.html" with id="begin-cursor" label="Copy the Cursor configuration" code=snippets.cursor only %}
+<h3 class="chapter__label label">The Claude apps</h3>
+<p>Add a custom connector with the address above, and sign in when it asks.</p>
+<p>Every other client, and each option in full: <a href="{% url 'docs-page' 'agent' %}">agent setup, in the Docs</a>.</p>
+<h2 class="chapter__heading">Or use the command line</h2>
+{% include "components/code_block.html" with id="begin-command-line" label="Copy the command line example" code=snippets.command_line only %}
+<h2 class="chapter__heading">Or plain HTTP</h2>
+{% include "components/code_block.html" with id="begin-http" label="Copy the curl example" code=snippets.http only %}
+<p>Agents can read everything they need in one file: <a href="/llms.txt">llms.txt</a>.</p>
+{# End of words. #}
+{% endblock %}

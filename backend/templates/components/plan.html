@@ -1,0 +1,8 @@
+{# Component: plan. One plan: its name, price, limits, and a link into sign-up with it chosen (spec 4.3). #}
+{# Inputs: plan, a dict with name, price, limits (a list of short phrases), signup_url and action. #}
+<article class="plan">
+<h2 class="plan__name">{{ plan.name }}</h2>
+<p class="plan__price label">{{ plan.price }}</p>
+<ul class="plan__limits">{% for limit in plan.limits %}<li>{{ limit }}</li>{% endfor %}</ul>
+<p class="plan__act"><a class="label interactive" href="{{ plan.signup_url }}">{{ plan.action }}</a></p>
+</article>

@@ -1,0 +1,107 @@
+/* Design tokens for the shell's pages, the dashboard's included: every color, size and space lives here (spec 3.2).
+   Paper is the default appearance. Ink applies to any element with data-theme="dark", and to
+   data-theme="system" (or no data-theme) when the system is dark. The stored values stay
+   light | dark | system, as visitors have saved them (shell.html's boot script reads them, shell.js writes them). */
+
+/* Every colour token is registered, so a switch of appearance can fade it: a custom property only transitions
+   once it has a type (base.css, html { transition }). A new colour token needs its rule here, with its Paper
+   value as the initial value; --grain is an image and stays out. */
+@property --paper { syntax: "<color>"; inherits: true; initial-value: #ebe6de; }
+@property --ink { syntax: "<color>"; inherits: true; initial-value: #2c2925; }
+@property --muted { syntax: "<color>"; inherits: true; initial-value: #534e47; }
+@property --hair { syntax: "<color>"; inherits: true; initial-value: rgba(44, 41, 37, .2); }
+@property --fill { syntax: "<color>"; inherits: true; initial-value: rgba(44, 41, 37, .12); }
+@property --box { syntax: "<color>"; inherits: true; initial-value: rgba(240, 236, 229, .35); }
+
+:root,
+[data-theme="light"],
+[data-theme="system"] {
+  --paper: #ebe6de;
+  --ink: #2c2925;
+  --muted: #534e47;
+  --hair: rgba(44, 41, 37, .2);
+  --fill: rgba(44, 41, 37, .12);
+  --box: rgba(240, 236, 229, .35);
+  --grain: url("../img/grain-paper.png"); /* the still grain over this ground (spec 3.3) */
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --paper: #1b1917;
+  --ink: #e6e0d6;
+  --muted: #aea79c;
+  --hair: rgba(230, 224, 214, .2);
+  --fill: rgba(230, 224, 214, .14);
+  --box: rgba(30, 28, 26, .35);
+  --grain: url("../img/grain-ink.png");
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]),
+  [data-theme="system"] {
+    --paper: #1b1917;
+    --ink: #e6e0d6;
+    --muted: #aea79c;
+    --hair: rgba(230, 224, 214, .2);
+    --fill: rgba(230, 224, 214, .14);
+    --box: rgba(30, 28, 26, .35);
+    --grain: url("../img/grain-ink.png");
+    color-scheme: dark;
+  }
+}
+
+:root {
+  --font-display: "Cormorant Garamond", "Cormorant Garamond Fallback", Georgia, serif;
+  --font-reading: "Newsreader", "Newsreader Fallback", Georgia, serif;
+  --font-mono: "IBM Plex Mono", "IBM Plex Mono Fallback", Menlo, Consolas, monospace;
+  --label-size: clamp(13px, 0.35vw + 11.6px, 14px); /* 13px on phones, 14px from 686px wide */
+  --label-tracking: .14em; /* a letter and its space are 10.4px at 14px: the same as 13px at .2em, so the column keeps its width */
+  --reading-size: 18.5px;
+  --reading-leading: 1.62;
+  --measure: 65ch;
+  --edge-block: 5.5vh;
+  --edge-inline: 5%;
+  --mark-size: 24px; /* the mark top left: 6px cells; 7px cells (28px) from 64rem up */
+  /* Wide screens: how far in from each side the page keeps clear of the corners. The widest corner is the menu column on
+     the right (its longest label, HOW IT WORKS, with the link's padding): its left edge lies 191px in from the window's edge
+     at 1024 wide, 204px at 1280 and 236px at 1920, where the reach below is 315, 328 and 360, so 124 to 125px stay clear. The
+     switches alone in the bottom corners are narrower. The reserve is 16 label widths, kept as the owner saw the column
+     (a smaller number widens it). */
+  --corner-reach: calc(var(--edge-inline) + 16 * var(--label-size) + var(--space-5));
+  /* Narrow screens: along the top the page fades out (base.css), fully past the corner labels (--fade-top, the corners'
+     rows), then in over --fade-band. */
+  --fade-top: calc(var(--edge-block) + 1.75rem);
+  --fade-band: 2rem;
+  --mask-solid: #000; /* the opaque end of a mask gradient: only its alpha counts */
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2.5rem;
+  --space-6: 4rem;
+  --fill-fade: .15s;
+  --outline-width: 1px; /* the keyboard focus outline (spec 3.4), and how far it stands off its element; the menu's padding holds both */
+  --outline-offset: 3px;
+  --display-size: clamp(26px, 3.6vw, 52px); /* the threshold line */
+  --title-size: clamp(28px, 2.9vw, 44px); /* a chapter's title */
+  --chapter-measure: 40rem; /* a chapter's column */
+  --form-measure: 26rem; /* a form page's column (layout-form, base.css): about fifty characters of Newsreader */
+  --app-measure: 60rem; /* the dashboard's column at most (layout-app, base.css): the room between the corners is narrower than this until the window is about 1650px wide */
+  --font-heading: italic 400 1.45em/1.2 var(--font-display); /* a chapter's heading and a plan's name; the em is the text around them */
+  --fade: .7s; /* Come in's cross-fade (come-in.js reads it to know how long to wait) */
+  --change-fade: .35s; /* a chapter change in place: the cross-fade of the content (a view transition, base.css), or where there is none each half of the fade out and in (shell.js reads it to know how long to wait); a change chosen from the phone sheet fades the old content out over the sheet's close (.18s) and the new in over .17s, which sum to it (shell.js) */
+  --scene-fade: 1.4s; /* a switch of appearance: every colour token fades with the cloth (spec 3.2) */
+}
+
+@media (max-width: 40rem) {
+  :root {
+    --reading-size: 17.5px;
+  }
+}
+
+@media (min-width: 64rem) {
+  :root {
+    --mark-size: 28px;
+  }
+}

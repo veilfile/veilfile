@@ -1,0 +1,29 @@
+{# Component: file_list. The Files section's list (spec 4.8): a stacked row for each file with its state and, while its link works, Copy and Revoke, then the way to older or newer files. #}
+{# Inputs: files, a list of rows (dashboard/file_rows.py: id, name, size, added, expires, flags, state, url); id_prefix, which the ids of the links Copy reads are made from; older_url and newest_url, each an address or empty. #}
+{% load dashboard %}
+{% if files %}
+<table class="rows files">
+<caption>Your files, newest first</caption>
+<thead>
+<tr><th scope="col">File</th><th scope="col">Size</th><th scope="col">Added</th><th scope="col">Expires</th><th scope="col">Secret flags</th><th scope="col">State</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr>
+</thead>
+<tbody>
+{% for file in files %}<tr class="files__row" data-state="{{ file.state }}">
+<td class="files__name" data-label="File">{{ file.name }}</td>
+<td data-label="Size">{{ file.size|bytes }}</td>
+<td data-label="Added">{{ file.added|utc_time }}</td>
+<td data-label="Expires">{{ file.expires|utc_time }}</td>
+<td data-label="Secret flags">{% if file.flags %}{{ file.flags|join:", " }}{% else %}None{% endif %}</td>
+<td data-label="State">{{ file.state|capfirst }}</td>
+<td data-label="Actions">{% if file.url %}<div class="files__actions"><button class="files__copy label interactive" type="button" data-copy="{{ id_prefix }}-url-{{ file.id }}" aria-label="Copy link for {{ file.name }}">Copy</button><a class="label interactive" href="{% url 'app-file-revoke' file.id %}" aria-label="Revoke {{ file.name }}">Revoke</a><code class="visually-hidden" id="{{ id_prefix }}-url-{{ file.id }}" aria-hidden="true">{{ file.url }}</code></div>{% else %}None{% endif %}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% elif newest_url %}
+<p>There are no older files.</p>
+{% else %}
+<p>No files yet. Create a key under Keys, point your agent at its variable name, and uploads will appear here.</p>
+<p class="form-links"><a class="label interactive" href="{% url 'app-keys' %}">Go to Keys</a></p>
+{% endif %}
+{% if newest_url or older_url %}<nav class="files__pager" aria-label="More files">{% if newest_url %}<a class="files__newest label interactive" href="{{ newest_url }}">Newest</a>{% endif %}{% if older_url %}<a class="files__older label interactive" href="{{ older_url }}" rel="next">Older files</a>{% endif %}</nav>
+{% endif %}<p class="visually-hidden" role="status" data-copy-status></p>

@@ -1,0 +1,1 @@
+{"mcpServers":{"veilfile":{"headers":{"Authorization":"Bearer ${VEILFILE_API_KEY}"},"type":"http","url":"https://veilfile.com/mcp"}}}

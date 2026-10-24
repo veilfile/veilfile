@@ -1,0 +1,22 @@
+/* The list of a page's sections, at the top of a Docs page or a legal document (spec 4.6). It shows no numbers of its
+   own: the legal documents number their headings in their words. Its links are the reading column's prose links
+   (base.css), which cover list items. */
+.sections {
+  margin: 0 0 var(--space-5);
+  padding: 0 0 var(--space-4);
+  border-bottom: 1px solid var(--hair);
+}
+
+.sections__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sections__list li {
+  margin: 0 0 var(--space-1);
+}
+
+.sections__list li:last-child {
+  margin-bottom: 0;
+}

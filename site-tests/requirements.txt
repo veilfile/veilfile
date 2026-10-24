@@ -1,0 +1,2 @@
+# Browser checks for the site (CI jobs `site`, `site-cloth`, `site-ink`, `site-reading`, `site-phone`, `site-forms` and `site-catalog`). Never installed in the app's image.
+playwright==1.49.1

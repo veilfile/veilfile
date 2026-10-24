@@ -1,0 +1,52 @@
+{% extends "layouts/form.html" %}
+{% load static %}
+{# Form page: the approval of a terminal's login (spec 4.7). The words are the old page's until the voice pass (PR 7). Approve and Deny are one form with the same fields; Deny only changes where it posts (formaction). A refusal is the page's one error and no field shows one, so its summary takes focus (focus=True). #}
+{% block title %}Approve terminal login | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/pages/device.css' %}">{% endblock %}
+{% block form_page %}
+<h1>Approve terminal login</h1>
+{% include "components/form_errors.html" with errors=errors focus=True only %}
+<p>A terminal is asking for an API key to your workspace.</p>
+<p class="device-warning"><strong>Only approve if you just ran <code>veilfile login</code> yourself</strong> and the code below matches the one in your terminal. If someone sent you this link or asked you to approve it, click Deny: approving would give them access to your files.</p>
+{% if not email_verified %}
+<p class="notice" role="status"><strong>Verify your email first.</strong> Approving this terminal key will be refused until your email address is verified. Check your inbox, or <a href="{% url 'email-verification' %}">re-send the verification email</a>.</p>
+{% endif %}
+{# A div cannot carry an aria-label (axe: aria-prohibited-attr), so the code has a visible label and its text is its name. #}
+<div class="device-code">
+<p class="label">Device code</p>
+<p class="device-code__value">{{ device_code.user_code_display }}</p>
+</div>
+{# requester_* come from the unauthenticated request: auto-escaped, shown as given. #}
+{# requester_ip is email_verification.client_ip, only as trustworthy as its proxy handling. #}
+<dl class="device-request">
+<dt>Requested</dt>
+<dd>{{ device_code.created_at|timesince }} ago</dd>
+<dt>From IP</dt>
+<dd>{{ device_code.requester_ip|default:"unknown" }}</dd>
+<dt>Client</dt>
+<dd>{% if device_code.requester_user_agent %}<code>{{ device_code.requester_user_agent|truncatechars:120 }}</code>{% else %}unknown{% endif %}</dd>
+<dt>Signed in as</dt>
+<dd>{{ account }}</dd>
+</dl>
+{% include "device/includes/grant_summary.html" with key_cap=key_cap only %}
+<form method="post" action="{% url 'device-approve' %}">
+{% csrf_token %}
+<input type="hidden" name="user_code" value="{{ device_code.user_code_display }}">
+{% if replacement_required %}
+<fieldset>
+<legend>Choose a key to replace</legend>
+<p>Your plan allows {{ key_cap }} active API key{{ key_cap|pluralize }}, and this workspace has {{ replaceable_keys|length }}. The key you choose is revoked when the terminal receives its new key; anything still using it stops working.</p>
+{% for key in replaceable_keys %}
+{# The value is the key's id and the re-checked radio is found by comparing it with the posted string: keep key.id|stringformat:"d". #}
+<label class="check"><input class="check__input" type="radio" name="replace_key" value="{{ key.id }}" required{% if selected_key == key.id|stringformat:"d" %} checked{% endif %}><span class="check__text">{{ key.name }}<span class="check__detail"><code>{{ key.key_prefix }}…</code> · created {{ key.created_at|date:"M j, Y" }} · last used {% if key.last_used_at %}{{ key.last_used_at|date:"M j, Y" }}{% else %}never{% endif %}</span></span></label>
+{% endfor %}
+</fieldset>
+{% endif %}
+<label class="check"><input class="check__input" type="checkbox" name="confirm" value="yes" required><span class="check__text">I just ran <code>veilfile login</code> myself, and this code matches my terminal.</span></label>
+<div class="form-actions">
+<button class="action interactive" type="submit">Approve</button>
+<button class="action interactive" type="submit" formaction="{% url 'device-deny' %}" formnovalidate>Deny</button>
+</div>
+</form>
+{% endblock %}

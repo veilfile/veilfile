@@ -1,0 +1,821 @@
+# CI for Veilfile. Render auto-deploys every commit to main, so this must be
+# green before anything is merged to main (see AGENTS.md). Set a ruleset on
+# main with these required checks: backend, npm-cli, python-cli, names. The
+# browser checks are one run in parts, each its own job with its own 20 minutes:
+# site (the page checks), site-cloth (the cloth's families), site-ink (the ink
+# washes, in the phone menu's sheet too), site-reading (the Journal, Docs and
+# legal pages), site-phone (the phone menu's sheet: its opening and closing, the
+# changes chosen from it and the faces they wait for, in Chromium and WebKit; the
+# only job that installs WebKit), site-forms (the forms and the error pages, each
+# in its states; it makes its own fixtures), site-catalog (the component
+# catalog's page checks, split from site for time) and site-dashboard (the signed-in
+# dashboard: its sections, their changes in place, Sign out, a new key, a revoke,
+# rows and times; it makes its own fixtures and installs WebKit too). Every site* job must pass;
+# they are required checks in the ruleset on the public repository. A new part is a new job here and a name in the docs that list the
+# required checks (pages.tests_site_parts holds both).
+#
+# Which runs happen. A push to main runs backend, npm-cli, python-cli and names only:
+# the site* jobs run for pull requests, and the browser checks of a merged pull
+# request already ran on its merge commit. A pull request skips the site* jobs
+# when the `changes` job finds that every changed path is one that cannot reach
+# a rendered page (cli/, npm/, plugin/, the repo-root docs/, markdown files at
+# the root, test modules and release.yml); a change to this file runs
+# everything. A skipped job counts as passed for a required check.
+#
+# Where they run. Every job runs on a GitHub-hosted runner, ubuntu-24.04 (x64),
+# a fresh machine for each job, and the jobs of a pull request run side by
+# side. Nothing carries from one job to the next:
+# - Python comes from actions/setup-python (with its pip cache), and the site*
+#   jobs install Playwright's browsers with their system libraries
+#   (--with-deps) and cache the browsers by Playwright's version.
+# - Each site* job serves on a port of its own (SITE_PORT, 8801 and up) and
+#   stops its server in a last step that runs `if: always()`.
+# - The site* jobs blank DATABASE_URL, so that `migrate` can never reach a
+#   database, whatever the environment holds.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      # A hosted runner starts clean for every job, and setup-python keeps its pip cache.
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+
+      # The test runner refuses DJANGO_DEBUG=False, forces local storage and
+      # strips STRIPE_*/AWS_*; tests use SQLite.
+      - name: Backend tests
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-only-not-a-secret
+        run: python manage.py test
+
+      - name: Static files collect with production storage
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "False"
+          DJANGO_SECRET_KEY: ci-only-not-a-secret
+          DJANGO_ALLOW_SQLITE: "True"
+        run: python manage.py collectstatic --noinput --verbosity 0
+
+      - name: Migrations are up to date
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-only-not-a-secret
+        run: python manage.py makemigrations --check --dry-run
+
+      # Production-like settings (mirrors the live Render env, with dummy
+      # values; nothing connects to a database or to R2). Errors fail the
+      # job. Warnings fail it too unless they are on the accepted list below:
+      # the django-oauth-toolkit RFC 9700 defaults (follow-ups, see
+      # AGENTS.md) and the HSTS subdomains/preload options, which stay off on
+      # purpose until every subdomain serves HTTPS. A new warning, including
+      # any veilfile.W00x, breaks the build.
+      - name: Deploy checks (production-like env)
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "False"
+          DJANGO_ALLOWED_HOSTS: veilfile.com
+          DROP_BASE_URL: https://veilfile.com
+          DROP_STORAGE: s3
+          AWS_S3_ENDPOINT_URL: https://example.r2.cloudflarestorage.com
+          AWS_S3_BUCKET: ci
+          AWS_ACCESS_KEY_ID: ci
+          AWS_SECRET_ACCESS_KEY: ci
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+          EMAIL_BACKEND: django.core.mail.backends.smtp.EmailBackend
+          EMAIL_HOST: smtp.example.com
+          VEILFILE_SAFETY_MODE: log
+        run: |
+          set -o pipefail
+          DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
+          export DJANGO_SECRET_KEY
+          python manage.py check --deploy --fail-level ERROR 2>&1 | tee "$RUNNER_TEMP/check-deploy.txt"
+          accepted='oauth2_provider\.W00[4-8]|security\.W005|security\.W021'
+          unexpected="$(grep -oE '\([a-z_0-9]+\.[WEC][0-9]+\)' "$RUNNER_TEMP/check-deploy.txt" | tr -d '()' | sort -u | grep -Ev "^(${accepted})$" || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected deploy-check warnings:" >&2
+            echo "$unexpected" >&2
+            exit 1
+          fi
+
+  npm-cli:
+    name: npm-cli (node ${{ matrix.node }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: ${{ matrix.node }}
+      - name: npm CLI tests
+        working-directory: npm
+        run: node --test
+
+  python-cli:
+    name: python-cli (python ${{ matrix.python }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # "3.9" is the newest 3.9 on a hosted runner (setup-python). The CLI only has to run on 3.9; the patch level does not matter.
+        python: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Python CLI tests
+        working-directory: cli
+        run: python -m unittest discover -s tests -t .
+
+  # Says whether a pull request can change a rendered page. The site* jobs wait for it and skip when it says no (a skipped job counts as passed).
+  changes:
+    name: changes
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      site: ${{ steps.paths.outputs.site }}
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0
+      # site=false only when every path the pull request changes is one that cannot reach a page the browser checks open: the CLIs and the plugin,
+      # the repo-root docs/ (not backend/docs, which are pages), markdown files at the root, test modules, and release.yml. Anything else, ci.yml
+      # included, and any doubt (no list of paths, a git error, a path git quotes) is site=true. --no-renames lists a moved file's old path as well.
+      - name: Decide whether the site checks run
+        id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if ! files="$(git diff --name-only --no-renames "$BASE_SHA...$HEAD_SHA")" || [ -z "$files" ]; then
+            echo "No list of changed files, so the site checks run."
+            echo "site=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Changed files:"
+          echo "$files"
+          skippable='^(cli/|npm/|plugin/|docs/|[^/]+\.md$|backend/([^/]+/)*tests[^/]*\.py$|backend/([^/]+/)*tests/|\.github/workflows/release\.yml$)'
+          rest="$(printf '%s\n' "$files" | grep -Ev "$skippable" || true)"
+          if [ -n "$rest" ]; then
+            echo "These can reach a page, so the site checks run:"
+            echo "$rest"
+            echo "site=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "None of these can reach a page, so the site checks are skipped."
+            echo "site=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  names:
+    name: names
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - name: No name from the owner's list in the tree
+        env:
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
+        run: |
+          printf '%s\n' "$FORBIDDEN_NAMES" | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/names"
+          if [ ! -s "$RUNNER_TEMP/names" ]; then
+            echo "::error::The FORBIDDEN_NAMES secret holds no names. The owner sets it (AGENTS.md, Where CI runs)."
+            exit 1
+          fi
+          status=0
+          git grep -l -i -I -F -f "$RUNNER_TEMP/names" -- . || status=$?
+          if [ "$status" -eq 0 ]; then
+            echo "::error::The files above hold a name that must not appear in this repository. Remove it. Only the owner can read the list."
+            exit 1
+          elif [ "$status" -ne 1 ]; then
+            echo "::error::git grep failed (exit $status), so the names check did not run."
+            exit 1
+          fi
+
+  site:
+    name: site
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8801"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm ci --prefix site-tests
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      - name: Browser checks, the pages
+        run: python -u site-tests/run_site_checks.py --part pages --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+  site-cloth:
+    name: site-cloth
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8802"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm ci --prefix site-tests
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      # The WebGL cloth's families (veil.js): Chromium runs with SwiftShader, so no GPU is needed.
+      - name: Browser checks, the cloth
+        run: python -u site-tests/run_site_checks.py --part cloth --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-cloth-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+  site-ink:
+    name: site-ink
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8803"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm ci --prefix site-tests
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      # The ink washes (veil.js), the phone menu's sheet included: the cloth's second half, in a job of its own so that neither runs near the
+      # 20 minutes. Chromium runs with SwiftShader, so no GPU is needed.
+      - name: Browser checks, the ink
+        run: python -u site-tests/run_site_checks.py --part ink --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-ink-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+  site-reading:
+    name: site-reading
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8804"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm ci --prefix site-tests
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      # The Journal, the Docs and the legal documents: long columns, section lists, code blocks, previous and next, and the changes among them.
+      # Chromium only (the reading checks have no WebKit pass), and the cloth is stubbed out, so no GPU or SwiftShader work is asked of the runner.
+      - name: Browser checks, the reading pages
+        run: python -u site-tests/run_site_checks.py --part reading --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-reading-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+  site-phone:
+    name: site-phone
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8805"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+      # WebKit as well as Chromium: the phone menu's sheet runs in both (the engine of every browser on an iPhone is WebKit), and a check that
+      # skips itself where WebKit is missing would pass in CI by not running (pages.tests_site_parts holds the install).
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium webkit
+          npm ci --prefix site-tests
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      # The phone menu's sheet: its opening and closing, the changes chosen from it (the sheet's close and the old content's fade out, the swap, the new
+      # content's fade in, no view transition) and the faces they wait for, in Chromium and in WebKit at an iPhone 13's settings. The cloth is stubbed out, so no GPU or SwiftShader work is asked.
+      - name: Browser checks, the phone menu
+        run: python -u site-tests/run_site_checks.py --part phone --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-phone-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+  site-forms:
+    name: site-forms
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8806"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm ci --prefix site-tests
+      # The fixture script draws the 404 and the 500 as production does (this server runs with DEBUG on) and makes the users, device codes and OAuth clients.
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          python manage.py shell -c "exec(open('../site-tests/make_form_fixtures.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      # Chromium only: WebKit would repeat the checks at twice the cost and cannot show the keyboard, the zoom or the autofill of iOS.
+      - name: Browser checks, the forms and the error pages
+        run: python -u site-tests/run_site_checks.py --part forms --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-forms-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+  site-catalog:
+    name: site-catalog
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8807"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+          npm ci --prefix site-tests
+      # The catalog is a staff page: the staff session is all it needs (no form fixtures).
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      # The component catalog (/app/components/) with the pages part's checks of a page: every width, appearance and Motion, and its edge cases. Chromium only,
+      # the cloth stubbed out.
+      - name: Browser checks, the component catalog
+        run: python -u site-tests/run_site_checks.py --part catalog --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-catalog-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true
+
+  site-dashboard:
+    name: site-dashboard
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.site != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE_PORT: "8808"
+    steps:
+      - uses: actions/checkout@v4.2.2
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site-tests/package-lock.json
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+      # WebKit as well as Chromium: the times (Date and Intl) and the Sign out button in the phone's sheet are checked in the engine of every browser on an iPhone, and a check that skips
+      # itself where WebKit is missing would pass in CI by not running (pages.tests_site_parts holds the install).
+      - name: Install dependencies
+        run: |
+          pip install -r backend/requirements.txt -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium webkit
+          npm ci --prefix site-tests
+      # The fixture script makes the dashboard's users with their keys, files, connected apps and billing states, and their sessions. It refuses a server with a Stripe variable.
+      - name: Start the app
+        working-directory: backend
+        env:
+          DJANGO_DEBUG: "True"
+          DJANGO_SECRET_KEY: ci-site-not-a-secret
+          DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
+          SITE_SESSION_FILE: ../site-tests/session.txt
+        run: |
+          if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
+            echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
+            exit 1
+          fi
+          python manage.py migrate --noinput
+          python manage.py shell -c "exec(open('../site-tests/make_staff_session.py').read())"
+          python manage.py shell -c "exec(open('../site-tests/make_dashboard_fixtures.py').read())"
+          nohup python manage.py runserver "127.0.0.1:$SITE_PORT" --noreload > ../site-tests/server.log 2>&1 &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 30); do curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null && break; sleep 1; done
+          curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null || { cat ../site-tests/server.log; exit 1; }
+      # The dashboard's sections with the pages part's checks of a page, their changes in place, Sign out, a new key, a revoke, rows that stack and times in the visitor's zone. Chromium, and WebKit
+      # for the two checks that depend on the engine. The cloth is stubbed out.
+      - name: Browser checks, the dashboard
+        run: python -u site-tests/run_site_checks.py --part dashboard --base-url http://127.0.0.1:$SITE_PORT --session-file site-tests/session.txt --out site-tests/artifacts
+      - name: Keep the screenshots and the server log
+        if: always()
+        uses: actions/upload-artifact@v4.4.3
+        with:
+          name: site-dashboard-screenshots
+          path: |
+            site-tests/artifacts/
+            site-tests/server.log
+          retention-days: 14
+      - name: Stop the app
+        if: always()
+        run: |
+          [ -n "${SERVER_PID:-}" ] || exit 0
+          kill "$SERVER_PID" 2>/dev/null || exit 0
+          for attempt in $(seq 1 10); do kill -0 "$SERVER_PID" 2>/dev/null || exit 0; sleep 1; done
+          kill -9 "$SERVER_PID" 2>/dev/null || true

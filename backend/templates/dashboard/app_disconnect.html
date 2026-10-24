@@ -1,0 +1,14 @@
+{% extends "layouts/form.html" %}
+{# Page: confirm disconnecting an app (spec 4.8). A GET only shows this form; the POST disconnects and goes back to Connected apps with "<App> disconnected.". The name is the app's own words: escaped, and shown with the host it returns to. #}
+{% block title %}Disconnect app | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Disconnect {{ app.name }}?</h1>
+<p>It loses access now and must ask you again to reconnect.</p>
+{% if app.redirect_host %}<p>It returns to <strong>{{ app.redirect_host }}</strong>.</p>
+{% endif %}<form method="post">
+{% csrf_token %}
+<button class="action interactive" type="submit">Disconnect</button>
+</form>
+<p class="form-links"><a class="label interactive" href="{% url 'app-apps' %}">Keep connected</a></p>
+{% endblock %}

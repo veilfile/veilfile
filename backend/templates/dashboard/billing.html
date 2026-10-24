@@ -1,0 +1,43 @@
+{% extends "layouts/app.html" %}
+{# Page: Billing (spec 4.8). Plan names and prices come from the view, which reads plans.py (AGENTS.md, Pricing changes); the sentences are the React dashboard's, kept as they were. #}
+{% block app_main %}
+<h1>Billing</h1>
+<p>Current plan: <strong>{{ plan_name }}</strong>{% if status_words %} ({{ status_words }}){% endif %}</p>
+{% if subscription_status == "past_due" %}
+<p class="notice" role="status">Your last payment failed. Stripe is retrying; update your payment method under Manage billing to keep your plan.</p>
+{% elif not subscribed and subscription_status == "unpaid" %}
+<p class="notice" role="status">Your subscription has an unpaid invoice, so this workspace is on the free plan. Pay it, or cancel the subscription, under Manage billing.</p>
+{% elif not subscribed and subscription_status == "incomplete" %}
+<p class="notice" role="status">Your subscription's first payment hasn't gone through. Complete it under Manage billing; an unfinished payment expires within a day.</p>
+{% elif not subscribed and subscription_status == "paused" %}
+<p class="notice" role="status">Your subscription is paused, so this workspace is on the free plan. Resume or cancel it under Manage billing.</p>
+{% endif %}
+{% if pending %}
+<p class="notice" role="status">Your switch to {{ pending.name }} is waiting for payment. {% if pending.invoice_url %}Pay the invoice to apply it (your bank may ask you to confirm), or keep your current plan.{% else %}Keep your current plan, or update your payment method under Manage billing and switch again.{% endif %} Unpaid switches lapse within a day.</p>
+<div class="form-actions">
+{% if pending.invoice_url %}<a class="action interactive" href="{{ pending.invoice_url }}" target="_blank" rel="noopener noreferrer">Complete payment<span class="visually-hidden"> (opens in a new tab)</span></a>
+{% endif %}<form method="post" action="{% url 'app-billing-switch' plan=plan %}">
+{% csrf_token %}
+<button class="action interactive" type="submit">Keep {{ plan_name }}</button>
+</form>
+</div>
+{% endif %}
+{% include "dashboard/over_limits.html" with status=status only %}
+{% if options %}
+<div class="form-actions">
+{% for option in options %}{% if subscribed %}<a class="action interactive" href="{% url 'app-billing-switch' plan=option.slug %}">Switch to {{ option.name }} (${{ option.price }}/mo)</a>
+{% else %}<form method="post" action="{% url 'app-billing-checkout' %}">
+{% csrf_token %}
+<input type="hidden" name="plan" value="{{ option.slug }}">
+<button class="action interactive" type="submit">Upgrade to {{ option.name }} (${{ option.price }}/mo)</button>
+</form>
+{% endif %}{% endfor %}</div>
+{% endif %}
+{% if can_manage %}
+<form method="post" action="{% url 'app-billing-portal' %}">
+{% csrf_token %}
+<p class="form-links"><button class="label interactive" type="submit">Manage billing</button></p>
+</form>
+{% endif %}
+<p>{% if subscribed %}Plan switches apply to your existing subscription with prorated charges or credits. Manage billing opens the Stripe portal for your payment method, invoices, and cancellation.{% else %}Upgrades go through Stripe Checkout. Once subscribed, you switch plans here and manage payment details and cancellation in the customer portal.{% endif %}</p>
+{% endblock %}

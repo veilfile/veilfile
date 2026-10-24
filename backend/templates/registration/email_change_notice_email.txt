@@ -1,0 +1,8 @@
+Someone signed in to the Veilfile account "{{ username }}" asked to change its email address to {{ new_email_masked }}.
+
+Nothing changes until the new address is confirmed. Until then, password reset links keep coming to this address.
+
+If this wasn't you, reset your password now: {{ reset_url }}
+A reset signs out other sessions and disconnects connected apps. Then check the API keys on your dashboard and revoke any you don't recognize.
+
+veilfile

@@ -1,0 +1,14 @@
+{% extends "layouts/form.html" %}
+{# Page: confirm revoking a file (spec 4.8). Context: artifact, the signed-in user's own file. A GET only shows this page; the POST below revokes. #}
+{% block title %}Revoke file | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Revoke this file?</h1>
+<p><strong>{{ artifact.filename }}</strong></p>
+<p>Its link stops working at once and the file is deleted. This cannot be undone.</p>
+<form method="post">
+{% csrf_token %}
+<button class="action interactive" type="submit">Revoke file</button>
+</form>
+<p class="form-links"><a class="label interactive" href="{% url 'app-files' %}">Keep it</a></p>
+{% endblock %}

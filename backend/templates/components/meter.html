@@ -1,0 +1,10 @@
+{# Component: meter. One figure of the dashboard against its limit (spec 4.8): a mono label, the numbers in words and, when there is a limit, a hairline bar that fills as the figure nears it, to the thousandth. #}
+{# Inputs: id, unique on the page (the label's id is the id and _label, the figures' the id and _figures); label, the words above; used, a whole number; cap, the limit, a whole number or none; unit, bytes (used and cap are printed as B, KB, MB or GB), a word such as day (printed after the number, plural when it should be) or absent for a plain count; unlimited, true to print of unlimited when there is no cap; note, a short line under the bar. Over its cap the figure says so in words and the bar stays full. A figure with no cap that is not unlimited, such as how long links last, has no bar. #}
+{% load dashboard %}<div class="meter{% if cap and used > cap %} meter--over{% endif %}">
+<p class="meter__label label" id="{{ id }}_label">{{ label }}</p>
+<p class="meter__figures" id="{{ id }}_figures">{% if unit == "bytes" %}{{ used|bytes }}{% else %}{{ used|floatformat:"0g" }}{% if unit %} {{ unit }}{{ used|pluralize }}{% endif %}{% endif %}{% if cap is not None %} of {% if unit == "bytes" %}{{ cap|bytes }}{% else %}{{ cap|floatformat:"0g" }}{% endif %}{% elif unlimited %} of unlimited{% endif %}{% if cap and used > cap %} <span class="meter__flag label">Over the limit</span>{% endif %}</p>
+{% if cap %}{% widthratio used cap 1000 as share %}<div class="meter__bar" role="meter" aria-labelledby="{{ id }}_label" aria-describedby="{{ id }}_figures" aria-valuemin="0" aria-valuemax="{{ cap }}" aria-valuenow="{% if used > cap %}{{ cap }}{% else %}{{ used }}{% endif %}">
+<svg viewBox="0 0 1000 1" preserveAspectRatio="none" aria-hidden="true"><rect class="meter__fill" width="{% if used > cap %}1000{% else %}{{ share }}{% endif %}" height="1"/></svg>
+</div>
+{% endif %}{% if note %}<p class="meter__note">{{ note }}</p>
+{% endif %}</div>

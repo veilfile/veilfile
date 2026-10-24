@@ -1,0 +1,47 @@
+/* A code block (spec 4.3): a snippet in a hairline box, with Copy as the install line has it (the same label, the same fill and ink
+   under the cursor) in a row of its own along the top, at the right. The code scrolls sideways inside its own box, which a keyboard
+   reaches (tabindex 0), and has the whole width: Copy is never beside it or over it, at any width, so a long line (the Docs and the
+   Journal will have many) loses nothing to the button. Without JavaScript Copy cannot work, so it is not shown, and the box holds the
+   code alone. */
+.code-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0 0 var(--space-3);
+  border: 1px solid var(--hair);
+  background: var(--box);
+}
+
+/* The box is the block's, not the code's; the type is the code's own wherever the block sits (a chapter sets it for its own pre). */
+.code-block pre {
+  margin: 0;
+  padding: var(--space-1) var(--space-3) var(--space-3);
+  overflow-x: auto;
+  border: 0;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: calc(var(--reading-size) * .75);
+  line-height: 1.7;
+}
+
+.code-block pre code {
+  font: inherit;
+}
+
+/* Copy says Copy, Copied or Selected: it keeps the width of the longest (eight letters, each its advance plus the label's tracking, and the
+   .8em padding either side), so it does not change as the word does. A label link's hit area is its padding (base.css): here that padding
+   is laid out, not given back by a negative margin (the selector is as specific as base.css's .label.interactive and more, which sets
+   that margin), so the button's box lies in its own row, clear of the code, and the word sits a space-3 in from the block's right edge. */
+.code-block .code-block__copy.interactive {
+  justify-self: end;
+  min-width: calc(8ch + 3.2em);
+  margin: var(--space-1) calc(var(--space-3) - .8em) 0 0;
+  text-align: center;
+}
+
+:root:not(.js) .code-block__copy {
+  display: none;
+}
+
+:root:not(.js) .code-block pre {
+  padding-top: var(--space-3);
+}

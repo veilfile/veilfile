@@ -1,0 +1,68 @@
+User-agent: *
+Disallow: /a/
+Disallow: /app/
+Disallow: /api/
+Disallow: /o/
+Disallow: /mcp
+Disallow: /device
+Disallow: /accounts/
+Allow: /
+
+# AI crawlers explicitly welcome on the public pages. A named group
+# replaces the * group for that crawler, so each repeats the Disallow
+# lines: /a/<token> links are private artifacts, never content to fetch.
+User-agent: GPTBot
+Disallow: /a/
+Disallow: /app/
+Disallow: /api/
+Disallow: /o/
+Disallow: /mcp
+Disallow: /device
+Disallow: /accounts/
+Allow: /
+
+# Fetchers acting for a person (an assistant opening a link its user
+# pasted into a chat) may open /a/ links: the person chose to hand over
+# that bearer link. Training and indexing crawlers may not.
+User-agent: ChatGPT-User
+User-agent: Claude-User
+User-agent: Perplexity-User
+Disallow: /app/
+Disallow: /api/
+Disallow: /o/
+Disallow: /mcp
+Disallow: /device
+Disallow: /accounts/
+Allow: /
+
+User-agent: PerplexityBot
+Disallow: /a/
+Disallow: /app/
+Disallow: /api/
+Disallow: /o/
+Disallow: /mcp
+Disallow: /device
+Disallow: /accounts/
+Allow: /
+
+User-agent: ClaudeBot
+Disallow: /a/
+Disallow: /app/
+Disallow: /api/
+Disallow: /o/
+Disallow: /mcp
+Disallow: /device
+Disallow: /accounts/
+Allow: /
+
+User-agent: Google-Extended
+Disallow: /a/
+Disallow: /app/
+Disallow: /api/
+Disallow: /o/
+Disallow: /mcp
+Disallow: /device
+Disallow: /accounts/
+Allow: /
+
+Sitemap: https://veilfile.com/sitemap.xml

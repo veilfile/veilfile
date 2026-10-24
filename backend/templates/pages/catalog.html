@@ -1,0 +1,22 @@
+{% extends "shell.html" %}
+{% load static %}
+{% block title %}Components | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block preload_display %}<link rel="preload" href="{% static 'fonts/cormorant-garamond/italic-300-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'css/pages/catalog.css' %}">{% endblock %}
+{% block main %}
+<h1 class="catalog__title">Components</h1>
+<p class="catalog__lede">Every component in Paper and Ink, with Motion on and off. Staff only.</p>
+{% for item in components %}
+<section class="catalog__entry" aria-labelledby="component-{{ item.entry.name }}">
+<h2 class="catalog__name label" id="component-{{ item.entry.name }}">{{ item.entry.name }}</h2>
+<p class="catalog__note">{{ item.entry.note }}</p>
+<div class="catalog__frames">
+{% for frame in item.frames %}<figure class="catalog__frame" data-theme="{{ frame.theme }}" data-motion="{{ frame.motion }}">
+<div class="catalog__sample">{{ frame.html }}</div>
+<figcaption class="label">{{ frame.caption }}</figcaption>
+</figure>
+{% endfor %}</div>
+</section>
+{% endfor %}
+{% endblock %}

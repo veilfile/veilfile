@@ -1,0 +1,11 @@
+{% extends "layouts/form.html" %}
+{# Page: the new key, the answer to the POST that made it (spec 4.8, invariant 1). The one place a raw key is ever written. It is drawn once, in the code block, and nowhere else: not in a message, a data attribute or the title. The warning takes focus on load, so a screen reader reads it first and the key is a Tab away. #}
+{% block title %}New API key | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Your new API key</h1>
+<p id="key-warning" tabindex="-1" autofocus>Copy this key now. You won't see it again.</p>
+{% include "components/code_block.html" with id="new-key" code=new_key label="Copy the new API key" only %}
+<p>Name: <strong>{{ key_name }}</strong></p>
+<p><a class="action interactive" href="{% url 'app-keys' %}">Done</a></p>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "layouts/form.html" %}
+{# Page: confirm a paid plan before Stripe (spec 4.7). The price comes from the view, which reads it from plans.py (AGENTS.md, Pricing changes). #}
+{% block title %}Checkout | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block form_page %}
+<h1>Subscribe to the {{ plan_name }} plan (${{ price_usd }}/mo, tax included).</h1>
+<p>You're signed in as {{ user.get_username }}. Checkout opens on Stripe, and nothing is charged until you confirm there.</p>
+<form method="post">
+{% csrf_token %}
+<button class="action interactive" type="submit">Continue to checkout</button>
+</form>
+<p class="form-links">Not now? <a class="label interactive" href="/app/">Go to your dashboard</a></p>
+{% endblock %}

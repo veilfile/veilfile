@@ -1,0 +1,10 @@
+{# Component: entries. A list of pages to read, each with its title, an optional date and its description (spec 4.6). #}
+{# Inputs: entries, a sequence of objects with url, title, description and optional date (a date, shown as YYYY-MM-DD); nothing is shown for an empty sequence. #}
+{% if entries %}<ol class="entries" role="list">
+{% for entry in entries %}<li class="entries__item">
+<p class="entries__title"><a href="{{ entry.url }}">{{ entry.title }}</a></p>
+{% if entry.date %}<time class="entries__date label" datetime="{{ entry.date|date:'Y-m-d' }}">{{ entry.date|date:"Y-m-d" }}</time>
+{% endif %}{% if entry.description %}<p class="entries__description">{{ entry.description }}</p>
+{% endif %}</li>
+{% endfor %}</ol>
+{% endif %}

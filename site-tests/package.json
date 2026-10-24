@@ -1,0 +1,8 @@
+{
+  "name": "veilfile-site-tests",
+  "private": true,
+  "description": "axe-core for the site's browser checks (CI jobs `site`, `site-cloth`, `site-ink`, `site-reading`, `site-phone`, `site-forms` and `site-catalog`).",
+  "dependencies": {
+    "axe-core": "4.10.2"
+  }
+}

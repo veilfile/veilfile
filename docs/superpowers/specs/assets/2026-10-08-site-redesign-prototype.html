@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paper and Ink</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,300;1,400&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+  :root { --fill: rgba(44, 41, 37, .12); --paper: #ebe6de; --ink: #2c2925; --muted: #5d574f; --hair: rgba(44, 41, 37, .2); --box: rgba(240, 236, 229, .35); }
+  .scene[data-theme="ink"] { --paper: #1b1917; --ink: #e6e0d6; --muted: #a0998e; --hair: rgba(230, 224, 214, .2); --box: rgba(30, 28, 26, .35); --fill: rgba(230, 224, 214, .14); }
+  body { margin: 0; background: #f3f3f2; color: #222; font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 24px 72px; }
+  h2 { font-size: 24px; margin: 6px 0 6px; }
+  .subtitle { color: #666; margin: 0 0 24px; line-height: 1.55; max-width: 980px; }
+  .frame { border: 1px solid #ddd; border-radius: 12px; overflow: hidden; background: #fff; }
+
+  .scene { position: relative; aspect-ratio: 16 / 10; overflow: hidden; background: var(--paper); color: var(--ink); container-type: inline-size; transition: color 1.4s ease, background-color 1.4s ease; }
+  .scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .scene .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: clamp(10px, 1.05cqw, 13px); letter-spacing: .2em; text-transform: uppercase; }
+  .lbl { position: absolute; color: var(--muted); z-index: 3; }
+  button.lbl, .controls button, .chapters button, .enter, .tab, .copy { background: none; border: 0; padding: .6em .8em; margin: -.6em -.8em; cursor: pointer; color: var(--muted); transition: color 1.2s ease; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+  .controls { display: flex; gap: 2.6em; }
+  .tl { top: 5.5%; left: 5%; } .bl { bottom: 5.5%; left: 5%; } .br { bottom: 5.5%; right: 5%; }
+  .nav { position: absolute; top: 5.5%; right: 5%; z-index: 3; display: flex; flex-direction: column; align-items: flex-end; }
+  .nav .menu-btn { position: relative; }
+  .chapters { list-style: none; margin: 1.1em 0 0; padding: 0; display: flex; flex-direction: column; align-items: flex-end; gap: .95em; }
+  .chapters li { opacity: 0; transform: translateY(-3px); transition: opacity .7s ease, transform .7s ease; }
+  .chapters.open li { opacity: 1; transform: none; }
+  .chapters li.gap { margin-top: 1.1em; }
+  .chapters[hidden] { display: none; }
+  .inked, .current { color: var(--ink) !important; }
+
+  .stage { position: absolute; inset: 0; z-index: 2; }
+  .view { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: opacity .7s ease, visibility 0s linear .7s; }
+  .view.active { opacity: 1; visibility: visible; transition: opacity 1s ease .25s, visibility 0s; }
+  .threshold { flex-direction: column; gap: 3.6cqw; text-align: center; }
+  .line { font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 300; font-size: 3.6cqw; line-height: 1.22; max-width: 80%; text-wrap: balance; margin: 0; }
+  .door { position: relative; display: grid; place-items: center; min-height: 6.5cqw; }
+  .door > * { grid-area: 1 / 1; transition: opacity .8s ease; }
+  .enter { letter-spacing: .28em; padding: 1em 1.6em; margin: 0; }
+  .gone { opacity: 0; pointer-events: none; }
+
+  .install { display: flex; flex-direction: column; align-items: center; gap: .9em; }
+  .tabs { display: flex; gap: 1.6em; }
+  .tab[aria-selected="true"] { color: var(--ink); }
+  .cmd { display: flex; align-items: center; gap: 2.4em; padding: .95em 1.3em .95em 1.4em; border: 1px solid var(--hair); background: var(--box); transition: background-color 1.4s ease, border-color 1.4s ease, color 1.4s ease;
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); text-transform: none; letter-spacing: .02em; color: var(--ink); }
+  .cmd code { font: inherit; } .cmd .ps { color: var(--muted); margin-right: .7em; }
+  .copy { text-transform: uppercase; letter-spacing: .2em; margin: -.6em -.4em; }
+  .then { color: var(--muted); text-transform: none; letter-spacing: .02em; opacity: 0; transition: opacity 1s ease; }
+  .then.shown { opacity: 1; }
+
+  .prose { width: min(52cqw, 640px); font-family: 'Cormorant Garamond', serif; font-size: max(15px, 1.62cqw); line-height: 1.5; color: var(--ink); font-variant-numeric: lining-nums; }
+  .prose h1 { font-style: italic; font-weight: 300; font-size: 2.9cqw; line-height: 1.15; margin: 0 0 .9em; }
+  .prose p { margin: 0 0 .8em; }
+  .prose dl { margin: 0; } .prose dt { font-style: italic; font-weight: 500; } .prose dd { margin: 0 0 .75em; }
+  .prose .mono { color: var(--muted); }
+  .prose code { font-family: 'IBM Plex Mono', monospace; font-size: .8em; letter-spacing: .01em; }
+  .steps { font-family: 'IBM Plex Mono', monospace; font-size: clamp(10px, 1.02cqw, 13px); line-height: 2; margin: 1.2em 0 1em; color: var(--ink); }
+  .steps span { color: var(--muted); }
+  .plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.2em; margin-top: .4em; }
+  .plans h3 { font-style: italic; font-weight: 400; font-size: 1.35em; margin: 0 0 .15em; }
+  .plans .price { margin-bottom: .8em; }
+  .plans p { margin: 0; font-size: .92em; line-height: 1.55; }
+  .note { color: var(--muted); font-style: italic; }
+  /* Motion off: no cloth, so no ink either. A flat fill sits behind the label instead, as on Lefos. */
+  .scene .ink-target { isolation: isolate; }
+  .controls button, .chapters button, .enter, .tab, .copy, .prose a { position: relative; }
+  .scene .ink-target::before { content: ''; position: absolute; inset: .3em .45em; z-index: -1; pointer-events: none; background: transparent; transition: background-color .15s ease; }
+  .scene .enter::before { inset: .7em 1.2em; }
+  .scene .prose a::before { inset: -.02em -.18em; }
+  .scene.still .ink-target:hover::before, .scene.still .ink-target:focus-visible::before, .scene.still .current::before { background: var(--fill); }
+  .scene.still .ink-target:hover, .scene.still .ink-target:focus-visible { color: var(--ink); }
+  .scene.still .prose a:hover, .scene.still .prose a:focus-visible { text-decoration-color: transparent; }
+  .prose a { color: inherit; text-decoration: underline dotted; text-decoration-color: var(--muted); text-decoration-thickness: 1px; text-underline-offset: .22em; transition: text-decoration-color .8s ease; }
+  .prose a.inked { text-decoration-color: transparent; }
+  @media (prefers-reduced-motion: reduce) { .scene .ink-target::before, .scene, .cmd, .view, .view.active, .chapters li, .door > *, .then, button.lbl, .enter { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h2>Paper and Ink, with Motion off</h2>
+  <p class="subtitle">Turn <b>Motion off</b> (bottom right): the voile drifts away over a second and leaves plain paper, or slate in Ink, with a fine still grain, like Lefos with its shadows off. Hovers become a flat tinted block behind the label, appearing in a tenth of a second; the current chapter keeps its block. Turn Motion back on and the cloth and the ink return. People whose system asks for reduced motion land on the still page and never load the cloth. Starts in Ink; the switch beside Motion cycles Ink, Auto, Paper.</p>
+
+  <div class="frame">
+    <div class="scene" id="shell" data-theme="ink">
+      <canvas class="gl" aria-hidden="true"></canvas>
+      <button class="lbl tl mono ink-target home" type="button">Veilfile</button>
+      <nav class="nav mono" aria-label="Chapters">
+        <button class="lbl menu-btn ink-target" type="button" aria-expanded="false" aria-controls="chapters">Menu</button>
+        <ul class="chapters" id="chapters" hidden>
+          <li><button type="button" class="ink-target" data-go="about">About</button></li>
+          <li><button type="button" class="ink-target" data-go="how">How it works</button></li>
+          <li><button type="button" class="ink-target" data-go="begin">Begin</button></li>
+          <li><button type="button" class="ink-target" data-go="promises">Promises</button></li>
+          <li><button type="button" class="ink-target" data-go="plans">Plans</button></li>
+          <li class="gap"><button type="button" class="ink-target" data-go="docs">Docs</button></li>
+          <li><button type="button" class="ink-target" data-go="journal">Journal</button></li>
+          <li><button type="button" class="ink-target" data-go="signin">Sign in</button></li>
+        </ul>
+      </nav>
+      <span class="lbl bl mono">Private · Ephemeral</span>
+      <div class="lbl br mono controls">
+        <button class="appearance ink-target" type="button" aria-label="Appearance: Ink">Ink</button>
+        <button class="motion ink-target" type="button" aria-pressed="true">Motion · on</button>
+      </div>
+
+      <main class="stage">
+        <section class="view threshold active" data-view="home">
+          <p class="line">Some files are meant to be seen for a moment,<br> by the right eyes, and then let go.</p>
+          <div class="door mono">
+            <button class="enter ink-target" type="button" aria-controls="install" aria-expanded="false">Come in</button>
+            <div class="install gone" id="install">
+              <div class="tabs" role="tablist" aria-label="Install with">
+                <button class="tab ink-target" role="tab" aria-selected="true" data-cmd="npm install -g veilfile">npm</button>
+                <button class="tab ink-target" role="tab" aria-selected="false" data-cmd="pip install veilfile">pip</button>
+              </div>
+              <div class="cmd"><code><span class="ps">$</span><span class="cmdtext">npm install -g veilfile</span></code><button class="copy ink-target" type="button">Copy</button></div>
+              <div class="then">then <code>veilfile login</code></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" data-view="about"><div class="prose">
+          <h1>A quiet place for what your agents make.</h1>
+          <p>Agents make things all day: a screenshot from a failing test, a bundle of logs, a report written in the middle of the night. Most of it needs to be seen by one or two people, for a little while.</p>
+          <p>Veilfile gives each file a private link, and lets it go when its time is up. No public repository, no bucket to lock down, no paste that lives forever.</p>
+        </div></section>
+
+        <section class="view" data-view="how"><div class="prose">
+          <h1>The life of a file</h1>
+          <dl>
+            <dt>Made.</dt><dd>Your agent pushes a file through the command line, the API, or MCP.</dd>
+            <dt>Veiled.</dt><dd>It gets back an unguessable link. The 256-bit token in the address is the only key; nothing is listed or indexed.</dd>
+            <dt>Seen.</dt><dd>You share the link with whoever should see it. Uploads are checked for anything shaped like a secret, and flagged.</dd>
+            <dt>Let go.</dt><dd>When its days run out, the link stops working and the file is deleted. Nothing to clean up.</dd>
+          </dl>
+        </div></section>
+
+        <section class="view" data-view="begin"><div class="prose">
+          <h1>Begin</h1>
+          <div class="steps">
+            <div>$ npm install -g veilfile &nbsp;<span>or: pip install veilfile</span></div>
+            <div>$ veilfile login &nbsp;<span>approve in your browser</span></div>
+            <div>$ veilfile push report.pdf &nbsp;<span>prints a private link</span></div>
+          </div>
+          <p>For agents that speak MCP, the server is at <code>veilfile.com/mcp</code>. Everything else is in the <a href="#docs" class="ink-target" data-go="docs">docs</a>.</p>
+        </div></section>
+
+        <section class="view" data-view="promises"><div class="prose">
+          <h1>What we promise</h1>
+          <dl>
+            <dt>The link is the only way in.</dt><dd>No listings, no search, no addresses anyone could guess.</dd>
+            <dt>Gone means deleted.</dt><dd>When a file expires it is removed from storage, not hidden.</dd>
+            <dt>We look for secrets, not at your files.</dt><dd>Uploads are scanned for the shapes of keys and tokens; their contents are never logged.</dd>
+            <dt>Why not a gist?</dt><dd>A gist is public by default and lives forever. Fine for a snippet; wrong for a client's failing screenshot. See <a href="#how" class="ink-target" data-go="how">how a file lives here</a>.</dd>
+          </dl>
+        </div></section>
+
+        <section class="view" data-view="plans"><div class="prose">
+          <h1>Plans</h1>
+          <div class="plans">
+            <div><h3>Free</h3><div class="price mono">$0</div><p>100 uploads a month. Links last up to 7 days. 1 GB.</p></div>
+            <div><h3>Team</h3><div class="price mono">$4 / month</div><p>2,000 uploads a month. Up to 90 days. 25 GB. Five keys.</p></div>
+            <div><h3>Scale</h3><div class="price mono">$12 / month</div><p>10,000 uploads a month. Up to a year. 100 GB.</p></div>
+          </div>
+        </div></section>
+
+        <section class="view" data-view="docs"><div class="prose"><h1>Docs</h1><p class="note">The reference opens here as a longer reading page in the same shell: API, CLI, MCP, limits.</p></div></section>
+        <section class="view" data-view="journal"><div class="prose"><h1>Journal</h1><p class="note">Posts open here, one at a time, in the same shell.</p></div></section>
+        <section class="view" data-view="signin"><div class="prose"><h1>Sign in</h1><p class="note">The sign-in and device-approval pages sit in this shell too, the form resting where the words are.</p></div></section>
+      </main>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const SCALE = 0.8, MAX_INKS = 4, ZOOM = 0.6;
+  const PACE = { home: 0.75, chapter: 0.6 };
+
+  const VERT = `attribute vec2 a; void main(){ gl_Position = vec4(a, 0.0, 1.0); }`;
+  const FRAG = `precision highp float;
+uniform vec2 u_res; uniform float u_time; uniform float u_zoom; uniform float u_veil; uniform float u_theme;   // 0 paper .. 1 ink
+uniform float u_cloth;   // 1 = the voile, 0 = plain paper (motion off)
+uniform vec4 u_clear;   // the reading area on chapter pages: centre x, y and half size (canvas px)
+uniform vec4 u_inkP[${MAX_INKS}];   // centre x, y (canvas px), radius x, y
+uniform vec4 u_inkQ[${MAX_INKS}];   // growth 0..1, strength 0..1, age (s), seed
+
+float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+float noise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
+float fbm(vec2 p){ float v = 0.0, a = 0.5; mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+  for (int i = 0; i < 4; i++) { v += a * noise(p); p = m * p; a *= 0.5; } return v; }
+
+const vec3 L = vec3(-0.451, 0.551, 0.702);      // key light from the upper left
+const vec3 H = vec3(-0.2445, 0.2986, 0.9225);   // halfway between the light and the eye
+// Colours for the current appearance, blended so a switch fades across.
+vec3 PAPER, LIT, SHADE, SHEEN, WASH;
+void appearance(float k){
+  PAPER = mix(vec3(0.922, 0.902, 0.871), vec3(0.104, 0.098, 0.091), k);   // paper | warm slate
+  LIT   = mix(vec3(0.992, 0.952, 0.880), vec3(0.300, 0.302, 0.312), k);   // vanilla | faint cool light
+  SHADE = mix(vec3(0.735, 0.728, 0.712), vec3(0.052, 0.049, 0.046), k);   // cool grey | near black
+  SHEEN = mix(vec3(0.080, 0.078, 0.074), vec3(0.125, 0.135, 0.150), k);   // the sheen matters more at night
+  WASH  = mix(vec3(0.235, 0.210, 0.185), vec3(0.880, 0.850, 0.800), k);   // dark ink | pale wash
+}
+
+// A slow swell of air moving under the cloth; every layer rides on it.
+float swell(vec2 p, float t){
+  vec2 c = vec2(0.8 + 0.5 * sin(t * 0.071), 0.5 + 0.28 * sin(t * 0.053 + 1.0));
+  return 0.09 * exp(-dot(p - c, p - c) / 0.2);
+}
+
+vec3 cloth(vec3 n){
+  float diff = clamp(dot(n, L) / L.z, 0.0, 1.5);
+  vec3 c = mix(SHADE, LIT, smoothstep(0.2, 1.15, diff));
+  return c + SHEEN * pow(max(dot(n, H), 0.0), 28.0);   // soft sheen on the crests
+}
+
+// The sheet underneath everything: broad diagonal folds.
+float baseH(vec2 p, float t){
+  vec2 d = vec2(0.83, 0.56);
+  float u = dot(p, d), v = dot(p, vec2(-d.y, d.x));
+  float w = fbm(p * 0.9 + vec2(0.0, t * 0.02));
+  return 0.10 * sin(u * 4.2 + 2.2 * w + t * 0.11) + 0.04 * sin(u * 7.5 - v * 1.6 + t * 0.17 + 1.3 * w) + swell(p, t);
+}
+
+// One turned-over band of cloth. x: distance inside its nearest edge, y: along it, z: across it.
+vec4 band(vec2 p, float t, float i){
+  vec2 a; float ang, W;
+  if (i < 0.5) { a = vec2(0.50, 0.80); ang = -0.38; W = 0.20; }
+  else if (i < 1.5) { a = vec2(1.20, 0.36); ang = 0.62; W = 0.24; }
+  else { a = vec2(0.30, 0.18); ang = 0.22; W = 0.17; }
+  vec2 dir = vec2(cos(ang), sin(ang)), nn = vec2(-dir.y, dir.x);
+  float along = dot(p - a, dir);
+  float s = dot(p - a, nn) - 0.08 * sin(along * 1.9 + t * 0.16 + i * 2.3) - 0.028 * sin(along * 4.1 - t * 0.23 + i);
+  float hw = W * (0.55 + 0.45 * sin(along * 1.5 + t * 0.19 + i * 2.1)) + 0.02;   // the band twists and narrows
+  return vec4(hw - abs(s), along, s, hw);
+}
+float bandH(vec4 r, vec2 p, float t, float i){ return 0.012 * sin(r.z * 34.0 + r.y * 1.2 + t * 0.3 + i) + swell(p, t); }
+
+vec3 layBand(vec3 col, vec2 p, float t, float i){
+  col *= 1.0 - 0.12 * smoothstep(-0.03, 0.05, band(p + L.xy * 0.04, t, i).x);   // its soft shadow on the cloth below
+  float e = 0.003;
+  vec4 r = band(p, t, i);
+  if (r.x < -0.004) return col;
+  vec4 rx = band(p + vec2(e, 0.0), t, i), ry = band(p + vec2(0.0, e), t, i);
+  float h = bandH(r, p, t, i);
+  vec3 nf = normalize(vec3(-(bandH(rx, p + vec2(e, 0.0), t, i) - h) / e, -(bandH(ry, p + vec2(0.0, e), t, i) - h) / e, 1.0));
+  // where the cloth rolls over the edge it is seen edge-on: dense, and lit or shaded by which way it faces
+  vec2 outward = -normalize(vec2(rx.x - r.x, ry.x - r.x) + 1e-6);
+  float phi = asin(1.0 - clamp(r.x / min(0.085, r.w), 0.0, 1.0));
+  vec3 n = normalize(vec3(outward * sin(phi) + nf.xy, cos(phi) * nf.z));
+  float a = (1.0 - exp(-0.32 / max(n.z, 0.1))) * smoothstep(-0.0015, 0.0015, r.x);
+  vec3 c = cloth(n) + (noise(vec2(r.y * 9.0, r.z * 150.0)) - 0.5) * 0.07;       // weave lines running with the band
+  return mix(col, c, a);
+}
+
+// A drop of ink on paper: a pale granulating wash with a darker edge where the pigment dries.
+float wash(vec4 P, vec4 Q){
+  if (Q.y < 0.002) return 0.0;
+  vec2 d = (gl_FragCoord.xy - P.xy) / (P.zw * (0.4 + 0.6 * Q.x) * (1.0 + 0.02 * Q.z));
+  float r = length(d) + (fbm(d * 1.4 + Q.w + Q.z * 0.03) - 0.5) * 0.5
+          + (noise(gl_FragCoord.xy * 0.2 + Q.w) - 0.5) * 0.07;                    // ragged, fibrous edge
+  float body = smoothstep(1.0, 0.88, r) * (0.7 + 0.6 * noise(gl_FragCoord.xy * 0.4 + Q.w * 9.0));
+  float rim = exp(-pow((r - 0.93) / 0.055, 2.0));
+  return (body * 0.10 + rim * 0.16) * Q.y;
+}
+
+void main(){
+  appearance(u_theme);
+  vec2 uv = gl_FragCoord.xy / u_res;
+  float aspect = u_res.x / u_res.y, t = u_time;
+  vec2 mid = vec2(aspect * 0.5, 0.5);
+  vec2 p = (vec2(uv.x * aspect, uv.y) - mid) * u_zoom + mid;
+
+  // base sheet over the paper
+  float e = 0.004, h = baseH(p, t);
+  vec3 n = normalize(vec3(-(baseH(p + vec2(e, 0.0), t) - h) / e, -(baseH(p + vec2(0.0, e), t) - h) / e, 1.0));
+  vec3 col = PAPER * 0.965;
+  vec2 bd = vec2(0.83, 0.56);
+  vec3 c = cloth(n) + (noise(vec2(dot(p, vec2(-bd.y, bd.x)) * 9.0, dot(p, bd) * 150.0)) - 0.5) * 0.06;
+  col = mix(col, c, 1.0 - exp(-0.5 / max(n.z, 0.1)));
+
+  // three bands turned over on top, each casting a soft shadow on what lies beneath
+  col = layBand(col, p, t, 0.0);
+  col = layBand(col, p, t, 1.0);
+  col = layBand(col, p, t, 2.0);
+
+  // On chapter pages a soft clearing opens behind the words; the cloth keeps moving around it, and faintly within it.
+  vec2 cq = abs(gl_FragCoord.xy - u_clear.xy) - u_clear.zw;
+  float cd = length(max(cq, 0.0)) + min(max(cq.x, cq.y), 0.0);
+  float clearing = (1.0 - smoothstep(-0.03 * u_res.y, 0.24 * u_res.y, cd)) * u_veil;
+  col = mix(col, PAPER * 1.012 + (col - PAPER) * 0.2, clearing * 0.88);
+  col = mix(PAPER, col, u_cloth);
+
+  for (int i = 0; i < ${MAX_INKS}; i++) col = mix(col, WASH, clamp(wash(u_inkP[i], u_inkQ[i]), 0.0, 0.6));
+
+  col += (hash(gl_FragCoord.xy + fract(t * 7.13) * vec2(97.3, 41.9)) - 0.5) * 0.05;   // fine film grain
+  gl_FragColor = vec4(col, 1.0);
+}`;
+
+  function makeGL(canvas) {
+    const gl = canvas.getContext('webgl', { antialias: false, preserveDrawingBuffer: false });
+    if (!gl) return null;
+    const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VERT)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FRAG)); gl.linkProgram(prog);
+    gl.useProgram(prog);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    const u = n => gl.getUniformLocation(prog, n);
+    return { gl, uRes: u('u_res'), uTime: u('u_time'), uZoom: u('u_zoom'), uVeil: u('u_veil'), uTheme: u('u_theme'), uCloth: u('u_cloth'), uClear: u('u_clear'), uInkP: u('u_inkP'), uInkQ: u('u_inkQ') };
+  }
+
+  const el = document.getElementById('shell');
+  const canvas = el.querySelector('canvas.gl'), g = makeGL(canvas);
+  const inkP = new Float32Array(4 * MAX_INKS), inkQ = new Float32Array(4 * MAX_INKS);
+  let theme = 1, themeTo = 1, cloth = reduceMotion ? 0 : 1, clothTo = cloth;
+  if (reduceMotion) el.classList.add('still');
+  let motion = !reduceMotion, t = 8, veil = 0, veilTo = 0, pace = PACE.home, paceTo = PACE.home;
+  let inks = [], raf = null, last = null, ch = 1, visible = true, clear = [0, 0, 0, 0];
+  // the clearing hugs the active chapter's text
+  function measureClear() {
+    const v = el.querySelector('.view.active .prose'); if (!v) return;
+    const r = el.getBoundingClientRect(), b = v.getBoundingClientRect();
+    clear = [(b.left + b.width / 2 - r.left) * SCALE, (r.bottom - (b.top + b.height / 2)) * SCALE, b.width / 2 * SCALE, b.height / 2 * SCALE];
+  }
+
+  function resize() {
+    const r = el.getBoundingClientRect(); ch = r.height;
+    canvas.width = Math.round(r.width * SCALE); canvas.height = Math.round(r.height * SCALE); measureClear(); render(performance.now());
+  }
+  function addInk(target, held = false) {
+    const r = el.getBoundingClientRect(), b = target.getBoundingClientRect();
+    const ink = { x: b.left + b.width / 2 - r.left, y: b.top + b.height / 2 - r.top, rx: b.width * 0.48 + 6, ry: b.height * 0.8 + 4,
+      born: performance.now(), dead: null, el: target, held, seed: Math.random() * 40 };
+    inks.push(ink);
+    while (inks.length > MAX_INKS) { const i = inks.findIndex(k => !k.held); inks.splice(i < 0 ? 0 : i, 1); }
+    target.classList.add('inked'); kick(); return ink;
+  }
+  function endInk(ink) { if (!ink || ink.dead) return; ink.dead = performance.now(); if (!ink.held || true) ink.el.classList.remove('inked'); kick(); }
+  function inkUniforms(now) {
+    const fadeMs = 1800;
+    inks = inks.filter(k => !k.dead || (motion && now - k.dead < fadeMs));
+    inkP.fill(0); inkQ.fill(0);
+    inks.forEach((k, i) => {
+      const age = (now - k.born) / 1000;
+      const grow = motion ? 1 - Math.pow(1 - Math.min(1, age / 1.4), 3) : 1;
+      const fade = k.dead ? Math.max(0, 1 - (now - k.dead) / fadeMs) : 1;
+      inkP.set([k.x * SCALE, (ch - k.y) * SCALE, k.rx * SCALE, k.ry * SCALE], i * 4);
+      inkQ.set([grow, fade, motion ? age : 0, k.seed], i * 4);
+    });
+  }
+  function render(now) {
+    if (!g) return;
+    inkUniforms(now);
+    const { gl } = g;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.uniform2f(g.uRes, canvas.width, canvas.height); gl.uniform1f(g.uTime, t); gl.uniform1f(g.uZoom, ZOOM); gl.uniform1f(g.uVeil, veil); gl.uniform1f(g.uTheme, theme); gl.uniform1f(g.uCloth, cloth); gl.uniform4fv(g.uClear, clear);
+    gl.uniform4fv(g.uInkP, inkP); gl.uniform4fv(g.uInkQ, inkQ);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+  function kick() {
+    if (raf) return; last = null;
+    const step = now => {
+      raf = null; if (!visible) return;
+      const dt = last == null ? 0 : Math.min(0.1, (now - last) / 1000); last = now;
+      const easing = Math.abs(veilTo - veil) > 0.002 || Math.abs(paceTo - pace) > 0.002 || Math.abs(themeTo - theme) > 0.002 || Math.abs(clothTo - cloth) > 0.002;
+      cloth = reduceMotion ? clothTo : cloth + (clothTo - cloth) * Math.min(1, dt * 1.8);
+      theme = reduceMotion ? themeTo : theme + (themeTo - theme) * Math.min(1, dt * 2.2);
+      veil = motion ? veil + (veilTo - veil) * Math.min(1, dt * 1.3) : veilTo;
+      pace = motion ? pace + (paceTo - pace) * Math.min(1, dt * 0.8) : paceTo;
+      if (motion || cloth > 0.01) t += dt * pace;   // the cloth keeps drifting while it fades away
+      render(now);
+      if (motion || inks.length || easing) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+  }
+
+  // hover ink on everything marked .ink-target; the current chapter holds its ink
+  let current = null, currentInk = null;
+  el.querySelectorAll('.ink-target').forEach(b => {
+    let ink = null;
+    const on = () => { if (motion && !ink && b !== current) ink = addInk(b); };
+    const off = () => { if (ink) { endInk(ink); ink = null; } };
+    b.addEventListener('pointerenter', on); b.addEventListener('pointerleave', off);
+    b.addEventListener('focus', on); b.addEventListener('blur', off);
+    b.addEventListener('click', off);
+  });
+
+  // menu
+  const menuBtn = el.querySelector('.menu-btn'), list = el.querySelector('#chapters');
+  function setMenu(open) {
+    menuBtn.setAttribute('aria-expanded', String(open));
+    if (open) { list.hidden = false; requestAnimationFrame(() => requestAnimationFrame(() => list.classList.add('open'))); }
+    else { list.classList.remove('open'); setTimeout(() => { if (menuBtn.getAttribute('aria-expanded') === 'false') list.hidden = true; }, reduceMotion ? 0 : 600); }
+    if (!open && currentInk) { endInk(currentInk); currentInk = null; }
+    if (open && current && !currentInk && motion) setTimeout(() => { if (current && !currentInk) currentInk = addInk(current, true); }, 80);
+  }
+  menuBtn.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
+
+  // views
+  function go(name) {
+    el.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.dataset.view === name));
+    const chapter = name !== 'home';
+    if (chapter) measureClear();
+    veilTo = chapter ? 1 : 0; paceTo = chapter ? PACE.chapter : PACE.home;
+    if (current) current.classList.remove('current');
+    if (currentInk) { endInk(currentInk); currentInk = null; }
+    current = chapter ? list.querySelector(`[data-go="${name}"]`) : null;
+    if (current) { current.classList.add('current'); if (menuBtn.getAttribute('aria-expanded') !== 'true') setMenu(true); else if (motion) currentInk = addInk(current, true); }
+    kick();
+  }
+  list.querySelectorAll('[data-go]').forEach(b => b.addEventListener('click', () => go(b.dataset.go)));
+  el.querySelectorAll('.prose a[data-go]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); go(a.dataset.go); }));
+  el.querySelector('.home').addEventListener('click', () => { go('home'); setMenu(false); });
+
+  // Come in becomes the install line
+  const enter = el.querySelector('.enter'), install = el.querySelector('#install');
+  enter.addEventListener('click', () => {
+    enter.classList.add('gone'); enter.setAttribute('aria-expanded', 'true'); enter.tabIndex = -1;
+    install.classList.remove('gone'); setTimeout(() => install.querySelector('.copy').focus({ preventScroll: true }), reduceMotion ? 0 : 500);
+  });
+  const cmdText = install.querySelector('.cmdtext');
+  install.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+    install.querySelectorAll('.tab').forEach(x => x.setAttribute('aria-selected', String(x === tab)));
+    cmdText.textContent = tab.dataset.cmd;
+  }));
+  const copyBtn = install.querySelector('.copy');
+  copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(cmdText.textContent); } catch (e) {}
+    copyBtn.textContent = 'Copied'; install.querySelector('.then').classList.add('shown');
+    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1800);
+  });
+
+  // motion toggle
+  const tog = el.querySelector('.motion');
+  const label = () => { tog.textContent = motion ? 'Motion · on' : 'Motion · off'; tog.setAttribute('aria-pressed', String(motion)); };
+  label(); tog.addEventListener('click', () => {
+    motion = !motion; label(); clothTo = motion ? 1 : 0; el.classList.toggle('still', !motion);
+    if (!motion) { inks.forEach(k => k.el.classList.remove('inked')); inks = []; currentInk = null; }
+    else if (current && menuBtn.getAttribute('aria-expanded') === 'true') currentInk = addInk(current, true);
+    kick();
+  });
+
+  // appearance: Ink, Auto (follows the system), Paper
+  const app = el.querySelector('.appearance'), dark = matchMedia('(prefers-color-scheme: dark)');
+  const ORDER = ['ink', 'auto', 'paper'], NAMES = { ink: 'Ink', auto: 'Auto', paper: 'Paper' };
+  let mode = 'ink';
+  function applyAppearance() {
+    const resolved = mode === 'auto' ? (dark.matches ? 'ink' : 'paper') : mode;
+    el.dataset.theme = resolved; themeTo = resolved === 'ink' ? 1 : 0;
+    app.textContent = NAMES[mode]; app.setAttribute('aria-label', `Appearance: ${NAMES[mode]}`); kick();
+  }
+  app.addEventListener('click', () => { mode = ORDER[(ORDER.indexOf(mode) + 1) % ORDER.length]; applyAppearance(); });
+  dark.addEventListener('change', () => { if (mode === 'auto') applyAppearance(); });
+  applyAppearance();
+
+  new ResizeObserver(resize).observe(el);
+  new IntersectionObserver(([e]) => { visible = e.isIntersecting; if (visible) kick(); }, { threshold: 0.02 }).observe(el);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+/* The lockup: the mark alone, top left (spec 3.6). Its box is one label line tall, so the mark sits
+   level with MENU; the mark is sized in whole pixels per cell (tokens.css, --mark-size). */
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  height: calc(1.4em + 1.2em);
+  color: var(--ink); /* the mark is ink in both appearances (spec 3.6), not the labels' grey */
+}
+
+.lockup .mark {
+  width: var(--mark-size);
+  height: var(--mark-size);
+}

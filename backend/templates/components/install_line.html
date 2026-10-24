@@ -1,0 +1,12 @@
+{# Component: install_line. MCP, npm and pip tabs over one box with Copy, and each tab's line after Copy (spec 4.2). #}
+{# Inputs: tabs, the dicts in pages/install.py (key, label, prompt, command, then, then_code); id_prefix, unique on the page. #}
+<div class="install-line" data-tabs>
+<div class="install-line__tabs" role="tablist" aria-label="Connect with">
+{% for tab in tabs %}<button class="install-line__tab label interactive" type="button" role="tab" id="{{ id_prefix }}-tab-{{ tab.key }}" aria-controls="{{ id_prefix }}-panel-{{ tab.key }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}" tabindex="{% if forloop.first %}0{% else %}-1{% endif %}">{{ tab.label }}</button>
+{% endfor %}</div>
+{% for tab in tabs %}<div class="install-line__panel" role="tabpanel" id="{{ id_prefix }}-panel-{{ tab.key }}" aria-labelledby="{{ id_prefix }}-tab-{{ tab.key }}"{% if not forloop.first %} hidden{% endif %}>
+<div class="install-line__box"><code id="{{ id_prefix }}-command-{{ tab.key }}" tabindex="0">{% if tab.prompt %}<span class="install-line__prompt" aria-hidden="true">{{ tab.prompt }}</span>{% endif %}<span data-copy-text>{{ tab.command }}</span></code><button class="install-line__copy label interactive" type="button" data-copy="{{ id_prefix }}-command-{{ tab.key }}">Copy</button></div>
+<p class="install-line__then" data-copy-then>{{ tab.then }}{% if tab.then_code %} <code>{{ tab.then_code }}</code>{% endif %}</p>
+</div>
+{% endfor %}<p class="visually-hidden" role="status" data-copy-status></p>
+</div>

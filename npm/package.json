@@ -1,0 +1,34 @@
+{
+  "bin": {
+    "veilfile": "veilfile.js"
+  },
+  "description": "Command-line client for Veilfile \u2014 private, ephemeral artifact hosting for AI agents. Zero dependencies.",
+  "engines": {
+    "node": ">=18.3"
+  },
+  "files": [
+    "veilfile.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "homepage": "https://veilfile.com",
+  "keywords": [
+    "veilfile",
+    "artifacts",
+    "file-sharing",
+    "cli",
+    "agents"
+  ],
+  "license": "MIT",
+  "name": "veilfile",
+  "repository": {
+    "directory": "npm",
+    "type": "git",
+    "url": "git+https://github.com/veilfile/veilfile.git"
+  },
+  "scripts": {
+    "prepublishOnly": "npm test",
+    "test": "node --test"
+  },
+  "version": "0.4.0"
+}

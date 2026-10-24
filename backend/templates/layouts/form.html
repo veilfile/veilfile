@@ -1,0 +1,6 @@
+{% extends "shell.html" %}
+{% load static %}
+{# Layout: form. Sign in, sign up, password reset, email verification, the device flow and OAuth consent: one narrow column (spec 4.7, 6.2). A page fills the shell's title block with its name, then | Veilfile. #}
+{% block preload_display %}<link rel="preload" href="{% static 'fonts/cormorant-garamond/italic-300-latin.woff2' %}" as="font" type="font/woff2" crossorigin>{% endblock %}
+{% block body_class %}layout-form{% endblock %}
+{% block main %}<div class="form-page">{% block form_page %}{% endblock %}</div>{% endblock %}

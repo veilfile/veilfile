@@ -1,0 +1,10 @@
+{% extends "layouts/reading.html" %}
+{# Layout: reading. A legal document: the owner's Markdown, rendered by legal/views.py and never edited here (AGENTS.md invariant 8). #}
+{# The document's own first-level heading is the page's h1. The section list sits right before the first section, after the title and the "Last updated" line, and shows nothing for fewer than two sections. #}
+{# Its italic 400 (a section's heading) is preloaded only when the document has a section: report-abuse.md has none. #}
+{% block preload_heading %}{% if "<h2" in body_html %}{{ block.super }}{% endif %}{% endblock %}
+{% block reading %}
+<article>{{ intro_html|safe }}
+{% include "components/sections.html" with sections=sections only %}
+{{ body_html|safe }}</article>
+{% endblock %}

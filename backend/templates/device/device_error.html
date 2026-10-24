@@ -1,0 +1,11 @@
+{% extends "layouts/form.html" %}
+{# Form page: a refusal. Shared: the device flow's own errors and the OAuth consent's unverified-email 403 (drop_core/oauth.py) both render it, with error_title, error_message and show_resend, so nothing on it may say device, terminal or app. #}
+{% block title %}{{ error_title }} | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex">{% endblock %}
+{% block form_page %}
+<h1>{{ error_title }}</h1>
+<p>{{ error_message }}</p>
+{% if show_resend %}
+<p class="form-links"><a class="label interactive" href="{% url 'email-verification' %}">Re-send the verification email</a></p>
+{% endif %}
+{% endblock %}

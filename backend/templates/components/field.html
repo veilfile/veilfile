@@ -1,0 +1,11 @@
+{# Component: field. One form field (spec 4.7): a mono label above a hairline input, a help line between them, the field's errors under it. #}
+{# Inputs: id, the input's id and the label's for (the help's id is the id followed by _help, the error's the id followed by _error); name; label, the label's words; type, text (the default), email or password; value, kept after an error and never printed for a password; autocomplete, a token; required and autofocus, true or absent; focus, the name of the one field of the page that takes focus (what {% focus_field %} of the shell tags returns: the first field in error, or the page's usual one), which prints autofocus when it is this field's name; help, a line or a short list above the input, plain text or trusted HTML such as a form field's help_text; errors, the field's errors (form.field.errors, or a list of sentences and never a bare string, which would be walked a letter at a time), none when empty or absent; extra, exact attribute text for the input, such as placeholder="XXXX-XXXX" spellcheck="false": a string literal in the page's template and never a variable, because a space in a variable starts a new attribute (a test holds every template to this); mono, true for a code. A page's CSRF token stays in the page's own form, never here. #}
+<div class="field{% if errors %} field--error{% endif %}">
+<label class="field__label label" for="{{ id }}">{{ label }}</label>
+{% if help %}<div class="field__help" id="{{ id }}_help">{{ help }}</div>
+{% endif %}<input class="field__input{% if mono %} field__input--mono{% endif %}" id="{{ id }}" name="{{ name }}" type="{{ type|default:'text' }}"{% if value and type != 'password' %} value="{{ value }}"{% endif %}{% if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}{% if required %} required{% endif %}{% if autofocus or focus == name %} autofocus{% endif %}{% if errors %} aria-invalid="true"{% endif %}{% if help or errors %} aria-describedby="{% if help %}{{ id }}_help{% endif %}{% if help and errors %} {% endif %}{% if errors %}{{ id }}_error{% endif %}"{% endif %}{% if extra %} {{ extra }}{% endif %}>
+{% if errors %}<div class="field__error" id="{{ id }}_error">
+<span class="field__flag label" aria-hidden="true">Check this</span>
+{% for error in errors %}<p>{{ error }}</p>
+{% endfor %}</div>
+{% endif %}</div>

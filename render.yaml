@@ -1,0 +1,78 @@
+# Veilfile on Render — Docker runtime. The live service is named "deadrop"
+# (Starter instance, Oregon) and serves https://veilfile.com.
+# Set the env vars below in the Render dashboard (never commit secrets).
+services:
+  - type: web
+    name: deadrop
+    runtime: docker
+    region: oregon
+    # Paid instance (0.5 CPU / 512 MB). Never "free": free instances spin
+    # down when idle, block outbound SMTP and have no pre-deploy commands.
+    plan: starter
+    # GET /healthz runs SELECT 1 against Postgres; 503 when it is down.
+    healthCheckPath: /healthz
+    # Optional: run migrations once per deploy instead of at every boot.
+    # Uncomment, and set SKIP_MIGRATE=1 below, together (see entrypoint.sh).
+    # preDeployCommand: python manage.py migrate --noinput
+    envVars:
+      - key: DJANGO_DEBUG
+        value: "False"
+      - key: DJANGO_SECRET_KEY
+        sync: false # set in dashboard: long random string
+      - key: DJANGO_ALLOWED_HOSTS
+        sync: false # set in dashboard: veilfile.com (plus any other served host)
+      - key: DROP_BASE_URL
+        sync: false # set in dashboard: https://veilfile.com
+      # Required: the app refuses to start with DEBUG=False and no DATABASE_URL.
+      # Use the Internal Database URL of the paid Postgres "deadrop-db"
+      # (postgresql://user:pass@host:5432/name; add ?sslmode=require for the
+      # external URL). Percent-encode special characters in the password.
+      - key: DATABASE_URL
+        sync: false
+      - key: DROP_STORAGE
+        value: "s3" # Render disk is ephemeral; prod must use R2
+      - key: AWS_S3_ENDPOINT_URL
+        sync: false
+      - key: AWS_S3_BUCKET
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Email: verification and password-reset mail. Without it (console
+      # backend) no new user can verify, mint keys or approve CLI logins;
+      # `manage.py check --deploy` and the boot log report veilfile.W001.
+      - key: EMAIL_BACKEND
+        sync: false # django.core.mail.backends.smtp.EmailBackend
+      - key: EMAIL_HOST
+        sync: false # e.g. smtp.gmail.com
+      - key: EMAIL_PORT
+        sync: false # 587
+      - key: EMAIL_USE_TLS
+        sync: false # True
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false # support@veilfile.com
+      # Billing is live: sk_live_... key and live-mode price IDs.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_TEAM
+        sync: false
+      - key: STRIPE_PRICE_SCALE
+        sync: false
+      # Upload screening: off | log | enforce. Unset means off and is
+      # reported as veilfile.W002.
+      - key: VEILFILE_SAFETY_MODE
+        sync: false
+      # Optional tuning (defaults in brackets; entrypoint.sh / settings.py):
+      #   WEB_CONCURRENCY [1] gunicorn workers, GUNICORN_THREADS [4],
+      #   GUNICORN_TIMEOUT [120], SKIP_MIGRATE [unset],
+      #   DJANGO_CONN_MAX_AGE [60], EMAIL_TIMEOUT [10],
+      #   DJANGO_SECURE_HSTS_SECONDS [31536000],
+      #   DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS [False],
+      #   DJANGO_CSRF_TRUSTED_ORIGINS [derived from DJANGO_ALLOWED_HOSTS].

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+{# Page: the 500, and the bare page a 404 or 403 falls back on when the shell cannot be drawn (pages/errors.py, spec 4.9). #}
+{# Context: none needed. title and message, when given, replace the 500's own words. This page must draw when everything else is broken: no extends, no include, no static file, no url tag, no context processor, and every style inline. Its colours are the values in static/css/tokens.css (a test compares them). #}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{{ title|default:"Something went wrong."|cut:"." }} | Veilfile</title>
+<script>
+try { var theme = localStorage.getItem("veilfile-theme"); if (theme === "light" || theme === "dark") document.documentElement.setAttribute("data-theme", theme); } catch (error) {}
+</script>
+<style>
+:root { --paper: #ebe6de; --ink: #2c2925; --muted: #534e47; color-scheme: light; }
+:root[data-theme="dark"] { --paper: #1b1917; --ink: #e6e0d6; --muted: #aea79c; color-scheme: dark; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --paper: #1b1917; --ink: #e6e0d6; --muted: #aea79c; color-scheme: dark; }
+}
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; padding: calc(5.5vh + 3rem) 5% 5.5vh; display: grid; place-items: center; background: var(--paper); color: var(--ink); font: 18px/1.62 Georgia, "Times New Roman", serif; }
+.name { position: absolute; top: 5.5vh; left: 5%; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-decoration: none; }
+main { width: 100%; max-width: 40rem; }
+h1 { margin: 0 0 1.5rem; font-size: clamp(28px, 2.9vw, 44px); font-style: italic; font-weight: 400; line-height: 1.15; overflow-wrap: anywhere; }
+p { margin: 0 0 1rem; overflow-wrap: anywhere; }
+a { color: inherit; text-decoration: underline dotted; text-underline-offset: .22em; }
+a:focus-visible { outline: 1px solid var(--ink); outline-offset: 3px; }
+</style>
+</head>
+<body>
+<a class="name" href="/">Veilfile</a>
+<main>
+<h1>{{ title|default:"Something went wrong." }}</h1>
+<p>{{ message|default:"This one is on our side. Wait a minute, then try again. If it keeps happening, write to support@veilfile.com." }}</p>
+<p><a href="/">Go to the home page</a></p>
+</main>
+</body>
+</html>

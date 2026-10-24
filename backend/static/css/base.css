@@ -1,0 +1,1451 @@
+/* Base styles for pages on the new shell: reset, type, the corners and the still grain.
+   Colors come only from tokens.css. */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--paper);
+  background-image: var(--grain);
+  background-size: var(--grain-size, auto);
+  background-attachment: fixed; /* the grain stays where it is as the page scrolls */
+  color: var(--ink);
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent; /* inherited, so the sheet, its links and every control: a press answers with the site's own feedback (below) */
+}
+
+/* The still grain is drawn at the size of the screen's pixels (spec 3.3), as the cloth's grain follows the screen (spec 3.1): its
+   tile is 128 px, so a tile of 128 / ratio CSS px is 128 device pixels, one tile pixel per device pixel, which the page repeats on
+   the pixel grid; a tile of any other size is resampled, and at a ratio like 1.25 (a tile of 85.33 CSS px is 106.67 device px) or
+   2.75 (42.67 is 117.33) does not even repeat on whole pixels. So each ratio that screens really have has a rule of its own, sized
+   128 / ratio to four places (the error is a thousandth of a device pixel in a tile): 1.25, 1.5 and 1.75 (Windows scaling), 2 (Macs,
+   iPhones), 2.625 and 2.75 (Android), 3 (iPhones, Android) and 4. Each rule starts halfway to the next ratio, so a screen between two
+   is given the nearer's tile and draws it a little under or over one device pixel. A ratio under 1.125, or a browser that cannot say,
+   keeps the tile at its own 128 CSS px (auto). The size is a token so that the two things that draw the grain, the page's ground
+   (html) and the phone menu's sheet (menu.css), draw it at the same size; nothing else does. grain_scale_problems reads it. */
+@media (-webkit-min-device-pixel-ratio: 1.125), (min-resolution: 1.125dppx) {
+  :root { --grain-size: 102.4px 102.4px; }       /* 1.25 */
+}
+@media (-webkit-min-device-pixel-ratio: 1.375), (min-resolution: 1.375dppx) {
+  :root { --grain-size: 85.3333px 85.3333px; }   /* 1.5 */
+}
+@media (-webkit-min-device-pixel-ratio: 1.625), (min-resolution: 1.625dppx) {
+  :root { --grain-size: 73.1429px 73.1429px; }   /* 1.75 */
+}
+@media (-webkit-min-device-pixel-ratio: 1.875), (min-resolution: 1.875dppx) {
+  :root { --grain-size: 64px 64px; }             /* 2 */
+}
+@media (-webkit-min-device-pixel-ratio: 2.3125), (min-resolution: 2.3125dppx) {
+  :root { --grain-size: 48.7619px 48.7619px; }   /* 2.625 */
+}
+@media (-webkit-min-device-pixel-ratio: 2.6875), (min-resolution: 2.6875dppx) {
+  :root { --grain-size: 46.5455px 46.5455px; }   /* 2.75 */
+}
+@media (-webkit-min-device-pixel-ratio: 2.875), (min-resolution: 2.875dppx) {
+  :root { --grain-size: 42.6667px 42.6667px; }   /* 3 */
+}
+@media (-webkit-min-device-pixel-ratio: 3.5), (min-resolution: 3.5dppx) {
+  :root { --grain-size: 32px 32px; }             /* 4 */
+}
+
+/* The phone menu's sheet (menu.css) is the other place the still grain is drawn: its surface is the page's ground, paper and this grain at
+   the same size, masked to fade across the left half so the scene shows there (spec 4.4). It is here and not in menu.css because
+   a url() in a custom property is resolved from the stylesheet that uses it, and --grain's path is written for this directory.
+   This surface is the sheet wherever the cloth is not drawing (Motion off, reduced motion's still page, no WebGL, a device too slow for the
+   cloth, a lost context). While the cloth runs it draws the sheet itself, paper with the film grain under the washes (veil.js, u_sheet), and
+   this surface is not drawn (the end of this file). */
+@media (max-width: 63.99rem) {
+  .js .menu__list::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-color: var(--paper);
+    background-image: var(--grain);
+    background-size: var(--grain-size, auto);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, var(--mask-solid) 50%, var(--mask-solid) 100%);
+    mask-image: linear-gradient(to right, transparent 0%, var(--mask-solid) 50%, var(--mask-solid) 100%);
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-reading);
+  font-size: var(--reading-size);
+  line-height: var(--reading-leading);
+  font-optical-sizing: auto;
+}
+
+img, svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--muted);
+}
+
+/* Text for screen readers and search engines only, such as the name of the mark top left. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+button.label {
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+/* Every interactive element answers the cursor (spec 3.4) with a flat fill. While the cloth (veil.js)
+   lays an ink wash under an element, the element carries is-inked and the fill steps aside, below. A touchscreen
+   keeps the :hover of the last thing touched, which would put the fill back where the wash has faded, so :hover
+   answers everywhere except where the primary pointer is a finger (pointer: coarse). Not (hover: hover): a browser
+   with no pointing device at all (headless Linux, as on CI) reports hover: none and would lose every hover fill. */
+.interactive {
+  position: relative;
+  isolation: isolate;
+  transition: color var(--fill-fade) ease;
+}
+
+.label.interactive {
+  padding: .6em .8em;
+  margin: -.6em -.8em;
+}
+
+.interactive::before {
+  content: "";
+  position: absolute;
+  inset: .3em .45em;
+  z-index: -1;
+  background: transparent;
+  transition: background-color var(--fill-fade) ease;
+}
+
+.interactive:focus-visible,
+.interactive[aria-current="page"],
+.interactive[aria-current="true"],
+.interactive[aria-selected="true"] {
+  color: var(--ink);
+}
+
+.interactive:focus-visible::before,
+.interactive[aria-current="page"]::before,
+.interactive[aria-current="true"]::before,
+.interactive[aria-selected="true"]::before {
+  background: var(--fill);
+}
+
+@media not all and (pointer: coarse) {
+  .interactive:hover {
+    color: var(--ink);
+  }
+
+  .interactive:hover::before {
+    background: var(--fill);
+  }
+}
+
+/* A touchscreen cannot hover, so a press is the one answer a control gives it: the flat fill for as long as the finger is
+   down. Where the cloth runs the wash answers instead (below), but in the open menu sheet, above the cloth, nothing is
+   inked and this is all there is. It is the only answer: the browser's own highlight of a tapped element is off (`html`, above).
+   The open phone sheet has a click listener and a pointer cursor (a tap on its surface closes it, menu.css), so the browser took
+   the whole sheet for the tapped element and washed all of it, blue in Chromium and grey on an iPhone, for the frame or two after
+   every tap, over a sheet that was closing; the controls and links flashed a box of their own. */
+@media (pointer: coarse) {
+  .interactive:active {
+    color: var(--ink);
+  }
+
+  .interactive:active::before {
+    background: var(--fill);
+  }
+}
+
+/* Keep this after the fill rules above: it wins over them by source order (equal specificity). */
+.interactive.is-inked::before {
+  background: transparent;
+}
+
+:focus-visible {
+  outline: var(--outline-width) solid var(--muted);
+  outline-offset: var(--outline-offset);
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 10;
+  padding: var(--space-2) var(--space-3);
+  background: var(--paper);
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+/* Each corner is a flex box, so its text sits at the corner's edge instead of inside a line box
+   as tall as the body's reading line, and neighbouring corners stay level. */
+.shell-corner {
+  position: fixed;
+  z-index: 3;
+  display: flex;
+}
+
+.shell-corner--top-left { top: var(--edge-block); left: var(--edge-inline); }
+.shell-corner--top-right { top: var(--edge-block); right: var(--edge-inline); }
+.shell-corner--bottom-left { bottom: var(--edge-block); left: var(--edge-inline); }
+.shell-corner--bottom-right { bottom: var(--edge-block); right: var(--edge-inline); }
+
+/* Wide screens (64rem and up): the four corners stay fixed and the page runs between them, clear
+   of the longest corner label (--corner-reach), so nothing ever passes under one. */
+.shell-main {
+  min-height: 100vh;
+  padding: calc(var(--edge-block) + 3.5rem) var(--corner-reach);
+}
+
+/* Narrow screens: the page needs the full width, so the bottom corners wait at the end of the
+   page (at the bottom of the window when the page is short), and along the top, where the mark and
+   MENU stay, the page fades out (further down). */
+@media (max-width: 63.99rem) {
+  .js body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .js .shell-main {
+    flex: 1 0 auto;
+    min-height: 0;
+    padding: calc(var(--fade-top) + var(--fade-band)) var(--edge-inline) var(--space-5);
+  }
+
+  .js footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: var(--space-3) var(--space-4);
+    padding: 0 var(--edge-inline) var(--edge-block);
+  }
+
+  .js .shell-corner--bottom-left,
+  .js .shell-corner--bottom-right {
+    position: static;
+  }
+}
+
+/* Narrow screens, along the top: nothing is laid over the page there. Instead the page's own content fades out as it
+   scrolls up toward the top edge, over a band as tall as the corners' rows plus a short fade (--fade-top, then
+   --fade-band), so it never reaches the mark and MENU and the cloth, or the still grain, shows through everywhere.
+   A mask moves with the element it is on, so shell.js keeps its gradient where the screen's top is as the page scrolls:
+   --fade-y is where that falls on <main>, which starts at the top of the document, and the gradient's two stops are placed
+   from it, so <main> is transparent above the band, fades in over it and is opaque below. It waits for shell.js
+   (.shell-ready), which has set --fade-y by then. Only <main> fades: the footer, where the bottom corners wait at the
+   page's end, cannot reach the top band.
+   A mask makes the element a backdrop root, so below 64rem a backdrop-filter inside <main> (the install box's slight
+   blur) sees only what <main> paints, not the cloth; from 64rem up <main> is one only while a change cross-fades. */
+@property --fade-y {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@media screen and (max-width: 63.99rem) {
+  /* What the browser scrolls to the top edge (a focused link, the target of a #fragment) lands below the fade, not in the
+     band where it would be invisible, which no focus ring could make up for (WCAG 2.4.11). */
+  .js.shell-ready {
+    scroll-padding-top: calc(var(--fade-top) + var(--fade-band));
+  }
+
+  .js.shell-ready .shell-main {
+    -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--fade-y) + var(--fade-top)), var(--mask-solid) calc(var(--fade-y) + var(--fade-top) + var(--fade-band)));
+    mask-image: linear-gradient(to bottom, transparent calc(var(--fade-y) + var(--fade-top)), var(--mask-solid) calc(var(--fade-y) + var(--fade-top) + var(--fade-band)));
+  }
+}
+
+/* Without JavaScript (or when shell.js cannot load) the menu is always shown, so the corners sit
+   in the page's flow, above the text, instead of floating over it. The footer holds only the two switches, which need
+   JavaScript, so it has nothing to show. */
+:root:not(.js) header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--edge-inline);
+}
+
+:root:not(.js) footer {
+  display: none;
+}
+
+:root:not(.js) .shell-corner {
+  position: static;
+}
+
+:root:not(.js) .shell-main {
+  min-height: 0;
+  padding: var(--space-4) var(--edge-inline);
+}
+
+/* Motion off (the switch, or a system asking for reduced motion with nothing saved) stops every
+   transition and animation. Without JavaScript the boot script never sets data-motion, so the
+   system setting decides. */
+[data-motion="off"] *,
+[data-motion="off"] *::before,
+[data-motion="off"] *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-motion]) *,
+  :root:not([data-motion]) *::before,
+  :root:not([data-motion]) *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* The cloth (veil.js, spec 3.1): one canvas, fixed behind everything; veil.js adds and removes it. veil.js draws in
+   this box, sizing its pixels from it and placing every wash in its frame, never the window's (on a phone the window's
+   height moves with the toolbar and this box does not). Its width is 100vw, not 100%, so it spans a window that has a
+   classic scrollbar: a fixed box adds nothing to the page's width, and the drawing then lines up with the page to the
+   last pixel. */
+.veil {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* The canvas is content to a printer, which would print a whole page of Paper or Ink: the page prints as the still page. */
+@media print {
+  .veil {
+    display: none;
+  }
+}
+
+/* A switch of appearance fades the whole scene (spec 3.2): every colour token here, so the ground, the text,
+   the labels and the lines go together, and the cloth in veil.js. The tokens are
+   registered in tokens.css, which is what lets a custom property transition. With Motion off it is instant,
+   like every other change. */
+html {
+  transition: --paper var(--scene-fade) ease, --ink var(--scene-fade) ease, --muted var(--scene-fade) ease,
+    --hair var(--scene-fade) ease, --fill var(--scene-fade) ease, --box var(--scene-fade) ease;
+}
+
+html[data-motion="off"] {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion]) {
+    transition: none;
+  }
+}
+
+/* Chapters (spec 4.3) and the threshold (4.2): one block, centred both ways in the space the page
+   has (between the corners from 64rem up); a long chapter grows and the page scrolls. */
+.layout-chapter .shell-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+}
+
+.chapter {
+  width: 100%;
+  max-width: var(--chapter-measure);
+  font-variant-numeric: lining-nums;
+}
+
+.chapter__title {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: var(--title-size);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.chapter > p {
+  margin: 0 0 var(--space-3);
+}
+
+/* The margin under a chapter's last line would sit inside the centred block and lift its words off centre. */
+.chapter > :last-child,
+.chapter__steps:last-child dd:last-child {
+  margin-bottom: 0;
+}
+
+.chapter__heading {
+  margin: var(--space-5) 0 var(--space-3);
+  font: var(--font-heading);
+  font-variant-numeric: inherit; /* the font shorthand resets it, and .chapter sets lining-nums */
+}
+
+.chapter__label {
+  margin: var(--space-4) 0 var(--space-2);
+  font-weight: 400;
+}
+
+.chapter__steps {
+  margin: 0;
+}
+
+.chapter__steps dt {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.25em;
+}
+
+.chapter__steps dd {
+  margin: 0 0 var(--space-4);
+}
+
+/* Inline links in prose: a dotted underline that gives way to the flat fill (spec 3.4). A labelled
+   link (.label) is not one: it keeps its own look, and as .interactive it answers the cursor with
+   its own inset fill, above. A chapter's are in its paragraphs and descriptions; the reading column's are
+   in those and in list items, table cells and quotations too, so a list of links or a table of them is marked
+   as links as well. veil.js lists both (INK_TARGETS), where the cloth draws the wash. */
+.chapter :is(p, dd) a:not(.interactive, .label),
+.reading :is(p, li, td, th, blockquote, dd) a:not(.interactive, .label) {
+  text-decoration: underline dotted var(--muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: .22em;
+  transition: background-color var(--fill-fade) ease, text-decoration-color var(--fill-fade) ease;
+}
+
+.chapter :is(p, dd) a:not(.interactive, .label):focus-visible,
+.reading :is(p, li, td, th, blockquote, dd) a:not(.interactive, .label):focus-visible {
+  background-color: var(--fill);
+  text-decoration-color: transparent;
+}
+
+@media not all and (pointer: coarse) {
+  .chapter :is(p, dd) a:not(.interactive, .label):hover,
+  .reading :is(p, li, td, th, blockquote, dd) a:not(.interactive, .label):hover {
+    background-color: var(--fill);
+    text-decoration-color: transparent;
+  }
+}
+
+@media (pointer: coarse) {
+  .chapter :is(p, dd) a:not(.interactive, .label):active,
+  .reading :is(p, li, td, th, blockquote, dd) a:not(.interactive, .label):active {
+    background-color: var(--fill);
+    text-decoration-color: transparent;
+  }
+}
+
+/* Keep this after the hover rule above: it wins over it by source order (equal specificity). */
+.chapter :is(p, dd) a:not(.interactive, .label).is-inked,
+.reading :is(p, li, td, th, blockquote, dd) a:not(.interactive, .label).is-inked {
+  background-color: transparent;
+}
+
+.chapter code {
+  font-family: var(--font-mono);
+  font-size: .8em;
+}
+
+.chapter pre {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  overflow-x: auto;
+  border: 1px solid var(--hair);
+  background: var(--box);
+}
+
+.chapter pre code {
+  font-size: .75em;
+  line-height: 1.7;
+}
+
+/* The reading column (spec 4.6): the Journal, Docs and the legal documents. One column of Newsreader at --measure,
+   centred between the corners as a chapter is, but starting at the top, so a long page scrolls. Its words come from
+   Markdown, so its elements are styled where they stand, and every element rule is written `.reading :where(...)`:
+   that counts for one class and no element, so a component's own class (.pager__item, .entries__title) overrides it
+   by source order. The component stylesheets are linked after this one (shell.html; a test holds them to it). */
+.layout-reading .shell-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+}
+
+/* Long words and addresses in running text wrap, anywhere, so the page never scrolls sideways; code blocks and tables
+   do not wrap, they scroll inside their own boxes (below). min-width: 0 lets the column be narrower than its widest
+   content. Newsreader has no face heavier than 500 (strong, below), so nothing here is drawn in a synthetic bold. */
+.reading {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--measure);
+  font-variant-numeric: lining-nums;
+  font-synthesis-weight: none;
+  overflow-wrap: anywhere;
+}
+
+/* The title is a chapter's title (.chapter__title): the display face, italic 300. */
+.reading :where(h1) {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: var(--title-size);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+/* A heading is a chapter's heading (.chapter__heading); a smaller one is a chapter's label (.chapter__label): mono,
+   uppercase, muted. scroll-margin-top leaves room above a heading that a section link jumps to (below 64rem the page
+   also keeps clear of the top fade: scroll-padding-top, above). */
+.reading :where(h2) {
+  margin: var(--space-5) 0 var(--space-3);
+  font: var(--font-heading);
+  font-variant-numeric: inherit; /* the font shorthand resets it, and .reading sets lining-nums */
+  scroll-margin-top: var(--space-4);
+}
+
+.reading :where(h3, h4, h5, h6) {
+  margin: var(--space-4) 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--muted);
+  scroll-margin-top: var(--space-4);
+}
+
+/* Not the visually hidden ones: a code block's status line is a paragraph, and the margin that clips it is what hides it. */
+.reading :where(p:not(.visually-hidden), ul, ol, blockquote) {
+  margin: 0 0 var(--space-3);
+}
+
+/* A line of mono above the title: JOURNAL, a date, a reading time. Two classes, so it wins over the paragraph rule above. */
+.reading .reading__meta {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.reading :where(strong, b) {
+  font-weight: 500; /* the heaviest face Newsreader has */
+}
+
+.reading :where(em, i, cite) {
+  font-style: italic;
+}
+
+.reading :where(ul, ol) {
+  padding: 0 0 0 1.8em; /* room for the markers, which are the browser's */
+}
+
+.reading :where(li) {
+  margin: 0 0 var(--space-1);
+}
+
+.reading :where(li > ul, li > ol) {
+  margin: var(--space-1) 0 0;
+}
+
+.reading :where(blockquote) {
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--hair);
+  font-style: italic;
+}
+
+.reading :where(blockquote em, blockquote i, blockquote cite) {
+  font-style: normal;
+}
+
+.reading :where(hr) {
+  margin: var(--space-5) 0;
+  border: 0;
+  border-top: 1px solid var(--hair);
+}
+
+.reading :where(code) {
+  font-family: var(--font-mono);
+  font-size: .8em;
+}
+
+/* A <pre> of its own, such as an indented block in the Markdown, is a chapter's (.chapter pre): its own box, scrolling
+   sideways. A fenced block is components/code_block.html, below. */
+.reading :where(pre) {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-3);
+  overflow-x: auto;
+  overflow-wrap: normal;
+  border: 1px solid var(--hair);
+  background: var(--box);
+}
+
+.reading :where(pre code) {
+  font-size: .75em;
+  line-height: 1.7;
+}
+
+/* A fenced block is components/code_block.html, and code_block.css draws it: its box, its type, its Copy button in a row of its
+   own. Every rule above that reaches it either weighs less than code_block.css's or weighs the same and comes earlier, so it
+   loses; what is left is what the column hands down to its text, and that stops here. A quotation is italic and code is not;
+   the column wraps long words anywhere, and Copy and the code keep their words whole. A test draws a block in the column and
+   outside it and compares the two (pages.tests_reading). */
+.reading :where(.code-block) {
+  font-style: normal;
+  overflow-wrap: normal;
+}
+
+/* A table scrolls sideways in its own box (.table-scroll, which render_markdown wraps every table in, with the
+   focus a keyboard needs to scroll it). Its cells keep normal wrapping: `anywhere` would let auto layout squeeze every
+   column to a letter, and the box would never need to scroll. */
+.reading :where(.table-scroll) {
+  margin: 0 0 var(--space-3);
+  overflow-x: auto;
+}
+
+.reading :where(table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9em;
+}
+
+.reading :where(th, td) {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+
+.reading :where(th) {
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* The margin under the last line of an item or a quotation would only add to the one under the item or the quotation.
+   After the rules above, so a bare code block or a rule that ends an item loses its margin too. (A fenced block keeps the
+   one code_block.css gives it, which comes later; the margins that meet collapse into the larger.) */
+.reading :where(li > :last-child, blockquote > :last-child) {
+  margin-bottom: 0;
+}
+
+/* Images: base.css already caps them at the column's width (img, svg { max-width: 100% }); the height follows. */
+.reading :where(img) {
+  height: auto;
+}
+
+.reading > :where(img, figure) {
+  margin: 0 0 var(--space-4);
+}
+
+/* Forms (spec 4.7): sign in, sign up, password reset, email verification, the device flow and OAuth consent, on layouts/form.html.
+   One narrow column (--form-measure). These pages are in no layout family and carry no data-layout, so nothing on them changes in
+   place and every link out of them is an ordinary load. From 64rem a short form is centred between the corners, as a chapter is;
+   below that it starts at the top, so the on-screen keyboard does not move it about. The field and the form's errors are
+   components (components/field.css, components/form_errors.css); the main action, the secondary links, a notice and the rows of
+   checkboxes and radios a consent form needs are here. As in the reading column, the bare elements are styled where they stand,
+   `.form-page :where(...)` weighing one class and no element, so a class of a component or of a piece below overrides them by
+   source order. No colour is added: an error is drawn with weight and a mark, in --ink. */
+.layout-form .shell-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+}
+
+@media (min-width: 64rem) {
+  .layout-form .shell-main {
+    align-content: center;
+  }
+}
+
+/* A long email, user agent or app name wraps, anywhere, so the page never scrolls sideways at 320; min-width: 0 lets the column be
+   narrower than its widest content. Newsreader has no face heavier than 500 (strong, below), so nothing is drawn in a synthetic bold. */
+.form-page {
+  width: 100%;
+  min-width: 0;
+  max-width: var(--form-measure);
+  font-variant-numeric: lining-nums;
+  font-synthesis-weight: none;
+  overflow-wrap: anywhere;
+}
+
+/* The title is a chapter's title (.chapter__title): the display face, italic 300. */
+.form-page :where(h1) {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: var(--title-size);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+/* A smaller heading, a term in a list of facts and a fieldset's legend are labels: mono, uppercase, muted. */
+.form-page :where(h2, h3, dt, legend) {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.form-page :where(h2, h3) {
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.form-page :where(dt) {
+  margin: var(--space-2) 0 0;
+}
+
+.form-page :where(dd) {
+  margin: 0;
+}
+
+/* Not the visually hidden ones: their margin is what clips them. */
+.form-page :where(p:not(.visually-hidden), ul, ol, dl) {
+  margin: 0 0 var(--space-3);
+}
+
+.form-page :where(ul, ol) {
+  padding: 0 0 0 1.8em; /* room for the markers, which are the browser's */
+}
+
+.form-page :where(li) {
+  margin: 0 0 var(--space-1);
+}
+
+.form-page :where(strong, b) {
+  font-weight: 500; /* the heaviest face Newsreader has */
+}
+
+.form-page :where(code) {
+  font-family: var(--font-mono);
+  font-size: .8em;
+}
+
+/* min-width: 0, or a fieldset (whose default is its widest content) holds the page wider than a phone. */
+.form-page :where(fieldset) {
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 0;
+}
+
+.form-page :where(legend) {
+  padding: 0 0 var(--space-2);
+}
+
+/* Inline links in a form page's words (a notice, a line under the title): the dotted underline that gives way to the flat fill, as in a
+   chapter. veil.js washes the chapters' and the reading column's prose links and not these, so the fill answers on its own. A
+   labelled link (.label) is not one: it is a secondary action, below. */
+.form-page :is(p, li, dd, .notice) a:not(.interactive, .label) {
+  text-decoration: underline dotted var(--muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: .22em;
+  transition: background-color var(--fill-fade) ease, text-decoration-color var(--fill-fade) ease;
+}
+
+.form-page :is(p, li, dd, .notice) a:not(.interactive, .label):focus-visible {
+  background-color: var(--fill);
+  text-decoration-color: transparent;
+}
+
+@media not all and (pointer: coarse) {
+  .form-page :is(p, li, dd, .notice) a:not(.interactive, .label):hover {
+    background-color: var(--fill);
+    text-decoration-color: transparent;
+  }
+}
+
+@media (pointer: coarse) {
+  .form-page :is(p, li, dd, .notice) a:not(.interactive, .label):active {
+    background-color: var(--fill);
+    text-decoration-color: transparent;
+  }
+}
+
+/* The dashboard (spec 4.8): its five sections, on layouts/app.html. One column that starts at the top and scrolls with the page, as the reading column
+   does, centred between the corners and no wider than --app-measure. The sections are a family of their own (data-layout="app"), so moving between them
+   changes in place, and an in-place change brings no stylesheet with it: everything a section needs is here, with the rules every page has. As in the
+   reading and form columns the bare elements are styled where they stand, `.app :where(...)` weighing one class and no element, so a component's own
+   class overrides them by source order. A long name, address or app name wraps, anywhere, so the page never scrolls sideways at 320; min-width: 0 lets
+   the column be narrower than its widest content. Newsreader has no face heavier than 500 (strong, below), so nothing is drawn in a synthetic bold.
+   The column is a container (named app): the rows below ask how wide it is, not how wide the window is, because between the corners it is only 394px at
+   1024 and 624px at 1280. Text here is set in the title's face (italic 300), Newsreader and the mono labels, which is what the layout's data-faces names. */
+.layout-app .shell-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+}
+
+.app {
+  container: app / inline-size;
+  width: 100%;
+  min-width: 0;
+  max-width: var(--app-measure);
+  font-variant-numeric: lining-nums;
+  font-synthesis-weight: none;
+  overflow-wrap: anywhere;
+}
+
+/* The title is a chapter's title (.chapter__title): the display face, italic 300. */
+.app :where(h1) {
+  margin: 0 0 var(--space-4);
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: var(--title-size);
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+/* A smaller heading, a term in a list of facts, a fieldset's legend and a table's caption are labels: mono, uppercase, muted. */
+.app :where(h2, h3, dt, legend, caption) {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.app :where(h2, h3) {
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.app :where(dt) {
+  margin: var(--space-2) 0 0;
+}
+
+.app :where(dd) {
+  margin: 0;
+}
+
+/* Not the visually hidden ones: their margin is what clips them. */
+.app :where(p:not(.visually-hidden), ul, ol, dl) {
+  margin: 0 0 var(--space-3);
+}
+
+.app :where(ul, ol) {
+  padding: 0 0 0 1.8em; /* room for the markers, which are the browser's */
+}
+
+.app :where(li) {
+  margin: 0 0 var(--space-1);
+}
+
+.app :where(strong, b) {
+  font-weight: 500; /* the heaviest face Newsreader has */
+}
+
+.app :where(code) {
+  font-family: var(--font-mono);
+  font-size: .8em;
+}
+
+/* min-width: 0, or a fieldset (whose default is its widest content) holds the page wider than a phone. */
+.app :where(fieldset) {
+  min-width: 0;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 0;
+}
+
+.app :where(legend) {
+  padding: 0 0 var(--space-2);
+}
+
+/* A part of a section's page (the plan, the meters, the list, the form): a <section> with its own label. After the margins above, so the first thing in
+   one starts at its top. */
+.app :where(section) {
+  margin: var(--space-5) 0 0;
+}
+
+.app :where(section > :first-child) {
+  margin-top: 0;
+}
+
+/* Inline links in the dashboard's words (a notice, a line under a label): the dotted underline that gives way to the flat fill, as on a form page. veil.js
+   washes the chapters' and the reading column's prose links and not these. A labelled link (.label) is not one: it is an action. */
+.app :is(p, li, dd, .notice) a:not(.interactive, .label) {
+  text-decoration: underline dotted var(--muted);
+  text-decoration-thickness: 1px;
+  text-underline-offset: .22em;
+  transition: background-color var(--fill-fade) ease, text-decoration-color var(--fill-fade) ease;
+}
+
+.app :is(p, li, dd, .notice) a:not(.interactive, .label):focus-visible {
+  background-color: var(--fill);
+  text-decoration-color: transparent;
+}
+
+@media not all and (pointer: coarse) {
+  .app :is(p, li, dd, .notice) a:not(.interactive, .label):hover {
+    background-color: var(--fill);
+    text-decoration-color: transparent;
+  }
+}
+
+@media (pointer: coarse) {
+  .app :is(p, li, dd, .notice) a:not(.interactive, .label):active {
+    background-color: var(--fill);
+    text-decoration-color: transparent;
+  }
+}
+
+/* Rows (spec 4.8, 4.10): the dashboard's lists of files, keys and connected apps, as <table class="rows"> with a <caption>, `th scope="col"` headers and a
+   `data-label` on every td (the name of its column). A table where the column is wide enough to hold one; where it is not, stacked rows: the header row goes
+   (hidden from sight, not from screen readers), each row is a block, and each cell is led by its column's name from data-label, so every value keeps its label.
+   The first column holds the name a person gave (a file, a key, an app) and breaks anywhere; so does a cell marked data-wrap. Every other cell breaks at its
+   spaces only, so a date and a size stay whole whatever a name does to the columns. A cell with nothing in it is not drawn when stacked. */
+.rows {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .9em;
+}
+
+.rows caption {
+  padding: 0 0 var(--space-2);
+  text-align: left;
+}
+
+.rows :where(th, td) {
+  padding: var(--space-2) var(--space-3) var(--space-2) 0;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+
+.rows :where(td:first-child, td[data-wrap]) {
+  overflow-wrap: anywhere;
+}
+
+.rows th,
+.rows td::before {
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  font-weight: 400;
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+@container app (max-width: 39.99rem) {
+  .rows thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .rows,
+  .rows tbody,
+  .rows tr,
+  .rows td {
+    display: block;
+  }
+
+  .rows caption {
+    display: block;
+  }
+
+  .rows tbody tr:first-child {
+    border-top: 1px solid var(--hair);
+  }
+
+  .rows tr {
+    padding: var(--space-3) 0 var(--space-2);
+    border-bottom: 1px solid var(--hair);
+  }
+
+  .rows td {
+    padding: 0 0 var(--space-2);
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .rows td::before {
+    content: attr(data-label);
+    display: block;
+    margin: 0 0 var(--space-1);
+  }
+
+  .rows td:empty {
+    display: none;
+  }
+}
+
+/* The main action (the owner's choice): a mono label in a 1px hairline box on --box, one to a form. Its box stays --hair: a button is
+   identified by its text label, where a field (whose line is --muted) has none. It is .interactive, so it answers the cursor as every
+   control does: the cloth's ink wash where the cloth runs, the flat fill where it does not and on a press.
+   .interactive's fill is inset a little for a bare label; here it fills the box. A button, or a link. The second selector keeps the
+   box if a page also gives the element .label, whose padding and negative margin (.label.interactive) and button.label's bare
+   background would otherwise win. */
+.action,
+.action.interactive {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  min-height: 3rem;
+  margin: var(--space-4) 0 0;
+  padding: .8em 1.2em;
+  border: 1px solid var(--hair);
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--box);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.action::before {
+  inset: 0;
+}
+
+/* Two actions of equal weight (Approve and Deny, Authorize and Deny): side by side where there is room, one under the other where there
+   is not, all of one width. An item is an .action, or a <form> that holds one, which then fills it. */
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+}
+
+.form-actions > * {
+  display: flex;
+  flex: 1 1 9rem;
+  min-width: 0;
+  margin: 0;
+}
+
+.form-actions > .action,
+.form-actions > * > .action {
+  margin: 0;
+}
+
+.form-actions > * > .action {
+  flex: 1 1 auto;
+}
+
+/* Secondary actions: quieter than the main one, mono labels in --muted with no box. A link (a.label.interactive) or a button of a form
+   of its own (button.label.interactive); words between them ("No account?") are the same label in the same colour. */
+.form-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3) var(--space-4);
+  margin: var(--space-5) 0 0;
+  font-family: var(--font-mono);
+  font-size: var(--label-size);
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Words and a link that go together, or a separator and the link after it ("No account?" and Sign up; the dot before Forgot password?): one
+   flex item of .form-links, so they wrap as a whole and a separator is never left at the end of a line. Its parts do not wrap to a line
+   of their own (a row of flex items does not), so a column too narrow for it wraps the words inside the link, never the dot away from it. */
+.form-links__item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-4);
+}
+
+/* Links that do not fit one line of the column with a separator between them (the sign-in page's, 26rem): one above the other, at every
+   width, with no separator, since a line of the three of them with none would read as a sentence. */
+.form-links--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* A quiet line of status or news: a --muted sentence with the reading column's 2px hairline down its left. role="status" on the ones that
+   are announced (a link was sent, an address is verified). */
+.notice {
+  margin: 0 0 var(--space-4);
+  padding: 0 0 0 var(--space-3);
+  border-left: 2px solid var(--hair);
+  color: var(--muted);
+}
+
+.notice strong {
+  color: var(--ink);
+}
+
+.notice > :last-child {
+  margin-bottom: 0;
+}
+
+/* A checkbox or a radio with its words, one row (a consent form's confirmation, the choice of a key to replace). The whole row is the
+   label, so the words are part of the target. The box is drawn here in --muted, as a field's line is: a boundary that must be seen.
+   The mark inside is a square, or for a radio a dot, in --ink: a shape and not a colour, and not a check mark, which no font of the
+   site has. */
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-3);
+  cursor: pointer;
+}
+
+.check__input {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin: .2em 0 0;
+  -webkit-appearance: none;
+  appearance: none;
+  border: 1px solid var(--muted);
+  border-radius: 0;
+  background-color: var(--box);
+  background-repeat: no-repeat;
+  background-position: center;
+  cursor: inherit;
+}
+
+.check__input[type="radio"] {
+  border-radius: 50%;
+}
+
+.check__input:checked {
+  background-image: linear-gradient(var(--ink), var(--ink));
+  background-size: 55% 55%;
+}
+
+.check__input[type="radio"]:checked {
+  background-image: radial-gradient(circle closest-side, var(--ink) 0, var(--ink) 50%, transparent 56%);
+  background-size: 100% 100%;
+}
+
+/* Left unticked after the visitor has tried: the same solid line as a field's. A rule of its own, as the field's is. */
+.check__input:user-invalid {
+  border-color: var(--ink);
+}
+
+@media (forced-colors: active) {
+  .check__input {
+    -webkit-appearance: auto;
+    appearance: auto;
+  }
+}
+
+.check__text {
+  min-width: 0;
+}
+
+.check__detail {
+  display: block;
+  font-size: .9em;
+  color: var(--muted);
+}
+
+/* Docs (spec 4.6): the quickstart's shell switcher and its command boxes. They are raw HTML in
+   backend/docs/pages/quickstart.md, run by tabs.js and copy.js through data-tabs and data-copy, and they are styled
+   here, with the rules every page has, because an in-place change brings no stylesheet with it. A command scrolls
+   inside its own box, its prompt and Copy held in place. Without JavaScript the tabs and Copy are hidden and every
+   shell's command shows, each under a line that names its shell. */
+.command-group {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.command-group__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) 1.6em;
+  margin: 0 0 var(--space-3);
+}
+
+.command .command__for {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: .75em;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.command .command__line {
+  display: flex;
+  align-items: center;
+  gap: 1.2em;
+  padding: .95em 1.2em .95em 1.3em;
+  border: 1px solid var(--hair);
+  background: var(--box);
+  font-family: var(--font-mono);
+  font-size: .75em;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.command .command__line code {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  font: inherit;
+}
+
+.command .command__prompt {
+  flex: none;          /* never shrinks: under .reading's overflow-wrap: anywhere a shrinking prompt wraps letter by letter */
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+/* Copy says Copy, Copied or Selected: it keeps the width of the longest (eight letters, each its advance plus the
+   label's .2em tracking, and the .8em padding either side) so the box never jumps. */
+.command .command__copy {
+  flex: none;
+  min-width: calc(8ch + 3.2em);
+  text-align: center;
+}
+
+.js .command__shell {
+  display: none;
+}
+
+:root:not(.js) .command[hidden] {
+  display: block;
+}
+
+:root:not(.js) .command + .command {
+  margin-top: var(--space-3);
+}
+
+:root:not(.js) .command-group__tabs {
+  display: none;
+}
+
+:root:not(.js) .command__copy {
+  display: none;
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10.5rem), 1fr));
+  gap: var(--space-5);
+  margin: var(--space-4) 0 var(--space-5);
+}
+
+/* The threshold (spec 4.2): the line and COME IN, then the install line alone in their place. Changes
+   are fades only, made while the content is invisible, so nothing ever moves in view. */
+.threshold {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--space-5);
+  text-align: center;
+}
+
+.threshold > * {
+  transition: opacity var(--fade) ease;
+}
+
+.threshold .is-faded {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.threshold__line {
+  max-width: 30ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 300;
+  font-size: var(--display-size);
+  line-height: 1.22;
+  text-wrap: balance;
+}
+
+.threshold__break {
+  display: none;
+}
+
+/* On wide screens the line breaks after "moment," (spec 3.6). That first line is about 16em long, so
+   there the threshold takes the page's whole width and the type shrinks before the line would wrap. */
+@media (min-width: 56.25rem) {
+  .chapter:has(> .threshold) {
+    max-width: none;
+    container-type: inline-size;
+  }
+
+  .threshold__line {
+    max-width: none;
+    font-size: min(var(--display-size), 100cqi / 16.5);
+  }
+
+  .threshold__break {
+    display: inline;
+  }
+}
+
+.label.threshold__enter {
+  padding: 1em 1.6em;
+  margin: 0;
+  letter-spacing: .28em;
+  /* Both: the rule for .threshold > * above would otherwise leave only the fade, and the colour would snap. */
+  transition: color var(--fill-fade) ease, opacity var(--fade) ease;
+}
+
+.threshold__install {
+  max-width: 100%;
+}
+
+/* In-place chapter changes (shell.js, spec 4.5): the content cross-fades; nothing slides. Where the browser has
+   view transitions, <main> is the one thing that cross-fades: the rest of the page, the cloth and the corners,
+   stays as it is. Where it has none, shell.js fades <main> out from the click and in once the new page has been
+   swapped in.
+   <main> is named for the transition (view-transition-name: chapter) by shell.js, only while a change runs, and not
+   here: a name makes the element a stacking context and a backdrop root, so a name that stayed would show every
+   backdrop-filter inside <main> (the install box's slight blur, spec 4.2) only what is painted inside <main>, which
+   is nothing, instead of the cloth behind it. The pseudo-elements below are styled here all the same. */
+.shell-main {
+  transition: opacity var(--change-fade) ease-out;
+}
+
+.shell-main.is-leaving {
+  opacity: 0;
+  transition-timing-function: ease-in;
+}
+
+/* The rest of the page is not part of the transition. The root is not captured (the UA names it "root"; no name, no
+   picture of it), so the cloth and the corners are not replaced by a picture of themselves for the cross-fade but
+   stay live, and the pointer reaches them: Chromium hits the transition's own pseudo-elements instead of the page
+   under them for as long as the root is captured, even with pointer-events off, and a click on another chapter's link
+   was dropped and a hovered control lost its wash. With the root left out the overlay holds only <main>'s two
+   pictures, and ::view-transition takes no pointer events, so the page below is hit as usual. */
+:root {
+  view-transition-name: none;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+/* For a browser that captures the root all the same (one that does not honour the name above): its old picture is not
+   shown and its new one does not fade in, so the cloth and the corners are not replaced by two pictures of themselves
+   cross-fading. Where the name is honoured these match nothing. */
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* Nothing slides. A change leaves the page scrolled where the new chapter belongs (the top, or where Back left it), inside
+   the transition, which would have the group travel from the old chapter's place to the new one's. The group stays at
+   the new chapter's place instead (no animation of its own: only the length is set, which the two pictures take), and the
+   old picture is moved back to where it was seen, by the distance shell.js sets in --slide. Both only fade. */
+::view-transition-group(chapter) {
+  animation-name: none;
+  animation-duration: var(--change-fade);
+}
+
+::view-transition-old(chapter) {
+  translate: 0 var(--slide, 0px);
+}
+
+/* The phone menu's sheet while the cloth runs (spec 4.4). The cloth draws it: veil.js lays the paper over the cloth in the canvas, from nothing
+   at the left edge to all of it at half the width, and the ink washes (the current page's link holds one, hovered and tapped links take
+   one) lie on it. So the CSS surface above is not drawn, and <main>, which lies above the canvas, is masked out of the right half by what is
+   left of the sheet: its alpha runs from 1 at the left edge to 1 - --sheet at half the width and stays there, the mirror of the paper's share.
+   --sheet is the sheet's one value (0 shut, 1 open), advanced once per drawn frame by shell.js; the links (menu.css), the paper
+   (veil.js is handed the same step, so it draws the value of its own frame) and this mask and the display control's fade all read it, so the
+   three things that fade together move together, and none of them can finish between two late frames, which a CSS transition, an animation
+   or a curve timed from a clock can (CI's WebKit showed it). Nothing here transitions it. The display control bottom right, which the solid
+   surface used to cover, fades with it. MENU and the links lie above everything.
+   It does not inherit, and shell.js writes it on each element that reads it (the sheet, its groups of links, <main> and the corners): written on
+   the root and inherited, it makes the browser recalculate the style of every element on the page for every frame of the fade (8.5 ms a write at
+   6,000 elements in Chromium on a Mac, 0.15 ms written on the readers; the long pages that move onto the shell have thousands of elements, on phones).
+   Letting each element on the way down take its parent's value by name (--sheet: inherit) is cheap in Chromium but WebKit never updates it (a child
+   keeps 0 while its parent moves; checked in Playwright's WebKit), so each reader is written to.
+   data-veil="on" is set by veil.js while the cloth draws, and data-motion is "off" the moment the cloth is told to stop (Motion off, a context
+   it lost, a visit too slow for it), when the CSS surface is back at once. The top fade (further up) and this mask are intersected. A change
+   that cross-fades takes the sheet away at once, --sheet with it; a link chosen from the sheet closes it by its driver like any close (shell.js). */
+@property --sheet {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@media (max-width: 63.99rem) {
+  :root[data-veil="on"]:not([data-motion="off"]) .menu__list::before {
+    display: none;
+  }
+
+  :root[data-veil="on"]:not([data-motion="off"]) .shell-corner--bottom-right {
+    opacity: calc(1 - var(--sheet));
+  }
+
+  :root[data-veil="on"]:not([data-motion="off"]).js.shell-ready .shell-main {
+    -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--fade-y) + var(--fade-top)), var(--mask-solid) calc(var(--fade-y) + var(--fade-top) + var(--fade-band))),
+      linear-gradient(to right, var(--mask-solid) 0%, color-mix(in srgb, var(--mask-solid) calc((1 - var(--sheet)) * 100%), transparent) 50%);
+    mask-image: linear-gradient(to bottom, transparent calc(var(--fade-y) + var(--fade-top)), var(--mask-solid) calc(var(--fade-y) + var(--fade-top) + var(--fade-band))),
+      linear-gradient(to right, var(--mask-solid) 0%, color-mix(in srgb, var(--mask-solid) calc((1 - var(--sheet)) * 100%), transparent) 50%);
+    -webkit-mask-composite: source-in;
+    mask-composite: intersect;
+  }
+}
+
+/* A Journal post's header image (templates/blog/post.html). Its width and height attributes give the browser the
+   picture's shape before the file arrives; height: auto keeps that shape when max-width (above) narrows the
+   picture to the column. */
+.reading__image {
+  height: auto;
+  margin: 0 0 var(--space-4);
+}

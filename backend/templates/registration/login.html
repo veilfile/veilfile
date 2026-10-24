@@ -1,0 +1,16 @@
+{% extends "layouts/form.html" %}
+{# Page: sign in (spec 4.7). It posts to its own address, so a ?next= rides along. A failed attempt always reads the same, whatever was wrong, and the page draws no field's error, so the summary takes focus (focus=True). #}
+{% block title %}Log in | Veilfile{% endblock %}
+{% block form_page %}
+<h1>Log in</h1>
+<p>Private, ephemeral artifact hosting for AI agents.</p>
+{% if form.errors %}{% include "components/form_errors.html" with message="Invalid username, email, or password. Try again." focus=True only %}{% endif %}
+<form method="post">
+{% csrf_token %}
+{% include "components/field.html" with id="id_username" name="username" label="Username or email" type="text" value=form.username.value autocomplete="username" required=True extra='autocapitalize="none" spellcheck="false"' only %}
+{% include "components/field.html" with id="id_password" name="password" label="Password" type="password" autocomplete="current-password" required=True only %}
+<button class="action interactive" type="submit">Log in</button>
+</form>
+{# With a separator the two do not fit one line of the 26rem column, and without one they would read as a sentence: they stack, at every width (base.css). #}
+<p class="form-links form-links--stacked"><span class="form-links__item">No account? <a class="label interactive" href="{% url 'signup' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Sign up</a></span> <a class="label interactive" href="{% url 'password_reset' %}">Forgot password?</a></p>
+{% endblock %}

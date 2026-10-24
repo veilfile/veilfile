@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.env
+db.sqlite3
+cli/dist/
+cli/build/
+# Node
+site-tests/.venv/
+site-tests/artifacts/
+site-tests/session.txt
+site-tests/form-fixtures.json
+site-tests/dashboard-fixtures.json
+node_modules/
+# Django
+staticfiles/
+# Left only by an interrupted tools/vendor_fonts.py run; the next run cleans them up.
+backend/static/.vendor-fonts-*/
+backend/static/.fonts-retired/
+media/
+*.log
+# Secrets
+.prod_secret

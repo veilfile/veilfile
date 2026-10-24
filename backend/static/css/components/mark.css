@@ -1,0 +1,6 @@
+/* The "Let go" mark: 1em square, in the current text color. */
+.mark {
+  width: 1em;
+  height: 1em;
+  flex: none;
+}

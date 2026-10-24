@@ -1,0 +1,7 @@
+{# Component: code_block. A code snippet in a focusable scroll box under a Copy button, with the status Copy speaks (spec 4.3). #}
+{# Inputs: id, unique on the page (the code's id, which Copy reads); code, the snippet's text, escaped here; label, what Copy copies, the button's accessible name, such as "Copy the Claude Code command" (the visible word stays Copy). All plain strings. #}
+<div class="code-block" data-code-block>
+<button class="code-block__copy label interactive" type="button" data-copy="{{ id }}" aria-label="{{ label }}">Copy</button>
+<pre tabindex="0" id="{{ id }}"><code>{{ code }}</code></pre>
+<p class="visually-hidden" role="status" data-copy-status></p>
+</div>
