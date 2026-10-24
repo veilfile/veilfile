@@ -1,6 +1,7 @@
 # CI for Veilfile. Render auto-deploys every commit to main, so this must be
-# green before anything is merged to main (see AGENTS.md). Set a ruleset on
-# main with these required checks: backend, npm-cli, python-cli, names. The
+# green before anything is merged to main (see AGENTS.md). The ruleset on main
+# requires every job here by name, each matrix entry on its own: backend,
+# npm-cli, python-cli, changes, names and the site* jobs below. The
 # browser checks are one run in parts, each its own job with its own 20 minutes:
 # site (the page checks), site-cloth (the cloth's families), site-ink (the ink
 # washes, in the phone menu's sheet too), site-reading (the Journal, Docs and
@@ -32,6 +33,7 @@
 #   stops its server in a last step that runs `if: always()`.
 # - The site* jobs blank DATABASE_URL, so that `migrate` can never reach a
 #   database, whatever the environment holds.
+# Every job first ran on hosted runners in pull request #1.
 name: CI
 
 on:
