@@ -602,6 +602,45 @@ under the templates glob above and take every figure from `plans.py`.
 Checklist: edit `plans.py`; update every file above; ask the owner to update
 the Terms of Service wording and the Stripe prices; run the backend suite.
 
+## Voice
+
+Every page, message, Markdown file and llms.txt line is written in the owner's voice. These
+seven rules are the whole of it; the recipes below point here instead of repeating them.
+
+1. Every sentence is complete: a subject and a finite verb, and an object when the verb
+   needs one. An imperative counts, with "you" understood. A list of noun phrases ending in
+   a full stop is a fragment, and so is a clipped question.
+   - Before: "Fine for a snippet; wrong for a client’s failing screenshot." After: "A gist
+     suits a snippet but not a client’s failing screenshot."
+   - Before: "No account?" After: "Do you need an account?"
+2. A semicolon joins only two independent clauses. Anywhere else it becomes a full stop, a
+   comma or a rewrite. The first "before" in rule 1 joins a fragment to a clause, which is why it changes.
+3. Labels are exempt: buttons (Copy, Come in), tabs, menu items, field labels, table column
+   headers, table cells that hold a value, short mono labels such as "Check this", and the
+   corner labels.
+4. A heading has no full stop, even when it is a complete sentence, and ends with a question
+   mark only when it is a complete question. Headings are `h1` to `h6`, the terms (`dt`) of
+   a definition list, Markdown headings and page titles.
+   - Before: "Nothing here." After: "Nothing here".
+   - Before: a confirmation heading that is a phrase. After: a complete question, as in
+     "Do you want to revoke this API key?".
+5. Everything else is a full sentence wherever it can be: status lines, notes, result lines,
+   empty states, the questions before a link, and every search description.
+   - Before: "Key revoked." After: "The key is revoked."
+6. `docs/llms.txt` follows the same rule. Data stays terse as a label and its value with no
+   full stop ("Max upload size: 25 MiB"), while anything that explains, qualifies or warns
+   is a complete sentence. Its structure, sections and exact values do not change.
+7. The older rules stay: no em dashes, no exclamation marks, none of the banned words
+   (`BANNED` in `backend/pages/tests_chapters.py`), American spelling ("canceled", not
+   "cancelled"), `’` for apostrophes in templates, errors that say what happened and what to
+   do with no apology, and no claim the product does not back.
+   - Before: "revoke any of them". After: "revoke only the key in use", because a key
+     approved on the device page can revoke only itself and not the workspace's others.
+
+A test holds rule 4 and the Markdown voice (`backend/pages/tests_voice.py`), and review
+holds the rest, since no test can judge grammar. Every team writes words, so this section
+names no single owner.
+
 ## Site recipes
 
 ### Write a Journal post
@@ -633,7 +672,7 @@ the Terms of Service wording and the Stripe prices; run the backend suite.
      so write it nowhere.
    - Each fenced code block in the body gets a Copy button on the page, which
      copies the fence's text. Write nothing for it.
-3. Write the body in Markdown only: `##` headings, paragraphs, lists, links,
+3. Write the body in the voice of `## Voice`, in Markdown only: `##` headings, paragraphs, lists, links,
    `code`, fenced code blocks (each with a Copy button), and images with alt
    text, like `![A failing checkout page](/static/img/journal/checkout.png)`.
    No HTML and no styling: the template decides how everything looks.
@@ -665,20 +704,19 @@ How it works, Begin, Promises and Plans.
    `backend/pages/snippets.py`. A link inside a sentence is a plain
    `<a href="...">`; a labelled action such as Come in is
    `class="label interactive"` and stays as it is.
-3. Write plain, calm sentences: no em dashes, no exclamation marks, and none of
-   genuinely, utilize, innovative, innovation, passionate about, excited to
-   share, powerful force, leverage, great. Use `’` for apostrophes.
+3. Write in the voice of `## Voice`. Use `’` for apostrophes.
 4. State only what the product does (`docs/API.md` is the reference). Never
    type a price or a limit in a chapter: Plans takes every figure from
    `backend/drop_core/plans.py`.
 5. Some sentences are product claims that tests pin word for word. In
    `backend/pages/tests_chapters.py`: the threshold's two halves and Come in;
-   About's "A quiet place for what your agents make." (and About stays under
+   About's "A quiet place for what your agents make" (and About stays under
    300 words and names no person); How it works' four steps (Made, Veiled,
-   Seen, Let go), its 256-bit token sentence and "deleted from storage soon
-   after"; Promises' "The link is the only way in.", "File contents are never
-   logged." and "Why not a gist?"; Plans' "Tax included. The price you see is
-   the price you pay." and, in the cards that `backend/pages/plan_cards.py`
+   Seen, Let go), its sentence "The 256-bit token in the address is the only
+   key" and "deleted from storage soon after"; Promises' "The link is the only
+   way in", "File contents are never logged." and "Why shouldn’t I use a
+   gist?"; Plans' "Prices include tax. The price you see is the price you pay."
+   and, in the cards that `backend/pages/plan_cards.py`
    writes, "Unlimited keys", the words around each figure ("N uploads a
    month", "Links last up to N days", "N GB of storage", "$N a month"),
    Free's price "$0" and Team's button "Choose Team"; and Begin's three
@@ -692,9 +730,9 @@ How it works, Begin, Promises and Plans.
    `veilfile push` and `curl -X POST https://veilfile.com/api/v1/artifacts`,
    and its link to `/llms.txt`. In `backend/pages/tests_install_line.py`: the
    tab labels (MCP, npm, pip), what Copy copies (`https://veilfile.com/mcp`
-   and `npm install -g veilfile`), the MCP tab's line after Copy ("Add it to
-   your agent as a remote MCP server; sign in when it asks.") and
-   `then <code>veilfile login</code>` on the npm and pip tabs. To reword one
+   and `npm install -g veilfile`), the MCP tab's line after Copy ("Add this
+   address to your agent as a remote MCP server, and sign in if the agent
+   asks.") and `Then run <code>veilfile login</code>` on the npm and pip tabs. To reword one
    on purpose, change the same text in the test in the same pull request.
    Begin's client snippets (`backend/pages/snippets.py`) must equal `backend/docs/pages/agent.md` exactly:
    change them only by changing agent.md and snippets.py together.
@@ -771,8 +809,7 @@ setup, so what they say must be true of the code.
    written as the shell's own markup (`data-tabs`, `role="tab"`, `data-copy`)
    because Markdown cannot express them. Change their words; keep every tag,
    attribute and id.
-5. Same voice as the chapters (step 3 of "Edit a chapter's words"), and state
-   only what the product does. Prices and limits must match `plans.py`, tool
+5. Write in the voice of `## Voice`, and state only what the product does. Prices and limits must match `plans.py`, tool
    names and error codes must exist in the code, and documented paths must
    resolve (`backend/drop_core/tests_fix_docs.py` checks all three). The client
    snippets under `### Claude Code`, `### Codex` and `### Cursor` in `agent.md`
@@ -875,6 +912,24 @@ every one in Paper and Ink, Motion on and off.
 9. Check it: the `pages` tests above, then the browser checks ("Site checks"): the catalog part
    (`--part catalog`) opens the catalog, where the component and its states are.
 
+### Change a color, size or spacing
+
+Who: usually the CTO's team. Every color, size and space on the shell's pages, the
+dashboard's included, is a token.
+
+1. Change only `backend/static/css/tokens.css`. A color token is defined twice: under
+   `:root` for Paper, and under the dark selectors for Ink (`[data-theme="dark"]` and the
+   `prefers-color-scheme: dark` rule for `system`). It also has an `@property` rule with its
+   Paper value as the initial value, so that it fades when the appearance switches; a new
+   color token needs all three.
+2. Keep text tokens at 4.5:1 contrast against `--paper` in both appearances (`--ink` at 7:1).
+   The cloth's own colors are in `appearance()` in `backend/static/js/veil.js` and
+   `pages.tests_veil` keeps its ground equal to `--paper`, so a changed `--paper` changes
+   both.
+3. Run `pages.tests_tokens` and the other modules that read `tokens.css`
+   (`git grep -l tokens.css -- 'backend/**/tests*.py'`), then the site checks' `site` and
+   `site-cloth` parts ("Site checks").
+
 ### Add or change a form page
 
 Who: usually the CTO's team. A form page has an input or a one-time state: sign in,
@@ -944,10 +999,8 @@ where.
    a `<fieldset>` with a `<legend>`. Errors use no colour, only weight, a solid line and a
    small "Check this" (the field component draws them): do not add a colour. Colours live
    in `tokens.css` and nowhere else.
-6. Words: keep the page's current words. A new sentence follows the voice rules (step 3
-   of "Edit a chapter's words": no em dashes, no exclamation marks, none of the banned
-   words, `’` for apostrophes), says what happened and what to do, and does not
-   apologise. Every non-ASCII character must exist in all three fonts (the check mark
+6. Words: keep the page's current words. A new sentence follows `## Voice`, says what
+   happened and what to do, and does not apologize. Every non-ASCII character must exist in all three fonts (the check mark
    U+2713 does not; `pages.tests_content` checks).
 7. Accessibility (spec 9): one `<h1>` per page, inside `<main>`; a visible `<label for>`
    on every input; `autocomplete` tokens kept; `autofocus` only on a page that exists to
@@ -1054,7 +1107,7 @@ functions, never a DRF view, and reaches Stripe only through `drop_billing.accou
    caps are read from `backend/drop_core/plans.py`, never typed ("Pricing changes").
 7. Actions. Every state change is a POST from a `<form method="post">` with `{% csrf_token %}` in the page's own
    template. It answers with a redirect and one line from `messages.success`, `info` or `warning`: a fixed
-   sentence ("Key revoked."), never anything secret. The layout prints the line as a `.notice` with
+   sentence ("The key is revoked."), never anything secret. The layout prints the line as a `.notice` with
    `role="status"` in whichever dashboard page loads next; a page on the form layout prints none. A GET changes
    nothing, revokes nothing and creates no Stripe session. An action that takes something away (revoke,
    disconnect, a switch between paid plans) goes first to a confirmation page: a GET that only shows a form,
@@ -1148,7 +1201,8 @@ endpoints answer with is unchanged.
   file is gone) get the same page from `artifact_miss()` in `pages/errors.py`, with the same
   status, body and headers (`Vary` and `Cache-Control` included). It is drawn with no
   request, so it never reads the session and is the same bytes for everyone, and it says only
-  "Nothing here. If this link was shared with you, its moment may have passed." Whether a
+  "Nothing here" and "This link does not lead to a file. If someone shared it with you,
+  ask them for a new link." Whether a
   token ever existed must not show. A link that works serves the file's bytes untouched and
   is never wrapped in the shell. `pages.tests_artifact_miss` compares the responses.
 - 500 (`500.html`) is self-contained, with inline CSS and no context, so it renders when the
