@@ -2053,7 +2053,7 @@ class AccessibilityTests(TestCase):
 
         alerts = Page(response.content.decode()).alerts
         self.assertEqual(len(alerts), 1)
-        self.assertIn("Invalid username, email, or password. Try again.", alerts[0])
+        self.assertIn("The username, email, or password is incorrect. Try again.", alerts[0])
 
     def test_verify_email_status_announced(self):
         from django.template.loader import render_to_string
@@ -2225,7 +2225,7 @@ class DeviceFlowTests(TestCase):
         _, raw_device_code, formatted = _issue_device_code()
         response = self._approve(formatted)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Approved")
+        self.assertContains(response, "You approved this login")
         device_code = DeviceCode.objects.get(user_code=formatted.replace("-", ""))
         self.assertEqual(device_code.status, DeviceCode.STATUS_APPROVED)
         self.assertEqual(device_code.workspace.owner, self.user)
@@ -2279,7 +2279,7 @@ class DeviceFlowTests(TestCase):
         self.client.force_login(self.user)
         response = self.client.post("/device/deny", {"user_code": formatted})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Denied")
+        self.assertContains(response, "You denied this request")
         device_code = DeviceCode.objects.get(user_code=formatted.replace("-", ""))
         self.assertEqual(device_code.status, DeviceCode.STATUS_DENIED)
         response = self.client.post(

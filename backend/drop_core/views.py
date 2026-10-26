@@ -720,7 +720,7 @@ def serve_artifact(request, token):
             type(exc).__name__,
         )
         response = HttpResponse(
-            "Artifact temporarily unavailable. Try again shortly.",
+            "This file is temporarily unavailable. Try again in about 30 seconds.",
             status=503,
             content_type="text/plain; charset=utf-8",
         )

@@ -50,7 +50,7 @@ PAGES = {
     **{state: ("password_reset_complete.html", "Password updated") for state in ("reset complete, signed in", "reset complete, signed out")},
     **{state: ("verify_email.html", "Verify email") for state in ("verify, no address yet", *VERIFY_PENDING, "verify, verified")},
     "verify link works": ("verify_email_done.html", "Email verified"),
-    "verify link dead": ("verify_email_invalid.html", "Link expired"),
+    "verify link dead": ("verify_email_invalid.html", "Link not valid"),
 }
 
 # The inputs of each state that has any, in document order, without the CSRF token: (name, type, value of a hidden one).
@@ -113,7 +113,7 @@ WORDS = {  # the sentences each state says, word for word
         "Add an email address to your account. We will send a verification link; API key creation stays locked until you verify."],
     "verify, pending": ["We sent a verification link to pending-verify@example.com. Click it to verify. "
                         "API key creation stays locked until you do."],
-    "verify, link sent": ["Verification link sent. Check your inbox."],
+    "verify, link sent": ["We sent the verification link. Check your inbox."],
     "verify, verified": ["Your email address is verified."],
     "verify link works": ["Your email address is verified. You can now create API keys."],
     "verify link dead": ["This verification link is invalid or has expired."],
@@ -438,7 +438,7 @@ class EveryStateTests(PageTestCase):
                 self.assertNotIn("bogus-token", self.html[state], f"{FILES}{PAGES[state][0]}: never print the token from the address")
 
     def test_the_status_lines_are_announced(self):
-        cases = {"verify, link sent": ["Verification link sent. Check your inbox."], "verify, verified": ["Your email address is verified."],
+        cases = {"verify, link sent": ["We sent the verification link. Check your inbox."], "verify, verified": ["Your email address is verified."],
                  "verify, pending": [], "verify, no address yet": [], "verify, wrong password": [], "verify, address taken": []}
         for state, wanted in cases.items():
             with self.subTest(state=state):

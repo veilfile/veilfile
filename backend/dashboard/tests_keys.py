@@ -648,7 +648,7 @@ class ResentPostTests(SignedInCase):
         with self.assertLogs("django.security.csrf", level="WARNING"):
             response = client.post(KEYS_URL, {"name": "x", "token": token})
         self.assertEqual(response.status_code, 403, "backend/config/settings.py: CSRF_FAILURE_VIEW answers a POST without the CSRF token with 403")
-        self.assertIn("Form not sent.", response.content.decode(), "backend/pages/errors.py: the shell's Form not sent page")
+        self.assertIn("Form not sent", response.content.decode(), "backend/pages/errors.py: the shell's Form not sent page")
         self.assertEqual(APIKey.objects.count(), 0, f"{KEYS_VIEW}: a POST without the CSRF token makes no key")
         self.assertEqual(client.session[forms.KEY_TOKENS], [token], f"{KEYS_VIEW}: and does not spend the token: the form on the page still works")
 
@@ -811,7 +811,7 @@ class RevokeKeyTests(SignedInCase):
         for method in (self.client.get, self.client.post):
             response = method(self.url(theirs))
             self.assertEqual(response.status_code, 404, f"{KEYS_VIEW}: key_revoke looks the key up in the signed-in person's workspace: another's is the shell's 404")
-            self.assertIn("Not found.", response.content.decode(), "backend/templates/404.html: the shell's 404 page")
+            self.assertIn("Not found", response.content.decode(), "backend/templates/404.html: the shell's 404 page")
             self.assertEqual(response.get("X-Robots-Tag"), NOINDEX, f"{KEYS_VIEW}: return the 404 (do not raise it) so dashboard_view adds the noindex header")
         theirs.refresh_from_db()
         self.assertTrue(theirs.is_active)
@@ -837,7 +837,7 @@ class RevokeKeyTests(SignedInCase):
         with self.assertLogs("django.security.csrf", level="WARNING"):
             response = client.post(self.url(key))
         self.assertEqual(response.status_code, 403)
-        self.assertIn("Form not sent.", response.content.decode(), "backend/pages/errors.py: the shell's Form not sent page")
+        self.assertIn("Form not sent", response.content.decode(), "backend/pages/errors.py: the shell's Form not sent page")
         self.assertEqual(APIKey.verify(raw), key, f"{KEYS_VIEW}: no CSRF token, no revoke")
 
     def test_a_signed_out_visit_goes_to_sign_in_and_revokes_nothing(self):
@@ -1040,7 +1040,7 @@ class DisconnectAppTests(SignedInCase):
         with self.assertLogs("django.security.csrf", level="WARNING"):
             response = client.post(self.url)
         self.assertEqual(response.status_code, 403)
-        self.assertIn("Form not sent.", response.content.decode())
+        self.assertIn("Form not sent", response.content.decode())
         self.refresh.refresh_from_db()
         self.assertIsNone(self.refresh.revoked, f"{KEYS_VIEW}: no CSRF token, no disconnect")
 

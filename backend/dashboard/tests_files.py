@@ -747,7 +747,7 @@ class FileRevokeTests(FilesCase):
         with self.assertLogs("django.security.csrf", "WARNING"):
             response = client.post(self.revoke_url(artifact))
         self.assertEqual(response.status_code, 403)
-        self.assertIn("Form not sent.", response.content.decode(), "backend/pages/errors.py: CSRF_FAILURE_VIEW draws the shell's Form not sent page")
+        self.assertIn("Form not sent", response.content.decode(), "backend/pages/errors.py: CSRF_FAILURE_VIEW draws the shell's Form not sent page")
         self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow", "backend/pages/errors.py: an error page drawn for an address under /app/ carries the header")
         self.assertTrue(Artifact.objects.filter(pk=artifact.pk).exists() and self.stored(artifact))
         self.assertFalse(Artifact.objects.get(pk=artifact.pk).is_expired())

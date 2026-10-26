@@ -347,7 +347,7 @@ class DeviceConsentTests(_DeviceTestBase):
         # form means it is unknown, expired or used, not that it must be typed.
         response = self.browser.get("/device?user_code=ABCD-EFGH")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "doesn't match a pending login")
+        self.assertContains(response, "does not match a pending login")
         self.assertNotContains(response, "Enter the code shown in your terminal.")
 
     def test_issuance_records_requester_ip_and_user_agent(self):
@@ -365,10 +365,10 @@ class DeviceConsentTests(_DeviceTestBase):
         page = self.browser.get("/device", {"user_code": grant["user_code"]})
         self.assertEqual(page.status_code, 200)
         for needle in (
-            "Only approve if you just ran",
+            "Approve only if you just ran",
             "veilfile login",
             "matches the one in your terminal",
-            "click Deny",
+            "choose Deny",
             "198.51.100.7",
             "veilfile-cli/0.3.0 (test)",
             "dev@example.com",
@@ -383,7 +383,7 @@ class DeviceConsentTests(_DeviceTestBase):
             "Upload files",
             "List every artifact in the workspace and download",
             "Revoke artifacts",
-            "List the workspace's API keys and revoke any of them",
+            "List the workspace's API keys and revoke only the key in use",
             "does not expire",
             "limit of 1 API key",
         ):
@@ -741,4 +741,4 @@ class DeviceReviewFollowupTests(_DeviceTestBase):
     def test_grant_summary_mentions_disconnecting_connected_apps(self):
         grant = self._start()
         page = self.browser.get("/device", {"user_code": grant["user_code"]})
-        self.assertContains(page, "Disconnect every app connected to your account")
+        self.assertContains(page, "disconnect your apps")

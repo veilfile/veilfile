@@ -7,8 +7,8 @@
 {% block form_page %}
 <h1>Approve terminal login</h1>
 {% include "components/form_errors.html" with errors=errors focus=True only %}
-<p>A terminal is asking for an API key to your workspace.</p>
-<p class="device-warning"><strong>Only approve if you just ran <code>veilfile login</code> yourself</strong> and the code below matches the one in your terminal. If someone sent you this link or asked you to approve it, click Deny: approving would give them access to your files.</p>
+<p>A terminal is asking for an API key to your workspace. Approving gives it that key.</p>
+<p class="device-warning"><strong>Approve only if you just ran <code>veilfile login</code> yourself</strong> and the code below matches the one in your terminal. If someone else sent you this link or asked you to approve it, choose Deny. Denying issues no key.</p>
 {% if not email_verified %}
 <p class="notice" role="status"><strong>Verify your email first.</strong> Approving this terminal key will be refused until your email address is verified. Check your inbox, or <a href="{% url 'email-verification' %}">re-send the verification email</a>.</p>
 {% endif %}

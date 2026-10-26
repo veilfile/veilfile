@@ -185,7 +185,7 @@ class ConsentPageTests(ConsentTestCase):
     def test_the_page_says_in_plain_words_what_mcp_use_lets_the_app_do(self):
         response = self.consent()
         html = response.content.decode()
-        for words in ("Approving lets the app act on your workspace. It can:",
+        for words in ("Approving lets the app act on your workspace. It can do these things:",
                       "Upload files and create share links, list your artifacts, and revoke them",
                       "See your plan, usage, and account email address",
                       "It cannot create, list, or revoke API keys, disconnect your other apps, or touch billing or your account settings.",
@@ -316,13 +316,13 @@ class SignInReturnsToConsentTests(ConsentTestCase):
 
 
 class RefusedRequestTests(ConsentTestCase):
-    def assert_error_page(self, response, status, description):
+    def assert_error_page(self, response, status):
         found = read(response)
         html = response.content.decode()
         fix = "backend/drop_core/oauth.py: render_to_response shows device/device_error.html for a request DOT refuses"
         self.assertEqual(response.status_code, status, f"{fix}; expected {status}, got {response.status_code}")
         self.assertEqual([h1["text"].strip() for h1 in found.h1s], ["Invalid request"], f"{fix}; found headings {[h1['text'].strip() for h1 in found.h1s]}")
-        self.assertIn(f"{description} Nothing was authorized. Go back to the app and start again.", html, f"{fix}, with the library's description of the error")
+        self.assertIn("The request from the app is incomplete or not valid. Nothing was authorized. Go back to the app and start again.", html, f"{fix}, with the fixed sentence for every refused request")
         self.assertEqual(found.forms, [], f"{fix}: an error page has no form, there is nothing to authorize")
         self.assertNotIn("csrfmiddlewaretoken", html, f"{fix}: no form, so no token")
         self.assertNotIn("nverified", html, f"{fix}: no consent wording on a page that has no app")
@@ -331,16 +331,16 @@ class RefusedRequestTests(ConsentTestCase):
 
     def test_an_unknown_client_gets_the_error_page(self):
         response = self.consent(params={**self.params, "client_id": "no-such-client"})
-        self.assert_error_page(response, 400, "Invalid client_id parameter value.")
+        self.assert_error_page(response, 400)
 
     def test_a_missing_client_gets_the_error_page(self):
         params = dict(self.params)
         del params["client_id"]
-        self.assert_error_page(self.consent(params=params), 400, "Missing client_id parameter.")
+        self.assert_error_page(self.consent(params=params), 400)
 
     def test_a_redirect_uri_the_client_did_not_register_gets_the_error_page(self):
         response = self.consent(params={**self.params, "redirect_uri": "https://other.example.com/callback"})
-        self.assert_error_page(response, 400, "Mismatching redirect URI.")
+        self.assert_error_page(response, 400)
         self.assertNotIn("other.example.com", response.content.decode(), "backend/drop_core/oauth.py: the page never echoes the request's redirect_uri")
 
     def test_nothing_from_the_request_is_echoed(self):
@@ -353,7 +353,7 @@ class RefusedRequestTests(ConsentTestCase):
     def test_a_post_with_fields_missing_gets_the_error_page(self):
         self.client.force_login(self.user)
         response = self.client.post(tests_oauth._AUTHORIZE_URL, {"allow": "Authorize"})
-        self.assert_error_page(response, 200, "This request is incomplete.")
+        self.assert_error_page(response, 200)
 
     def test_an_error_the_app_can_be_told_about_still_goes_back_to_the_app(self):
         # DOT redirects these (not a fatal client error); render_to_response must not turn them into pages.

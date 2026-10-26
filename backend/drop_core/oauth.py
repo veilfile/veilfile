@@ -352,13 +352,12 @@ class VeilfileAuthorizationView(AuthorizationView):
         client_id, or a redirect_uri the client did not register: it must not redirect there) and a form that failed
         validation. The last two have no application, and a consent page without one is a card with no app in it
         and buttons that carry only a token, so they get the error page. The status stays DOT's (400 for the first,
-        200 for the second). The text is the library's own fixed description of the error and never part of the
-        request, which the page must not echo."""
+        200 for the second). The text is one fixed sentence for every refused request; nothing of the library's error
+        or of the request is shown, because the page must not echo the request."""
         if context.get("application") is None:
-            description = getattr(context.get("error"), "description", None) or "This request is incomplete"
             return self._error_page(
                 "Invalid request",
-                f"{description.rstrip('.')}. Nothing was authorized. Go back to the app and start again.",
+                "The request from the app is incomplete or not valid. Nothing was authorized. Go back to the app and start again.",
                 response_kwargs.get("status", 200),
             )
         return super().render_to_response(context, **response_kwargs)

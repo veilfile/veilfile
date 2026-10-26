@@ -102,7 +102,7 @@ def entries():
               )),
         Entry("form_errors", "The top of a form that has something to say as a whole: a summary with a solid ink line down its left, the mark Check this and each sentence in full ink. "
                              "Shown with one sentence of the page's own, and with the form's errors.",
-              {"message": "Invalid username, email, or password. Try again."},
+              {"message": "The username, email, or password is incorrect. Try again."},
               within="form-page",
               states=({"errors": ["Your current password is incorrect."]},)),
         Entry("meter", "The dashboard's Overview: one figure against its limit, as a mono label, the numbers in words and a hairline bar. "

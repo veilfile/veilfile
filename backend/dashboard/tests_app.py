@@ -242,4 +242,4 @@ class ErrorsUnderAppTests(TestCase):
             response = checked.post("/app/files/")
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.headers.get("X-Robots-Tag"), NOINDEX)
-        self.assertIn("Form not sent.", response.content.decode())
+        self.assertIn("Form not sent", response.content.decode())

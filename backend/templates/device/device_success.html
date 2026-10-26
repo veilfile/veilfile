@@ -7,9 +7,9 @@
 {% block form_page %}
 <span class="device-mark" aria-hidden="true"></span>
 <h1>Terminal approved</h1>
-<p>Approved. Return to your terminal: it receives its key on its next check, within a few seconds. You can close this window.</p>
+<p>You approved this login. Return to your terminal: it receives its key on its next check, within a few seconds. You can close this window.</p>
 {% if replace_key %}
 <p>When it does, <strong>{{ replace_key.name }}</strong> (<code>{{ replace_key.key_prefix }}…</code>) is revoked.</p>
 {% endif %}
-<p>If the terminal already stopped waiting, no key is created. Run veilfile login again.</p>
+<p>If the terminal already stopped waiting, no key is created, so run <code>veilfile login</code> again. You can revoke the key at any time in the dashboard.</p>
 {% endblock %}

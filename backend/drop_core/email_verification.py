@@ -420,7 +420,7 @@ def send_email_change_notice(user, old_email, new_email):
         },
     )
     send_mail(
-        "Your Veilfile email address is being changed",
+        "Someone asked to change your Veilfile email address",
         body,
         settings.DEFAULT_FROM_EMAIL,
         [old_email],

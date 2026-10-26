@@ -23,13 +23,13 @@ logger = logging.getLogger(__name__)
 # The words of the bare page when the shell cannot be drawn: (title, message), by the template that failed. 500 has none:
 # templates/500.html says its own words when it is given nothing.
 BARE_WORDS = {
-    "404.html": ("Not found.", "There is nothing at this address."),
-    "403.html": ("Not allowed.", "You do not have access to this page."),
-    "403_csrf.html": ("Form not sent.", "Go back, reload that page and send the form again."),
+    "404.html": ("Not found", "There is nothing at this address. Check it for a typo, or start from the home page."),
+    "403.html": ("Not allowed", "You do not have access to this page. If you expected to, sign in with the account that does."),
+    "403_csrf.html": ("Form not sent", "Go back, reload that page and send the form again."),
 }
 # The same words as templates/404.html says for a file link that leads nowhere (spec 4.9). A test keeps these and the
 # templates' words together.
-GONE_WORDS = ("Nothing here.", "If this link was shared with you, its moment may have passed.")
+GONE_WORDS = ("Nothing here", "This link does not lead to a file. If someone shared it with you, ask them for a new link.")
 
 
 def log_failure(exc, message, *args):
