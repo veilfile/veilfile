@@ -204,7 +204,7 @@
   "group": "chapters",
   "file": "backend/templates/chapters/how.html",
   "old": "Uploads are checked for anything shaped like a secret, and flagged.",
-  "new": "Veilfile scans each upload for known secret formats, such as API keys and tokens, and flags any match.",
+  "new": "Veilfile scans the first 1 MiB of each upload for known secret formats, such as API keys and tokens, and flags any match.",
   "mode": "replace"
  },
  {
@@ -228,7 +228,7 @@
   "group": "chapters",
   "file": "backend/templates/chapters/promises.html",
   "old": "No public list, nothing indexed, no addresses anyone could guess.",
-  "new": "Nothing is listed publicly or indexed, and no one can guess an address.",
+  "new": "Nothing is listed publicly, links ask search engines not to index them, and no one can guess an address.",
   "mode": "replace"
  },
  {
@@ -519,6 +519,14 @@
   "file": "backend/docs/pages/how-it-works.md",
   "old": "Downloads send `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`. Nothing caches the bytes. Artifact URLs are never indexed.",
   "new": "Downloads send `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, which ask caches not to keep the bytes and crawlers not to index the URL.",
+  "mode": "replace"
+ },
+ {
+  "id": "X-docs-scan-limit",
+  "group": "docs",
+  "file": "backend/docs/pages/how-it-works.md",
+  "old": "Every upload is scanned for secret-shaped content:",
+  "new": "The first 1 MiB of every upload is scanned for secret-shaped content:",
   "mode": "replace"
  },
  {
