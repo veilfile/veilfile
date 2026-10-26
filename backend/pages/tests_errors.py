@@ -1,5 +1,6 @@
 """The error pages (spec 4.9): 404, 403, a failed CSRF check and 500, what they never print, and what they do when they cannot be drawn."""
 import re
+from html import unescape
 from pathlib import Path
 from unittest import mock
 
@@ -92,7 +93,7 @@ class NotFoundPageTests(TestCase):
         self.assertIn("data-menu", html, "backend/templates/404.html: it must extend a layout, which extends shell.html")
         self.assertEqual(len(re.findall(r"<h1[ >]", html)), 1, "backend/templates/404.html: one <h1>, inside <main>")
         self.assertIn("<h1", main(html), "backend/templates/404.html: the <h1> belongs inside <main>")
-        self.assertIn("Not found.", main(html))
+        self.assertIn("Not found", main(html))
         self.assertIn("<title>Not found | Veilfile</title>", html)
         self.assertIn('<meta name="robots" content="noindex">', html, "backend/templates/404.html: an error page is never indexed")
 
@@ -142,7 +143,7 @@ class NotFoundPageTests(TestCase):
     def test_a_post_gets_the_same_page(self):
         response = self.client.post("/no-such-page/", {"a": "b"})
         self.assertEqual(response.status_code, 404)
-        self.assertIn("Not found.", response.content.decode())
+        self.assertIn("Not found", response.content.decode())
 
     def reader(self):
         return get_user_model().objects.create_user(username="reader", password="pw12345678")
@@ -157,7 +158,7 @@ class PermissionDeniedPageTests(TestCase):
         html = response.content.decode()
         self.assertEqual(response.status_code, 403, "backend/pages/errors.py: permission_denied() must answer with status 403")
         self.assertIn("<title>Not allowed | Veilfile</title>", html)
-        self.assertIn("Not allowed.", main(html))
+        self.assertIn("Not allowed", main(html))
         self.assertEqual(len(re.findall(r"<h1[ >]", html)), 1)
         self.assertIn('<meta name="robots" content="noindex">', html)
         self.assertNotIn(SECRET, html, "backend/templates/403.html: never print the exception")
@@ -184,7 +185,7 @@ class CsrfFailurePageTests(TestCase):
         html = response.content.decode()
         self.assertEqual(response.status_code, 403, "backend/pages/errors.py: csrf_failure() must answer with status 403")
         self.assertIn("<title>Form not sent | Veilfile</title>", html)
-        self.assertIn("Form not sent.", main(html))
+        self.assertIn("Form not sent", main(html))
         self.assertEqual(len(re.findall(r"<h1[ >]", html)), 1)
         self.assertIn('<meta name="robots" content="noindex">', html)
         self.assertIn('<main id="main"', html, "backend/templates/403_csrf.html: it must extend a layout, which extends shell.html")
@@ -220,7 +221,7 @@ class ServerErrorPageTests(TestCase):
         html = response.content.decode()
         self.assertEqual(response.status_code, 500)
         self.assertIn("<title>Something went wrong | Veilfile</title>", html)
-        self.assertIn("<h1>Something went wrong.</h1>", html)
+        self.assertIn("<h1>Something went wrong</h1>", html)
         self.assertIn("support@veilfile.com", html)
         self.assertNotIn(SECRET, html, "backend/templates/500.html: never print the exception")
 
@@ -228,7 +229,7 @@ class ServerErrorPageTests(TestCase):
         # Django's own server_error() is called with the request and draws with none; so does this one.
         response = errors.server_error(None)
         self.assertEqual(response.status_code, 500)
-        self.assertIn("Something went wrong.", response.content.decode())
+        self.assertIn("<h1>Something went wrong</h1>", response.content.decode())
 
     def test_it_is_drawn_when_the_static_manifest_is_missing(self):
         with override_settings(STORAGES=manifest_with_nothing_in_it()):
@@ -237,7 +238,7 @@ class ServerErrorPageTests(TestCase):
                 render_to_string("shell.html")
             response = errors.server_error(RequestFactory().get("/"))
         self.assertEqual(response.status_code, 500)
-        self.assertIn("Something went wrong.", response.content.decode(),
+        self.assertIn("<h1>Something went wrong</h1>", response.content.decode(),
                       "backend/templates/500.html: no {% static %} tag; it must draw when the static manifest is missing")
 
     def test_it_is_drawn_when_every_context_processor_raises(self):
@@ -248,7 +249,7 @@ class ServerErrorPageTests(TestCase):
             with self.assertLogs("django.request", level="ERROR"):
                 response = client.get("/boom/")
         self.assertEqual(response.status_code, 500)
-        self.assertIn("Something went wrong.", response.content.decode(),
+        self.assertIn("<h1>Something went wrong</h1>", response.content.decode(),
                       "backend/pages/errors.py: server_error() must draw templates/500.html with no request, so no context processor runs")
 
     def test_its_own_words_can_be_replaced_and_are_escaped(self):
@@ -258,7 +259,7 @@ class ServerErrorPageTests(TestCase):
 
     def test_with_no_words_given_it_says_its_own(self):
         html = render_to_string("500.html")
-        self.assertIn("<h1>Something went wrong.</h1>", html)
+        self.assertIn("<h1>Something went wrong</h1>", html)
         self.assertIn("<title>Something went wrong | Veilfile</title>", html)
 
 
@@ -282,31 +283,31 @@ class AnErrorPageThatCannotBeDrawnTests(TestCase):
     def test_a_404_stays_a_404(self):
         with self.shell_that_raises(), self.assertLogs("pages.errors", level="ERROR") as logs:
             response = self.client.get("/no-such-page/")
-        self.assert_bare(response, 404, "Not found.")
+        self.assert_bare(response, 404, "Not found")
         self.assertIn("404.html could not be drawn on the shell", logs.output[0])
         self.assertNotIn("no-such-page", logs.output[0], "backend/pages/errors.py: do not log the path; it can be a bearer token")
 
     def test_a_403_stays_a_403(self):
         with self.shell_that_raises(), self.assertLogs("pages.errors", level="ERROR"):
             response = self.client.get("/denied/")
-        self.assert_bare(response, 403, "Not allowed.")
+        self.assert_bare(response, 403, "Not allowed")
 
     def test_a_failed_csrf_check_stays_a_403(self):
         client = Client(enforce_csrf_checks=True)
         with self.shell_that_raises(), self.assertLogs("pages.errors", level="ERROR"), self.assertLogs("django.security.csrf", level="WARNING"):
             response = client.post("/accounts/verify-email/SECRET_VERIFY_TOKEN/")
-        self.assert_bare(response, 403, "Form not sent.")
+        self.assert_bare(response, 403, "Form not sent")
 
     def test_a_missing_static_manifest_does_not_turn_a_404_into_a_500(self):
         with override_settings(STORAGES=manifest_with_nothing_in_it()), self.assertLogs("pages.errors", level="ERROR"):
             response = self.client.get("/no-such-page/")
-        self.assert_bare(response, 404, "Not found.")
+        self.assert_bare(response, 404, "Not found")
 
     def test_a_context_processor_that_raises_does_not_turn_a_404_into_a_500(self):
         with override_settings(TEMPLATES=templates_with_processors(["pages.tests_errors.exploding_processor"])):
             with self.assertLogs("pages.errors", level="ERROR"):
                 response = self.client.get("/no-such-page/")
-        self.assert_bare(response, 404, "Not found.")
+        self.assert_bare(response, 404, "Not found")
 
     def test_when_even_the_bare_page_cannot_be_drawn_one_line_of_text_keeps_the_status(self):
         with mock.patch("pages.errors.render", side_effect=RuntimeError(SECRET)), \
@@ -398,7 +399,11 @@ class ErrorTemplateRulesTests(SimpleTestCase):
         self.assertEqual(stray, [], f"backend/templates/500.html: {', '.join(stray)} is not in backend/static/css/tokens.css; use the token's value")
 
     def test_the_fallback_says_what_the_templates_say(self):
-        # pages/errors.py repeats the words of 404.html, 403.html for the moment the shell cannot be drawn.
+        # pages/errors.py repeats the words of 404.html, 403.html for the moment the shell cannot be drawn. Each sentence
+        # must appear word for word in the template's visible text: tags removed, spaces collapsed (a link is still words).
+        def visible(html):
+            return unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", html[html.index("<main"):html.index("</main>")])))
+
         gone = render_to_string("404.html", {"gone_link": True})
         found = render_to_string("404.html")
         denied = render_to_string("403.html")
@@ -407,4 +412,4 @@ class ErrorTemplateRulesTests(SimpleTestCase):
                             (errors.BARE_WORDS["403.html"], denied), (errors.BARE_WORDS["403_csrf.html"], csrf)):
             for sentence in words:
                 with self.subTest(sentence=sentence):
-                    self.assertIn(sentence, html, f"backend/pages/errors.py: \"{sentence}\" is not what the template says; change them together")
+                    self.assertIn(sentence, visible(html), f"backend/pages/errors.py: \"{sentence}\" is not what the template says; change them together")

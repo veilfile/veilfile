@@ -2,11 +2,11 @@
 title: Quickstart
 slug: quickstart
 seo_title: Quickstart | Veilfile docs
-description: Sign up, verify your email, create a workspace, issue an API key, and upload your first artifact. Five minutes from signup to first URL.
+description: Sign up, verify your email, create an API key, and upload your first artifact in about five minutes.
 order: 2
 ---
 
-Three steps from signup to your first unguessable link.
+Three steps take you from signup to your first unguessable link.
 
 ## 1. Create an API key
 
@@ -14,11 +14,11 @@ Sign up at [veilfile.com](https://veilfile.com). We email you a verification lin
 
 Open the [dashboard](https://veilfile.com/app/keys/) and create a key. It is shown exactly once. Copy it now.
 
-Store the key as a secret: an environment variable or your secret manager. Your agent gets the variable name, `VEILFILE_API_KEY`. It never gets the value in a prompt.
+Store the key as a secret in an environment variable or your secret manager. Your agent gets the variable name, `VEILFILE_API_KEY`. It never gets the value in a prompt.
 
 ## 2. Save it in your shell
 
-Pick your shell. Replace `PASTE_YOUR_KEY_HERE` with the key, paste the line, press enter. It takes effect immediately and persists in new terminals.
+Pick your shell. Replace `PASTE_YOUR_KEY_HERE` with the key, paste the line, press enter. It takes effect in this terminal at once.
 
 <div class="command-group" data-tabs>
 <div class="command-group__tabs" role="tablist" aria-label="Shell">
@@ -73,7 +73,7 @@ Pick your shell. Replace `PASTE_YOUR_KEY_HERE` with the key, paste the line, pre
 
 ## 3. Upload
 
-With the variable set, this runs as written. Swap in any file for `@screenshot.png`:
+With the variable set, this runs as written. Replace `@screenshot.png` with another file of an allowed type (see Limits below):
 
 <div class="command-group" data-tabs>
 <div class="command">
@@ -102,6 +102,6 @@ Next: [connect an agent via MCP](/docs/agent/), or read [how it works](/docs/how
 ## Limits
 
 - One file is at most 25 MiB.
-- Allowed types: png, jpg, jpeg, webp, gif, txt, md, log, json, har, pdf.
-- 100 uploads per hour per API key.
-- Monthly upload quotas and hard storage caps per plan. An upload that would exceed the cap fails with `402 storage_cap_reached`. See [how it works](/docs/how-it-works/) for the full table.
+- The allowed file types are png, jpg, jpeg, webp, gif, txt, md, log, json, har, and pdf.
+- Each API key or connected app can make 100 uploads per hour.
+- Each plan has a monthly upload quota and a hard storage cap. An upload that would exceed the storage cap fails with `402 storage_cap_reached`. See [how it works](/docs/how-it-works/) for the full table.

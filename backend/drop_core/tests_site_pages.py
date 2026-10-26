@@ -67,7 +67,7 @@ class DocsSetupFlowTests(TestCase):
     def test_quickstart_limits(self):
         html = self._html()
         self.assertIn("25 MiB", html)
-        self.assertIn("100 uploads per hour per API key", html)
+        self.assertIn("Each API key or connected app can make 100 uploads per hour", html)
         for fmt in ("png", "jpg", "jpeg", "webp", "gif", "txt", "md", "log", "json", "har", "pdf"):
             with self.subTest(fmt=fmt):
                 self.assertIn(fmt, html)

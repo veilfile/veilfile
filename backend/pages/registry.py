@@ -38,48 +38,48 @@ class MenuLink:
 
 PAGES = (
     Page("landing", "Veilfile | Private ephemeral artifact hosting for AI agents",
-         "Private file hosting for AI agents. Upload screenshots, logs, and bundles via REST or MCP. "
-         "Unguessable links that expire on schedule. Free to $12/mo.",
+         "Veilfile hosts private files for AI agents. Upload files via REST or MCP. "
+         "Links are unguessable and expire on schedule. Plans cost $0 to $12 a month.",
          layout="chapter"),
     Page("about", "About | Veilfile",
-         "Veilfile gives each file your agents make a private link, and lets it go when its time is up. "
-         "No public repository, no bucket, no paste that lives forever.",
+         "Each file your agents make gets a private link that stops when its time is up. "
+         "Nothing sits in a public repository, a bucket, or a paste that lives forever.",
          layout="chapter"),
     Page("how", "How it works | Veilfile",
-         "The life of a file on Veilfile: your agent pushes it, gets an unguessable link and shares it; "
-         "when its days run out the link stops, then the file is deleted.",
+         "An agent uploads a file and gets an unguessable link to share. "
+         "When its days run out, the link stops working and the file is deleted soon after.",
          layout="chapter"),
     Page("begin", "Begin | Veilfile",
-         "Set up Veilfile: connect your agent to the MCP server at veilfile.com/mcp, install the command line "
+         "Connect your agent to the MCP server at veilfile.com/mcp, install the command-line tool "
          "with npm or pip, or upload over plain HTTP.",
          layout="chapter"),
     Page("plans", "Plans | Veilfile",
-         "Veilfile plans: Free ($0), Team ($4/month), Scale ($12/month). Tax included. "
+         "Veilfile has three plans: Free ($0), Team ($4/month), and Scale ($12/month). Prices include tax. "
          "The price you see is the price you pay.",
          layout="chapter"),
     Page("promises", "What we promise | Veilfile",
-         "What Veilfile promises: the link is the only way in, expired files are deleted from storage, "
-         "and uploads are scanned for secrets without logging contents.",
+         "Veilfile promises that the link is the only way in, that expired files are deleted from storage, "
+         "and that file contents are never logged.",
          layout="chapter"),
     Page("docs-index", "Veilfile docs | REST API, MCP, and agent setup",
-         "Start here: five-minute quickstart, agent key setup, how uploads and expiry work, "
-         "and the full REST and MCP API reference.",
+         "Start with the quickstart, then set up an agent key, learn how uploads and expiry work, "
+         "and look up the upload, list, revoke, and download endpoints.",
          layout="reading"),
     Page("blog-index", "Veilfile blog | launches and build notes",
-         "Notes from building Veilfile: launches, changes, pricing, and the reasoning behind each decision. "
-         "Updated twice a month. RSS available.",
+         "Read notes on how Veilfile is built, including launches, changes, pricing, and the reasoning behind them. "
+         "An RSS feed is available.",
          layout="reading"),
     Page("terms", "Terms of service | Veilfile",
-         "Veilfile's terms: acceptable use, accounts and API keys, data retention, billing and refunds, "
+         "Veilfile's terms cover acceptable use, accounts and API keys, data retention, billing and refunds, "
          "liability limits, and how to contact us.",
          layout="reading"),
     Page("privacy", "Privacy policy | Veilfile",
-         "What Veilfile collects, why, how long files and metadata are kept, subprocessors, "
+         "Read what Veilfile collects and why, how long it keeps files and metadata, which subprocessors it uses, "
          "and how to request access or deletion.",
          layout="reading"),
     Page("report-abuse", "Report abuse | Veilfile",
-         "Report a file on Veilfile that violates our terms. Email abuse@veilfile.com with the link "
-         "and a description. CSAM reports go to NCMEC first.",
+         "Report a file that violates our terms by emailing abuse@veilfile.com with the link "
+         "and details. We report apparent child sexual exploitation to NCMEC.",
          layout="reading"),
 )
 

@@ -8,7 +8,7 @@ Disallow: /device
 Disallow: /accounts/
 Allow: /
 
-# AI crawlers explicitly welcome on the public pages. A named group
+# AI crawlers are explicitly welcome on the public pages. A named group
 # replaces the * group for that crawler, so each repeats the Disallow
 # lines: /a/<token> links are private artifacts, never content to fetch.
 User-agent: GPTBot
@@ -23,7 +23,7 @@ Allow: /
 
 # Fetchers acting for a person (an assistant opening a link its user
 # pasted into a chat) may open /a/ links: the person chose to hand over
-# that bearer link. Training and indexing crawlers may not.
+# that bearer link. Training and indexing crawlers may not open /a/ links.
 User-agent: ChatGPT-User
 User-agent: Claude-User
 User-agent: Perplexity-User

@@ -1,8 +1,7 @@
 """The device flow's pages on the shell (spec 4.7): the code entry, the approval, its two results and the refusal.
 
-The five templates in backend/templates/device/ extend layouts/form.html. Their words are the old pages' (the voice pass,
-PR 7, rewrites them), so what these tests hold is what must not change with the move: the form's fields and addresses, the
-escaping of what a stranger's terminal sent, the confirmation the approval needs, the keys offered at the plan's cap, and the
+The five templates in backend/templates/device/ extend layouts/form.html. Their words are the voice pass's, so what these tests hold is what must not change with them: the form's fields and
+addresses, the escaping of what a stranger's terminal sent, the confirmation the approval needs, the keys offered at the plan's cap, and the
 two other flows that meet these pages (the CLI's link, and the OAuth consent's refusal, which renders device/device_error.html).
 
 Every class sets longMessage = False, so that a failure prints its own message, which names the file and the fix, and not the
@@ -34,7 +33,7 @@ PAGE_TEMPLATES = {"device_enter_code.html", "device_consent.html", "device_succe
                   "device_error.html"}
 DASH = "\N{EM DASH}"  # the voice rules ban it, in a stylesheet's comments too
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
-# The <title> of each state a visitor can meet: the old pages' words, in the shell's form (Name | Veilfile).
+# The <title> of each state a visitor can meet: the voice pass's words, in the shell's form (Name | Veilfile).
 TITLES = {
     "enter": "Enter device code | Veilfile",
     "enter, wrong code": "Enter device code | Veilfile",
@@ -198,7 +197,7 @@ class DevicePageFrameTests(DeviceCase):
         for label, response in self.every_page().items():
             with self.subTest(page=label):
                 self.says(response.content.decode(), f"<title>{TITLES[label]}</title>",
-                          f"{label}: the title block of its template in backend/templates/device/ (the old page's words, "
+                          f"{label}: the title block of its template in backend/templates/device/ (the voice pass's words, "
                           "then ' | Veilfile' as on every page of the shell); the page")
 
     def test_every_page_is_kept_out_of_search(self):
@@ -386,8 +385,8 @@ class DeviceEnterCodeTests(DeviceCase):
                          "focus skips the paragraph above the field, so the field is described by it")
         intro = element_with_id(main, "device-intro")
         self.assertIsNotNone(intro, "the intro paragraph needs id=device-intro: it is the field's description")
-        self.assertIn("Enter the code shown in your terminal. Only enter a code from a veilfile login you ran yourself.",
-                      text_of(intro), "the intro keeps its words until the voice pass")
+        self.assertIn("Enter the code shown in your terminal. Enter only a code from a veilfile login that you started yourself, just now.",
+                      text_of(intro), "the intro keeps the voice pass's words")
 
     def test_after_a_wrong_code_the_sentence_is_tied_to_the_field_and_the_field_takes_focus(self):
         main = self.entry(user_code="NOPE-NOPE")
@@ -401,7 +400,7 @@ class DeviceEnterCodeTests(DeviceCase):
         self.assertTrue(described and all(described), "aria-describedby must name elements of the page")
         self.assertIn("We couldn't find that code.", text_of(" ".join(described)),
                       "the field's sentence is the view's error (the 'errors' list in backend/drop_core/device.py)")
-        self.says(text_of(main), "doesn't match a pending login", "the paragraph above the field")
+        self.says(text_of(main), "does not match a pending login", "the paragraph above the field")
         self.omits(main, "Enter the code shown in your terminal.", "the page after a wrong code")
         self.omits(main, 'id="device-intro"', "the page after a wrong code (the explanation is the paragraph)")
 
@@ -455,22 +454,20 @@ class DeviceConsentTests(DeviceCase):
         _grant, main = self.consent()
         words = text_of(main)
         for needle in (
-            "Only approve if you just ran veilfile login yourself and the code below matches the one in your terminal. "
-            "If someone sent you this link or asked you to approve it, click Deny: approving would give them access to "
-            "your files.",
-            "A terminal is asking for an API key to your workspace.",
-            "Approving creates an API key for your workspace. Whoever holds it can:",
+            "Approve only if you just ran veilfile login yourself and the code below matches the one in your terminal. "
+            "If someone else sent you this link or asked you to approve it, choose Deny. Denying issues no key.",
+            "A terminal is asking for an API key to your workspace. Approving gives it that key.",
+            "Approving creates an API key for your workspace. Whoever holds the key can do these things:",
             "Upload files and create share links",
             "List every artifact in the workspace and download each one through its link",
             "Revoke artifacts",
-            "List the workspace's API keys and revoke any of them",
-            "Disconnect every app connected to your account (OAuth / MCP clients)",
+            "List the workspace's API keys and revoke only the key in use",
             "See the account email and plan usage",
             "The key does not expire: it works until you revoke it in the dashboard. It counts toward your plan's limit "
             "of 1 API key. It is sent only to the terminal; this browser never sees it.",
         ):
             self.says(words, needle, "backend/templates/device/device_consent.html or includes/grant_summary.html "
-                      "(the words stay until the voice pass, and the summary must stay accurate)")
+                      "(the words are the voice pass's, and the summary must stay accurate)")
 
     def test_the_form_posts_the_same_fields_to_the_same_two_addresses(self):
         grant, main = self.consent()
@@ -579,20 +576,20 @@ class DeviceResultPageTests(DeviceCase):
         self.says(main, "<h1>Terminal approved</h1>", "backend/templates/device/device_success.html")
         self.omits(main, 'role="img"', "backend/templates/device/device_success.html (the old mark was an image)")
         words = text_of(main)
-        self.says(words, "Approved. Return to your terminal: it receives its key on its next check, within a few seconds. "
+        self.says(words, "You approved this login. Return to your terminal: it receives its key on its next check, within a few seconds. "
                   "You can close this window.", "backend/templates/device/device_success.html")
         self.says(words, "When it does, old <i>key</i> (", "device_success.html: the replaced key's name, as text")
         self.says(words, f"{key.key_prefix}{ELLIPSIS} ) is revoked.", "device_success.html: the replaced key's prefix")
         self.omits(main, "<i>key</i>", "device_success.html: the replaced key's name is escaped; the page")
-        self.says(words, "If the terminal already stopped waiting, no key is created. Run veilfile login again.",
+        self.says(words, "If the terminal already stopped waiting, no key is created, so run veilfile login again. You can revoke the key at any time in the dashboard.",
                   "backend/templates/device/device_success.html")
 
     def test_the_denied_page(self):
         response = self.browser.post("/device/deny", {"user_code": self.start()["user_code"]})
         main = main_of(response.content.decode())
         self.says(main, "<h1>Terminal denied</h1>", "backend/templates/device/device_denied.html")
-        self.says(text_of(main), "Denied. No key was issued. If you didn't start this request, rotate your keys from "
-                  "the dashboard.", "backend/templates/device/device_denied.html")
+        self.says(text_of(main), "You denied this request, so no key was issued and nothing in your account changed. "
+                  "If you did not start this login, you can close this window. To check your account, review your API keys in the dashboard.", "backend/templates/device/device_denied.html")
 
     def test_the_error_page_is_its_title_and_its_message(self):
         response = self.browser.post("/device/approve", {"user_code": "NOPE-NOPE"})

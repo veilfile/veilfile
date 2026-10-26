@@ -39,7 +39,7 @@ SIGNUP = "/accounts/signup/"
 DEVICE_LINK = "/device?user_code=ABCD-EFGH"
 TEMPLATES = Path(settings.BASE_DIR) / "templates"
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
-FAILED = "Invalid username, email, or password. Try again."
+FAILED = "The username, email, or password is incorrect. Try again."
 
 
 class Page(HTMLParser):
@@ -862,7 +862,7 @@ class CheckoutConfirmPageTests(PageCase):
                 self.assertEqual(response.status_code, 200)
                 page = self.parse(response)
                 self.assertEqual(page.headings,
-                                 [f"Subscribe to the {plan.title()} plan (${PLANS[plan]['price_usd']}/mo, tax included)."])
+                                 [f"Subscribe to the {plan.title()} plan (${PLANS[plan]['price_usd']}/mo, tax included)"])
                 self.assertIn("<title>Checkout | Veilfile</title>", page.html,
                               "backend/templates/registration/checkout_confirm.html: {% block title %} is Checkout, then | Veilfile")
 

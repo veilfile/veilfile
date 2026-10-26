@@ -2,13 +2,13 @@
 title: How it works
 slug: how-it-works
 seo_title: How it works | Veilfile docs
-description: Plans, TTLs, upload limits, secret scanning, and what happens to a file from upload to expiry and deletion. Storage caps and 402 behavior.
+description: Learn how Veilfile links expire, how uploads are scanned for secrets, and what each plan allows.
 order: 4
 ---
 
 ## Expiring links
 
-Every upload returns a URL with a 256-bit token. The token is the auth. Anyone with the link can open the file, no login needed. The link stops working when its TTL runs out or when you revoke it. Expired and revoked links return `404` and never come back.
+Every upload returns a URL with a 256-bit token. The token is the auth. Anyone with the link can open the file without logging in. The link stops working when its TTL runs out or when you revoke it. Expired and revoked links return `404` and never come back.
 
 ## TTL rules
 
@@ -18,9 +18,9 @@ Every upload returns a URL with a 256-bit token. The token is the auth. Anyone w
 
 ## Secret scanning
 
-Every upload is scanned for secret-shaped content: API keys, tokens, private-key headers. Matches are reported in `secret_flags`. By default the scan only warns: a flagged upload is stored and its link works. Send `on_secret=reject` to refuse flagged files instead.
+The first 1 MiB of every upload is scanned for secret-shaped content: API keys, tokens, private-key headers. Matches are reported in `secret_flags`. By default the scan only warns: a flagged upload is stored and its link works. Send `on_secret=reject` to refuse flagged files instead.
 
-Check `secret_flags` in every upload response. If it is non-empty and you want never-host semantics, revoke the upload: `DELETE /api/v1/artifacts/<id>`, or the `revoke_artifact` MCP tool.
+Check `secret_flags` in every upload response. If it is non-empty and you do not want Veilfile to keep hosting the file, revoke the upload with `DELETE /api/v1/artifacts/<id>` or the `revoke_artifact` MCP tool.
 
 ## Plans and limits
 
@@ -33,9 +33,9 @@ Check `secret_flags` in every upload response. If it is non-empty and you want n
 Prices include tax. Only successful uploads count against the monthly quota. Rejected uploads never consume quota.
 
 - One file is at most 25 MiB. For MCP uploads the limit applies to the decoded bytes.
-- 100 uploads per hour per credential.
+- Each API key or connected app can make 100 uploads per hour.
 - Storage caps are hard. An upload that would exceed the cap fails with `402 storage_cap_reached`.
 
 ## Downloads and revocation
 
-Downloads send `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`. Nothing caches the bytes. Artifact URLs are never indexed. Revoking an artifact takes effect immediately. Revoking an API key stops that key from uploading or listing, but links it already created keep working until you revoke those artifacts or they expire.
+Downloads send `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, which ask caches not to keep the bytes and crawlers not to index the URL. Revoking an artifact takes effect immediately. Revoking an API key stops that key from uploading or listing, but links it already created keep working until you revoke those artifacts or they expire.

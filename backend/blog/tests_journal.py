@@ -121,7 +121,7 @@ class JournalIndexTests(FakeJournal, TestCase):
         for path in self.posts_dir.glob("*.md"):
             path.unlink()
         text = main(self.index())
-        self.assertIn("Nothing here yet.", text, "backend/templates/blog/index.html: an empty Journal says 'Nothing here yet.'")
+        self.assertIn("The Journal has no posts yet.", text, "backend/templates/blog/index.html: an empty Journal says 'The Journal has no posts yet.'")
         self.assertNotIn("<ol", text, "backend/templates/blog/index.html: an empty Journal shows no list")
 
 

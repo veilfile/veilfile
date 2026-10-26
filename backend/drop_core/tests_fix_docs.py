@@ -82,7 +82,7 @@ def _price_facts(text):
     price = r"\$(\d+(?:\.\d+)?)"
     # "Team $4", "Team ($4/month)", "| Team | $4/mo |", "Team **$4/month**"
     for m in re.finditer(r"\b(Free|Team|Scale)\b[^\n$0-9/]{0,20}" + price, text):
-        if " to " in m.group(0):  # a range such as "Free to $12/mo"
+        if " to " in m.group(0):  # a range such as "Free to $12" (the landing description reads "Plans cost $0 to $12 a month.")
             continue
         facts.append((NAME_TO_PLAN[m.group(1)], float(m.group(2))))
     # "$4 Team / $12 Scale"

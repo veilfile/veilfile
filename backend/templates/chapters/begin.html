@@ -9,15 +9,15 @@
 <h3 class="chapter__label label">Codex</h3>
 {% include "components/code_block.html" with id="begin-codex" label="Copy the Codex command" code=snippets.codex only %}
 <h3 class="chapter__label label">Cursor</h3>
-<p>In <code>~/.cursor/mcp.json</code>:</p>
+<p>Add this to <code>~/.cursor/mcp.json</code>:</p>
 {% include "components/code_block.html" with id="begin-cursor" label="Copy the Cursor configuration" code=snippets.cursor only %}
 <h3 class="chapter__label label">The Claude apps</h3>
-<p>Add a custom connector with the address above, and sign in when it asks.</p>
-<p>Every other client, and each option in full: <a href="{% url 'docs-page' 'agent' %}">agent setup, in the Docs</a>.</p>
+<p>In a Claude app, go to Customize, then Connectors, then Add custom connector, name it Veilfile and enter <code>https://veilfile.com/mcp</code> as its URL. If the dialog asks for an OAuth client, choose Register automatically, then sign in.</p>
+<p>The Docs cover every other client and each option in <a href="{% url 'docs-page' 'agent' %}">agent setup</a>.</p>
 <h2 class="chapter__heading">Or use the command line</h2>
 {% include "components/code_block.html" with id="begin-command-line" label="Copy the command line example" code=snippets.command_line only %}
 <h2 class="chapter__heading">Or plain HTTP</h2>
 {% include "components/code_block.html" with id="begin-http" label="Copy the curl example" code=snippets.http only %}
-<p>Agents can read everything they need in one file: <a href="/llms.txt">llms.txt</a>.</p>
+<p>Agents can read a plain-text guide in one file, <a href="/llms.txt">llms.txt</a>.</p>
 {# End of words. #}
 {% endblock %}

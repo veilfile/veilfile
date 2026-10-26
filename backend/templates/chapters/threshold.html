@@ -4,7 +4,7 @@
 {% block chapter %}
 <div class="threshold" data-threshold>
 {# Words: edit the text between here and the end marker; keep every tag, class and template tag as it is. #}
-<h1 class="threshold__line" data-threshold-line>Some files are meant to be seen for a moment,<br class="threshold__break"> by the right eyes, and then let go.</h1>
+<h1 class="threshold__line" data-threshold-line>Some files are meant to be seen for a moment,<br class="threshold__break"> by the right eyes, and then let go</h1>
 <a class="threshold__enter label interactive" href="{% url 'begin' %}" data-come-in>Come in</a>
 {# End of words. #}
 <div class="threshold__install" data-install hidden>{% include "components/install_line.html" with tabs=install_tabs id_prefix="threshold" only %}</div>

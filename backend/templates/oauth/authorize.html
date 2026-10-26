@@ -7,13 +7,13 @@
 {% block form_page %}
 <div class="consent">
 <h1>Authorize this app</h1>
-<p>An unverified third-party app is asking for access to your workspace.</p>
+<p>An unverified third-party app is asking for access to your workspace. Authorize it only if you started this connection yourself, just now, from an app you trust.</p>
 <div class="consent__app">
 {# client_name is attacker-controlled: auto-escaped, framed as unverified #}
 <p class="label consent__label">App</p>
 <p class="consent__name">{{ application.name|default:"Unnamed app" }}</p>
 <p><strong>Unverified app:</strong> this name is what the app claims to be, not something we checked.</p>
-<p>It will send you back to <code>{{ redirect_host }}</code> after you decide.</p>
+<p>It will send you back to <code>{{ redirect_host }}</code> after you decide. If you deny, the app gets no access.</p>
 </div>
 {% include "oauth/includes/grant_summary_oauth.html" only %}
 {# Two forms, each with every field DOT's AllowForm expects. Authorize posts allow=Authorize; Deny posts no allow. Neither has an action: the POST returns to this address with its query string. Two equal actions, Deny first as it always was. #}

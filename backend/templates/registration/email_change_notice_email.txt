@@ -1,4 +1,4 @@
-Someone signed in to the Veilfile account "{{ username }}" asked to change its email address to {{ new_email_masked }}.
+Someone who is signed in to the Veilfile account "{{ username }}" asked to change its email address to {{ new_email_masked }}.
 
 Nothing changes until the new address is confirmed. Until then, password reset links keep coming to this address.
 

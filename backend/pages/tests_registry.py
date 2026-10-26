@@ -1,5 +1,7 @@
 """The registry of public pages (spec 6.5): one place for titles, descriptions and the menu."""
+import re
 from html.parser import HTMLParser
+from pathlib import Path
 
 from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
@@ -51,7 +53,7 @@ class RegistryTests(SimpleTestCase):
     def test_how_it_works_says_the_link_stops_before_the_file_is_deleted(self):
         # Ruled during PR 2: in search results the order matters (the link stops, then a sweep deletes the
         # file), and the length test alone would let the sentence drift to something that fits and is wrong.
-        self.assertIn("when its days run out the link stops, then the file is deleted",
+        self.assertIn("When its days run out, the link stops working and the file is deleted soon after.",
                       registry.page("how").description)
 
     def test_canonical_urls_use_the_public_origin(self):
@@ -117,3 +119,12 @@ class RegistryMatchesRenderedPagesTests(TestCase):
                 self.assertEqual(head.title.strip(), page.title)
                 self.assertEqual(head.description, page.description)
                 self.assertEqual(head.canonical, registry.canonical_url(page.url_name))
+
+
+class DocsIndexDescriptionTests(SimpleTestCase):
+    def test_the_docs_index_description_matches_its_front_matter(self):
+        text = (Path(__file__).resolve().parent.parent / "docs" / "pages" / "index.md").read_text(encoding="utf-8")
+        front_matter = re.search(r"^description:[ \t]*(.+?)[ \t]*$", text, re.MULTILINE).group(1)
+        self.assertEqual(
+            registry.page("docs-index").description, front_matter,
+            "backend/pages/registry.py and backend/docs/pages/index.md: the Docs index description must be the same words in both")

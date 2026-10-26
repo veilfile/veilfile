@@ -2,7 +2,7 @@
 
 Stripe is never reached. These tests patch the Stripe library the way drop_billing.tests_fix_billing does, and its base class points
 the library's API address at a closed port, so a call that a test forgot to patch fails at once. They pin what a visitor reads:
-the React dashboard's sentences, kept; one fixed sentence in the customer's words on the Billing page for every way Stripe or the
+the React dashboard's sentences, as the voice pass reworded them; one fixed sentence in the customer's words on the Billing page for every way Stripe or the
 setup can refuse, never a 500, and never Stripe's own text, a code or the word "instance" (those, and a reference that finds them, go to
 the log); and that only a POST changes anything.
 
@@ -66,11 +66,11 @@ ADVICE = {
 # Every status Stripe can report for a subscription, in the customer's words.
 STATUS_WORDS = {
     "active": "Active", "trialing": "Trial", "past_due": "Payment overdue", "unpaid": "Unpaid", "incomplete": "Payment not finished",
-    "incomplete_expired": "Payment expired", "paused": "Paused", "canceled": "Cancelled",
+    "incomplete_expired": "Payment expired", "paused": "Paused", "canceled": "Canceled",
 }
 PAST_DUE = "Your last payment failed. Update your payment method under Manage billing before changing plans."
 MULTIPLE_SUBSCRIPTIONS = "This workspace has more than one subscription. Use Manage billing to cancel the extra one, or contact support."
-NO_SUCH_PLAN = "Choose one of the plans on this page."
+NO_SUCH_PLAN = "That plan isn't available. Choose one of the plans on this page."
 NO_BILLING_ACCOUNT = "There is no billing account to manage yet. Upgrade to a paid plan to start one."
 NOT_SUBSCRIBED = "You have no subscription to switch yet. Upgrade to a paid plan to start one."
 REFERENCE = re.compile(r"Reference: ([0-9A-F]{6})$")
@@ -81,11 +81,11 @@ OPERATOR_WORDS = ("Stripe:", "instance", "billing_not_configured", "stripe_error
 # The sentences the React dashboard said, word for word. That dashboard is gone; these constants are where they are kept.
 WARNINGS = {
     "past_due": "Your last payment failed. Stripe is retrying; update your payment method under Manage billing to keep your plan.",
-    "unpaid": ("Your subscription has an unpaid invoice, so this workspace is on the free plan. Pay it, or cancel the "
+    "unpaid": ("Your subscription has an unpaid invoice, so this workspace is on the Free plan. Pay it, or cancel the "
                "subscription, under Manage billing."),
     "incomplete": ("Your subscription's first payment hasn't gone through. Complete it under Manage billing; an unfinished "
                    "payment expires within a day."),
-    "paused": "Your subscription is paused, so this workspace is on the free plan. Resume or cancel it under Manage billing.",
+    "paused": "Your subscription is paused, so this workspace is on the Free plan. Resume or cancel it under Manage billing.",
 }
 EXPLAIN_SUBSCRIBED = ("Plan switches apply to your existing subscription with prorated charges or credits. Manage billing opens "
                       "the Stripe portal for your payment method, invoices, and cancellation.")
@@ -288,8 +288,8 @@ class BillingPageModuleTests(SimpleTestCase):
                                    "current": {"slug": "team", "name": "Team"}, "upgrade": True}, f"{self.FILE}: switch_context()")
 
     def test_a_switch_that_stripe_accepted_is_a_line_in_the_react_dashboards_words(self):
-        for outcome, sentence in (("switched", "Switched to the Scale plan."), ("unchanged", "You're already on the Scale plan."),
-                                  ("pending_cancelled", "The pending switch was cancelled. You stay on the Scale plan."), (None, "Switched to the Scale plan.")):
+        for outcome, sentence in (("switched", "You're now on the Scale plan."), ("unchanged", "You're already on the Scale plan."),
+                                  ("pending_cancelled", "The pending switch was canceled. You stay on the Scale plan."), (None, "You're now on the Scale plan.")):
             with self.subTest(outcome=outcome):
                 self.assertEqual(billing_page.switch_result("scale", outcome), sentence, f"{self.FILE}: switch_result()")
 
@@ -483,6 +483,13 @@ class BillingPageTests(BillingCase):
         self.assertIn("Current plan: Scale", self.page(), f"{PAGE}: with no status there is no parenthesis")
         self.assertNotIn("Current plan: Scale (", self.page(), f"{PAGE}: no status, no parenthesis")
 
+    def test_a_canceled_subscription_reads_canceled(self):
+        self.assertEqual(billing_page.status_words("canceled"), "Canceled", "backend/dashboard/billing_page.py: the label for canceled is American")
+        self.lapse("canceled")
+        text = self.page()
+        self.assertIn("Current plan: Free (Canceled)", text, f"{PAGE}: the status in plain words")
+        self.assertNotIn("Cancelled", text, f"{PAGE}: American spelling, so Cancelled appears nowhere")
+
     def test_every_status_stripe_reports_has_its_own_plain_words(self):
         for status, words_ in STATUS_WORDS.items():
             with self.subTest(status=status):
@@ -513,7 +520,7 @@ class BillingPageTests(BillingCase):
                 self.lapse(status)
                 self.assertEqual(warnings_shown(), [status], f"{PAGE}: a lapsed subscription named {status} gets its own sentence, and no other")
         self.subscribe("team", status="unpaid")
-        self.assertEqual(warnings_shown(), [], f"{PAGE}: the three lapsed-subscription sentences say the workspace is on the free plan, so they are for a workspace with no subscription (React's rule)")
+        self.assertEqual(warnings_shown(), [], f"{PAGE}: the three lapsed-subscription sentences say the workspace is on the Free plan, so they are for a workspace with no subscription (React's rule)")
         self.subscribe("team", status="active")
         self.assertEqual(warnings_shown(), [], f"{PAGE}: an active subscription has no warning")
 
@@ -522,9 +529,9 @@ class BillingPageTests(BillingCase):
         self.go_over(keys=caps["keys"] + 2, storage=True, ttl=True)
         text = self.page()
         for sentence in (
-            "Your workspace is over the free plan's limits.",
-            f"{caps['keys'] + 2} active API keys; the plan allows {caps['keys']}. Existing keys keep working, but new keys can't be created until you revoke some or upgrade.",
-            f"{caps['storage_gb'] + 1}.0 GB stored; the plan allows {caps['storage_gb']} GB. Existing links keep working, but new uploads are refused until you're under the cap.",
+            "Your workspace is over the Free plan's limits.",
+            f"You have {caps['keys'] + 2} active API keys, and the plan allows {caps['keys']}. Existing keys keep working, but new keys can't be created until you revoke some or upgrade.",
+            f"You have {caps['storage_gb'] + 1}.0 GB stored, and the plan allows {caps['storage_gb']} GB. Existing links keep working, but new uploads are refused until you're under the cap.",
             f"Some links expire later than the plan's {caps['ttl_days']}-day maximum. They keep their original expiry; new uploads get at most {caps['ttl_days']} days.",
         ):
             self.assertIn(sentence, text, "backend/templates/dashboard/over_limits.html: keep React's sentence")
@@ -532,8 +539,8 @@ class BillingPageTests(BillingCase):
     def test_only_the_limits_it_is_over_are_listed(self):
         self.go_over(keys=PLANS["free"]["keys"] + 1)
         text = self.page()
-        self.assertIn("active API keys; the plan allows", text, "backend/templates/dashboard/over_limits.html: the keys line shows when keys is over")
-        for absent in ("stored; the plan allows", "Some links expire later"):
+        self.assertIn("active API keys, and the plan allows", text, "backend/templates/dashboard/over_limits.html: the keys line shows when keys is over")
+        for absent in ("stored, and the plan allows", "Some links expire later"):
             self.assertNotIn(absent, text, f"backend/templates/dashboard/over_limits.html: {absent!r} shows only when its own limit is over")
 
     def test_nothing_is_said_of_limits_within_them(self):
@@ -730,7 +737,7 @@ class SwitchConfirmationTests(BillingCase):
         self.subscribe("team")
         text = self.page(self.switch_url("scale"))
         for sentence in (
-            f"Switch to Scale (${price('scale')}/mo)?",
+            f"Do you want to switch to Scale (${price('scale')}/mo)?",
             f"You'll be charged now for the prorated difference for the rest of this billing period, then ${price('scale')}/mo from your next "
             "renewal. If that payment doesn't go through, you stay on Team.",
         ):
@@ -740,7 +747,7 @@ class SwitchConfirmationTests(BillingCase):
         self.subscribe("scale")
         text = self.page(self.switch_url("team"))
         for sentence in (
-            f"Switch to Team (${price('team')}/mo)?",
+            f"Do you want to switch to Team (${price('team')}/mo)?",
             "The unused part of your current period becomes a credit on your next invoices, and Team limits apply right away. "
             "Existing API keys and links are not removed.",
         ):
@@ -751,7 +758,7 @@ class SwitchConfirmationTests(BillingCase):
         self.subscribe("team")
         with mock.patch.dict(PLANS, {"scale": {**PLANS["scale"], "price_usd": 99}}):
             text = self.page(self.switch_url("scale"))
-        self.assertIn("Switch to Scale ($99/mo)?", text, f"{SWITCH_PAGE}: the heading's price comes from plans.py, never from the template")
+        self.assertIn("Do you want to switch to Scale ($99/mo)?", text, f"{SWITCH_PAGE}: the heading's price comes from plans.py, never from the template")
         self.assertIn("then $99/mo from your next renewal", text, f"{SWITCH_PAGE}: and so does the sentence")
 
     def test_a_dearer_target_is_an_upgrade_whatever_it_is_called(self):
@@ -833,7 +840,7 @@ class SwitchPostTests(BillingCase):
         self.pending()
         response = self.post("scale")
         self.assertSentTo(response, self.billing, f"{VIEWS}: a switch POST goes back to Billing")
-        self.assertEqual(self.said(response), ["Switched to the Scale plan."], f"{VIEWS}: with React's sentence for a switch")
+        self.assertEqual(self.said(response), ["You're now on the Scale plan."], f"{VIEWS}: with React's sentence for a switch")
         self.assertEqual(modify.call_args.kwargs["items"], [{"id": "si_1", "price": "price_scale"}], "the price swapped is the plan's")
         self.assertEqual(self.reload().plan, "scale", "the plan changes through the billing code's read of Stripe, as the JSON endpoint's does")
         self.assertNotIn(billing_page.PENDING_KEY, self.client.session, f"{VIEWS}: a switch Stripe accepted settles any unpaid one")
@@ -844,7 +851,7 @@ class SwitchPostTests(BillingCase):
         self.patch_stripe("modify", return_value=make_sub("sub_A", "active", "price_scale"))
         response = self.client.post(self.switch_url("scale"), follow=True)
         self.assertEqual(response.redirect_chain, [(self.billing, 302)], f"{VIEWS}: POST, redirect, GET")
-        self.assertIn("Switched to the Scale plan.", visible_text(response.content.decode()), "backend/templates/layouts/app.html: shows the messages above the page")
+        self.assertIn("You're now on the Scale plan.", visible_text(response.content.decode()), "backend/templates/layouts/app.html: shows the messages above the page")
         self.assertIn("Current plan: Scale", visible_text(response.content.decode()), "and the page shows the new plan")
 
     def test_the_plan_already_held_is_unchanged(self):
@@ -862,7 +869,7 @@ class SwitchPostTests(BillingCase):
         void = self.patch_stripe("void", return_value={"id": "in_pending", "status": "void"})
         self.pending()
         response = self.post("team")
-        self.assertEqual(self.said(response), ["The pending switch was cancelled. You stay on the Team plan."], f"{VIEWS}: React's sentence")
+        self.assertEqual(self.said(response), ["The pending switch was canceled. You stay on the Team plan."], f"{VIEWS}: React's sentence")
         void.assert_called_once_with("in_pending")
         self.assertNotIn(billing_page.PENDING_KEY, self.client.session, f"{VIEWS}: the hint goes with the switch")
 

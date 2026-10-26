@@ -55,7 +55,7 @@ class BlogFeed(Feed):
 
     feed_type = ContentFeed
     title = "Veilfile Journal"
-    description = "Notes on Veilfile: launches, changes, and build notes."
+    description = "The Veilfile Journal shares launches, changes, and notes on how Veilfile is built."
 
     def link(self):
         return registry.SITE_ORIGIN + reverse("blog-index")

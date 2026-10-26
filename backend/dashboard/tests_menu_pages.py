@@ -64,7 +64,7 @@ class DashboardMenuPageTests(TestCase):
         with self.assertLogs("django.security.csrf", level="WARNING"):
             response = client.post("/accounts/logout/")
         self.assertEqual(response.status_code, 403)
-        self.assertIn("Form not sent.", response.content.decode())
+        self.assertIn("Form not sent", response.content.decode())
         self.assertEqual(client.get("/app/").status_code, 200)
 
     def test_a_signed_out_visitor_is_never_given_the_dashboards_menu(self):

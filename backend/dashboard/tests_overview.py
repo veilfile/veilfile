@@ -17,6 +17,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.template.loader import render_to_string
 from django.test import Client, SimpleTestCase, TestCase
 from django.utils import timezone
 
@@ -34,15 +35,15 @@ PAGE = "backend/templates/dashboard/overview.html"
 OVER = "backend/templates/dashboard/over_limits.html"
 
 # The sentences the React dashboard said, kept word for word where they still apply (the skeleton's copy rule).
-SUCCESS = "Subscription updated. It can take a moment for the new plan to appear below. Refresh if it doesn't."
-CANCELLED = "Checkout was cancelled. No charges were made."
+SUCCESS = "Your subscription is updated. It can take a moment for the new plan to appear below. Refresh if it doesn't."
+CANCELLED = "Checkout was canceled. No charges were made."
 ERROR = "We couldn't start checkout{plan}. Nothing was charged. Try again from Billing."
 ALREADY = "You already have a subscription, so no new checkout was started. Switch plans or manage billing."
 VERIFY = "Verify your email to create API keys."
-KEYS_OVER = "{n} active API keys; the plan allows {cap}. Existing keys keep working, but new keys can't be created until you revoke some or upgrade."
-STORAGE_OVER = "{used} stored; the plan allows {cap} GB. Existing links keep working, but new uploads are refused until you're under the cap."
+KEYS_OVER = "You have {n} active API keys, and the plan allows {cap}. Existing keys keep working, but new keys can't be created until you revoke some or upgrade."
+STORAGE_OVER = "You have {used} stored, and the plan allows {cap} GB. Existing links keep working, but new uploads are refused until you're under the cap."
 TTL_OVER = "Some links expire later than the plan's {days}-day maximum. They keep their original expiry; new uploads get at most {days} days."
-UPLOADS_OVER = "{used} uploads this month; the plan allows {cap}. Existing links keep working, but new uploads are refused until the next month begins (UTC)."
+UPLOADS_OVER = "You have made {used} uploads this month, and the plan allows {cap}. Existing links keep working, but new uploads are refused until the next month begins (UTC)."
 BILLING_DOWN = "Plan limits could not be checked just now. Reload the page to check again."
 USAGE_DOWN = "Usage could not be loaded just now. Reload the page to try again."
 
@@ -137,7 +138,7 @@ class OverviewPageTests(OverviewTestCase):
         self.assertEqual(len(page.bars()), 3, f"{PAGE}: uploads, storage and keys have a bar; how long links last is a value with no limit")
         for bar in page.bars():
             self.assertIn(bar["aria-labelledby"], page.tree.ids(), f"{PAGE}: each bar is named by its label")
-        self.assertIn("Counted by calendar month, in UTC.", page.sections()["Usage"], f"{PAGE}: the uploads figure says that its month is the UTC month")
+        self.assertIn("Uploads are counted by calendar month, in UTC.", page.sections()["Usage"], f"{PAGE}: the uploads figure says that its month is the UTC month")
         self.assertIn("You are on the Free plan.", page.sections()["Plan"])
         self.assertIn(("Billing", "/app/billing/"), page.links(), f"{PAGE}: the plan section links to Billing")
 
@@ -176,7 +177,7 @@ class OverviewPageTests(OverviewTestCase):
         for i in range(2):
             APIKey.create_key(workspace, f"key {i}")
         page = self.open(user, "?billing=error&plan=scale")
-        marks = ["We couldn't start checkout for the Scale plan.", VERIFY, "Your workspace is over the free plan's limits.", "You are on the Free plan.",
+        marks = ["We couldn't start checkout for the Scale plan.", VERIFY, "Your workspace is over the Free plan's limits.", "You are on the Free plan.",
                  "Successful uploads this month", "not verified."]
         found = [page.text.find(mark) for mark in marks]
         self.assertTrue(all(i >= 0 for i in found), f"{PAGE}: all of {marks} are on this page; found at {found}")
@@ -206,7 +207,7 @@ class OverLimitTests(OverviewTestCase):
         block = page.classed("notice")[0]
         self.assertEqual(block["attrs"].get("role"), "status", f'{OVER}: the lines are a .notice with role="status", the first notice of the page')
         said = words(block)
-        self.assertTrue(said.startswith("Your workspace is over the free plan's limits."), f"{OVER}: it opens with the old sentence, naming the plan; found {said!r}")
+        self.assertTrue(said.startswith("Your workspace is over the Free plan's limits."), f"{OVER}: it opens with the old sentence, naming the plan; found {said!r}")
         for sentence in (KEYS_OVER.format(n=3, cap=1), STORAGE_OVER.format(used="2.0 GB", cap=1), TTL_OVER.format(days=7), UPLOADS_OVER.format(used=150, cap=100)):
             self.assertIn(sentence, said, f"{OVER}: keep the sentence {sentence!r}")
         self.assertLess(page.text.index("Your workspace is over"), page.text.index("You are on the Free plan."), f"{PAGE}: anything over a limit comes before the plan (spec 4.8)")
@@ -235,15 +236,32 @@ class OverLimitTests(OverviewTestCase):
                 said = self.over_text(self.open(user))
                 for sentence in sentences:
                     self.assertIn(sentence, said, f"{OVER}: the {name} line is {sentence!r}")
-                self.assertEqual(said.count("; the plan allows") + said.count("Some links expire"), 1, f"{OVER}: only the {name} line, found {said!r}")
+                self.assertEqual(said.count(", and the plan allows") + said.count("Some links expire"), 1, f"{OVER}: only the {name} line, found {said!r}")
 
     def test_the_heading_names_the_plan_the_workspace_is_on(self):
         user, workspace = make_user("ov-teamover", "teamover@example.com", verified=True, plan="team")
         for i in range(6):
             APIKey.create_key(workspace, f"key {i}")
         said = self.over_text(self.open(user))
-        self.assertTrue(said.startswith("Your workspace is over the team plan's limits."), f"{OVER}: the plan is named as the old dashboard named it; found {said!r}")
+        self.assertTrue(said.startswith("Your workspace is over the Team plan's limits."), f"{OVER}: the plan is named as the old dashboard named it; found {said!r}")
         self.assertIn(KEYS_OVER.format(n=6, cap=5), said)
+
+    def test_the_over_limit_heading_names_the_plan_with_a_capital(self):
+        user, workspace = make_user("ov-capital", "capital@example.com", verified=True, plan="team")
+        for i in range(6):
+            APIKey.create_key(workspace, f"key {i}")
+        said = self.over_text(self.open(user))
+        self.assertIn("Team plan's limits", said, f"{OVER}: the plan name goes through |title; found {said!r}")
+        self.assertNotIn("team plan's limits", said, f"{OVER}: the plan name is never lowercase in the heading")
+
+    def test_one_upload_is_singular(self):
+        for used, phrase, wrong in ((1, "1 upload this month", "1 uploads"), (2, "2 uploads this month", None)):
+            with self.subTest(used=used):
+                html = render_to_string("dashboard/over_limits.html", {"usage": {"plan": "free", "uploads_used": used, "uploads_cap": 0}, "status": None})
+                said = " ".join(html.split())
+                self.assertIn(phrase, said, f"{OVER}: {used} upload(s) uses the right number")
+                if wrong:
+                    self.assertNotIn(wrong, said, f"{OVER}: one upload is singular")
 
 
 class BillingReturnTests(OverviewTestCase):
@@ -434,9 +452,9 @@ class FailureTests(OverviewTestCase):
             page = self.open(self.user)
         said = [words(e) for e in page.classed("notice") if "Your workspace is over" in words(e)]
         self.assertEqual(len(said), 1, f"{OVER}: with no status the uploads line still shows, from usage")
-        self.assertTrue(said[0].startswith("Your workspace is over the free plan's limits."), f"{OVER}: the plan is named from usage when the status is down; found {said[0]!r}")
+        self.assertTrue(said[0].startswith("Your workspace is over the Free plan's limits."), f"{OVER}: the plan is named from usage when the status is down; found {said[0]!r}")
         self.assertIn(UPLOADS_OVER.format(used=150, cap=100), said[0])
-        self.assertNotIn("active API keys; the plan allows", said[0], f"{OVER}: the keys line needs the status, which is down")
+        self.assertNotIn("active API keys, and the plan allows", said[0], f"{OVER}: the keys line needs the status, which is down")
         self.assertIn(("status", BILLING_DOWN), page.notices(), f"{PAGE}: and the page still says that the other limits could not be checked")
 
     def test_a_usage_that_raises_does_not_hide_the_limits_or_the_account(self):
@@ -467,7 +485,7 @@ class FailureTests(OverviewTestCase):
 
 
 class VoiceTests(SimpleTestCase):
-    """The words of the page and its include keep the site's voice (spec 5): no em dash, no exclamation mark, none of the banned words. Voice is the owner's, and PR 7 reads these words again."""
+    """The words of the page and its include keep the site's voice (spec 5): no em dash, no exclamation mark, none of the banned words. Voice is the owner's, and the voice pass (PR 7) wrote these words."""
     longMessage = False
 
     def test_the_templates_keep_the_voice(self):

@@ -32,6 +32,6 @@ class InstallLineTests(SimpleTestCase):
         self.assertIn("<span data-copy-text>https://veilfile.com/mcp</span>", self.html)
 
     def test_every_tab_has_a_line_after_copy_and_copy_is_announced(self):
-        self.assertIn("Add it to your agent as a remote MCP server; sign in when it asks.", self.html)
-        self.assertEqual(self.html.count("then <code>veilfile login</code>"), 2)
+        self.assertIn("Add this address to your agent as a remote MCP server, and sign in if the agent asks.", self.html)
+        self.assertEqual(self.html.count("Then run <code>veilfile login</code>"), 2)
         self.assertIn('role="status" data-copy-status', self.html)

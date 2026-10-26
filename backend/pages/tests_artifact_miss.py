@@ -15,7 +15,7 @@ from pages.tests_errors import SECRET, main, manifest_with_nothing_in_it
 
 User = get_user_model()
 UNKNOWN_TOKEN = "u" * 43
-WORDS = "If this link was shared with you, its moment may have passed."
+WORDS = "This link does not lead to a file. If someone shared it with you, ask them for a new link."
 
 
 class NoSuchKey(Exception):
@@ -91,7 +91,7 @@ class ArtifactMissTests(TestCase):
     def test_the_page_says_only_the_spec_words(self):
         response = self.client.get(f"/a/{UNKNOWN_TOKEN}")
         html = response.content.decode()
-        self.assertIn("<h1 class=\"chapter__title\">Nothing here.</h1>", html, "backend/templates/404.html: the heading for a file link is Nothing here.")
+        self.assertIn("<h1 class=\"chapter__title\">Nothing here</h1>", html, "backend/templates/404.html: the heading for a file link is Nothing here")
         self.assertIn(f"<p>{WORDS}</p>", html, "backend/templates/404.html: the sentence for a file link is the spec's (4.9)")
         self.assertIn("<title>Nothing here | Veilfile</title>", html)
         self.assertIn('<main id="main"', html, "backend/templates/404.html: the page is on the shell")
@@ -133,7 +133,7 @@ class ArtifactMissTests(TestCase):
                     response = self.client.get(address)
                 html = response.content.decode()
                 self.assertEqual(response.status_code, 404)
-                self.assertIn("Nothing here.", html, "backend/drop_core/views.py: serve_artifact() returns artifact_miss(); it must not raise Http404, which DEBUG answers with a page that names the token")
+                self.assertIn("Nothing here", html, "backend/drop_core/views.py: serve_artifact() returns artifact_miss(); it must not raise Http404, which DEBUG answers with a page that names the token")
                 self.assertNotIn(address.rsplit("/", 1)[1], html)
 
     def test_the_one_log_line_is_the_redacted_one(self):
@@ -149,7 +149,7 @@ class ArtifactMissTests(TestCase):
         first = self.client.get(f"/a/{live}/")
         second = self.client.get(f"/a/{UNKNOWN_TOKEN}/")
         self.assertEqual(first.status_code, 404)
-        self.assertIn("Not found.", first.content.decode())
+        self.assertIn("Not found", first.content.decode())
         self.assertEqual(everything_a_reader_gets(first), everything_a_reader_gets(second),
                          "backend/templates/404.html: the 404 for an address that does not resolve must not depend on the token in it")
 
@@ -193,7 +193,7 @@ class ArtifactMissThatCannotBeDrawnTests(TestCase):
             expired = self.client.get(f"/a/{self.expired_token()}")
         self.assertEqual(unknown.status_code, 404, "backend/pages/errors.py: artifact_miss() keeps the 404 when the page cannot be drawn")
         self.assertIn(WORDS, unknown.content.decode())
-        self.assertIn("<h1>Nothing here.</h1>", unknown.content.decode())
+        self.assertIn("<h1>Nothing here</h1>", unknown.content.decode())
         self.assertEqual(everything_a_reader_gets(unknown), everything_a_reader_gets(expired))
         self.assertEqual(unknown["Cache-Control"], "no-store")
         self.assertEqual(unknown["X-Robots-Tag"], "noindex, nofollow")

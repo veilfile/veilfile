@@ -9,7 +9,7 @@
 <p class="notice" role="status">Your email address is verified.</p>
 <p><a class="action interactive" href="/app/">Back to dashboard</a></p>
 {% else %}
-{% if sent %}<p class="notice" role="status">Verification link sent. Check your inbox.</p>
+{% if sent %}<p class="notice" role="status">We sent the verification link. Check your inbox.</p>
 {% endif %}
 {% if record %}
 <p>We sent a verification link to {{ record.email }}. Click it to verify. API key creation stays locked until you do.</p>

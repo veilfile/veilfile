@@ -139,14 +139,18 @@ COVERED = """(selector) => {
 # sheet itself: what is painted on top at its centre is #shell-menu, the nav holding it, or something in the
 # sheet that is not a link. Where the menu is a column (from 64rem up) a link on top is not the sheet: that is the defect
 # menu_reach_problems looks for. Below 64rem the sheet covers the screen and is solid behind its links, so a link on top of
-# the element is the sheet over it too.
+# the element is the sheet over it too. The point looked at is the centre of the part of the element that lies inside the viewport: a
+# footer control on a page a line or so taller than a short screen (About at 667x375 on a runner whose text wrapped one line more, so that
+# the controls' box began at 366 to 375 and its centre fell at or past the bottom edge) shows only a strip at the bottom, the sheet is
+# painted over that strip, and the centre of the whole box, which is off the screen, would read as "not under the sheet".
 UNDER_SHEET = """(selector) => {
   const inert = [...document.querySelectorAll("[inert]")];
   inert.forEach((part) => { part.inert = false; });
   const el = document.querySelector(selector), sheet = document.querySelector("#shell-menu");
   const r = el.getBoundingClientRect();
-  const x = r.left + r.width / 2, y = r.top + r.height / 2;
-  const hit = r.width && y >= 0 && y <= innerHeight ? document.elementFromPoint(x, y) : null;
+  const top = Math.max(r.top, 0), bottom = Math.min(r.bottom, innerHeight);
+  const x = r.left + r.width / 2, y = (top + bottom) / 2;
+  const hit = r.width && bottom > top ? document.elementFromPoint(x, y) : null;
   inert.forEach((part) => { part.inert = true; });
   return Boolean(hit && sheet && !el.contains(hit) && (!hit.closest("a") || matchMedia("(max-width: 63.99rem)").matches)
                  && (sheet.contains(hit) || hit === sheet.closest("[data-menu]")));
@@ -3341,7 +3345,7 @@ def cloth_sheet_ink_problems(browser, base_url, session_key):
         page.wait_for_function("() => location.pathname === '/plans/'", timeout=20000)
         run_frames(page, 30, step=100)   # 3 s of cloth time more
         fall = page.evaluate("() => window.__fall")
-        old, new = "A quiet place for what your agents make.", "Plans"
+        old, new = "A quiet place for what your agents make", "Plans"
         closing = [frame for frame in fall if frame["heading"] == old]
         between = [frame["shader"] for frame in closing if 0.02 < frame["shader"] < 0.98]
         if len(between) < 2:
@@ -3455,7 +3459,11 @@ def cloth_backdrop_problems(browser, base_url, session_key):
     is painted inside it, which is nothing. At 1280 (below 64rem the top fade's mask makes <main> a backdrop root too,
     for which nothing is checked), on the threshold after Come in, with the cloth held still: the spread of the luma
     along the box's top padding, where there is no text, with its blur and with the same frame without it, must be at
-    least 8% lower with it. A blur that sees the cloth lowers it by about 20%; one that sees nothing, by none."""
+    least 8% lower with it. The cloth is told to draw none of its folds (u_cloth forced to 0, as in cloth_grain_problems),
+    so that what is measured is the film grain alone, which is what the blur is meant to smooth: the folds are low in
+    frequency, the slight blur does not remove them, and a fold under the strip would make the ratio depend on where
+    the box sits (moving the box up 9.75 px raised it from about 0.85 to 0.93). A blur that sees the grain lowers its
+    spread to 0.34 to 0.83 of the sharp frame's; one that sees nothing leaves it at exactly 1.000."""
     problems = []
     for theme in ("light", "dark"):
         label = f"/ cloth at 1280px, {theme}, the install box's backdrop blur"
@@ -3476,16 +3484,16 @@ def cloth_backdrop_problems(browser, base_url, session_key):
         run_frames(page, 30)
         box = page.evaluate(BOX_RECT, ".install-line__panel:not([hidden]) .install-line__box")
         clip = {"x": box["x"] + 4, "y": box["y"] + 2, "width": box["width"] - 8, "height": 8}   # inside the border, above the text
-        page.evaluate("() => { window.__cloth.drawAll = true; }")
+        page.evaluate("() => { window.__cloth.force.u_cloth = 0; window.__cloth.drawAll = true; }")   # the grain alone, no folds
         page.evaluate(NEXT_FRAMES)
         blurred = png_luma(page.screenshot(clip=clip))[1]
         page.add_style_tag(content=".install-line__box { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }")
         page.evaluate(NEXT_FRAMES)
         sharp = png_luma(page.screenshot(clip=clip))[1]
-        page.evaluate("() => { window.__cloth.drawAll = false; }")
+        page.evaluate("() => { delete window.__cloth.force.u_cloth; window.__cloth.drawAll = false; }")
         if blurred > 0.92 * sharp:
             problems.append(f"{label}: the box's backdrop blur leaves the grain behind it as it is (spread {blurred:.4f} of luma with the blur, "
-                            f"{sharp:.4f} without); it should see the cloth and smooth it by about a fifth (<main> is named "
+                            f"{sharp:.4f} without); the blur should smooth the grain, so that the spread with it is under 0.92 of the spread without (<main> is named "
                             f"{page.evaluate(MAIN_NAME)!r} for view transitions)")
         problems += [f"{label}: console: {error}" for error in errors]
         context.close()
@@ -4367,7 +4375,7 @@ def chapter_change_problems(browser, base_url, session_key, site_page):
             problems.append(f"{label}: focus does not move to the new heading")
     if clicked:  # there is a change to go back from
         if try_history(problems, page, "back", f"{label}, then back") and \
-                arrive(page, "/about/", "A quiet place for what your agents make.", f"{label}, then back") and \
+                arrive(page, "/about/", "A quiet place for what your agents make", f"{label}, then back") and \
                 (not page.evaluate(stayed) or page.title() != "About | Veilfile"):
             problems.append(f"{label}, then back: About did not come back in place with its title")
         if try_history(problems, page, "forward", f"{label}, then forward"):
@@ -6214,7 +6222,7 @@ FIRST_STEP_MS = 16   # how long after a fade's first frame (which has no time be
 SHEET_CHANGE_BOUND_MS = 6000   # a change from the sheet is over within this, at frames 120 ms apart as at normal speed (it takes about 1 s at most then)
 # The pages a change from the open sheet is tried between (the menu's links): About to How, two chapters, and Terms to Privacy, the two tallest reading
 # pages (about 5,400 px at 375 wide, 16,200 device px at 3x, above the largest texture many mobile browsers take), as (from, to, from's heading, to's heading).
-SHEET_CHANGES = (("/about/", "/how/", "A quiet place for what your agents make.", "The life of a file"),
+SHEET_CHANGES = (("/about/", "/how/", "A quiet place for what your agents make", "The life of a file"),
                  ("/terms/", "/privacy/", "Terms of Service", "Privacy Policy"))
 
 
@@ -9216,7 +9224,7 @@ def dashboard_section_problems(browser, base_url, session_key, fixtures):
         lines = page.evaluate("""() => ({ notice: (document.querySelector('main .notice strong') || { textContent: '' }).textContent, items: document.querySelectorAll('main .notice li').length,
           over: document.querySelectorAll('main .meter--over').length, figures: [...document.querySelectorAll('main .meter__figures')].map((p) => p.textContent.replace(/\\s+/g, ' ').trim()),
           values: [...document.querySelectorAll('main [role=meter]')].map((m) => Number(m.getAttribute('aria-valuenow')) <= Number(m.getAttribute('aria-valuemax'))) })""")
-        if "over the free plan" not in lines["notice"] or lines["items"] != 4 or lines["over"] != 3 or not all(lines["values"]):
+        if "over the Free plan" not in lines["notice"] or lines["items"] != 4 or lines["over"] != 3 or not all(lines["values"]):
             problems.append(f"/app/ of the downgraded user: the over-limit notice reads {lines['notice']!r} with {lines['items']} lines (keys, storage, link lifetime, uploads: four), {lines['over']} meters over their limit (three) "
                             f"and the bars' values {'within' if all(lines['values']) else 'past'} their ends (templates/dashboard/over_limits.html, components/meter.html; {FIXTURES_STALE})")
         if not any("2.0 GB of 1.0 GB" in figures for figures in lines["figures"]):
@@ -9635,9 +9643,9 @@ def dashboard_key_problems(browser, base_url, session_key, fixtures):
 
 
 REVOKES = (   # what, the section, the column of the name, the confirmation's link ending, its heading, Keep, its button, the line after
-    ("key", "/app/keys/", "Name", "/revoke/", "Revoke this API key?", "Keep this key", "Revoke key", "Key revoked."),
-    ("file", "/app/files/", "File", "/revoke/", "Revoke this file?", "Keep it", "Revoke file", "File revoked."),
-    ("app", "/app/apps/", "App", "/disconnect/", "Disconnect {name}?", "Keep connected", "Disconnect", "{name} disconnected."),
+    ("key", "/app/keys/", "Name", "/revoke/", "Do you want to revoke this API key?", "Keep this key", "Revoke key", "The key is revoked."),
+    ("file", "/app/files/", "File", "/revoke/", "Do you want to revoke this file?", "Keep it", "Revoke file", "The file is revoked."),
+    ("app", "/app/apps/", "App", "/disconnect/", "Do you want to disconnect {name}?", "Keep connected", "Disconnect", "{name} is disconnected."),
 )
 
 
@@ -9649,7 +9657,7 @@ def dash_row(page, label, name):
 
 def dashboard_revoke_problems(browser, base_url, session_key, fixtures):
     """A revoke, end to end, for a key, a file and a connected app of the owner: the row's link opens a confirmation page (an ordinary load that changes nothing: Keep goes back with the row
-    as it was), whose button revokes and goes back with the one line "Key revoked." (read once: a reload has it gone) and the row revoked, gone or disconnected. The confirmation page is a
+    as it was), whose button revokes and goes back with the one line "The key is revoked." (read once: a reload has it gone) and the row revoked, gone or disconnected. The confirmation page is a
     form page: one h1 with the name, a POST form with a token, the section marked in the menu, Sign out, axe and no sideways scroll at 1280, 375 and 320."""
     problems, owner = [], fixtures["owner"]
     names = {"key": owner["revoke_key"], "file": owner["revoke_file"], "app": owner["apps"]["gone"]}
@@ -9891,7 +9899,7 @@ def dashboard_billing_problems(browser, base_url, session_key, fixtures):
         words = page.locator("main").inner_text()
         for ok, what in (("Current plan: Free" in words, "the plan line does not read 'Current plan: Free'"),
                          ("unpaid invoice" in words, "the stored unpaid status shows no warning (the Subscription row of the fixture)"),
-                         ("over the free plan" in words, "the over-limit lines are missing"),
+                         ("over the Free plan" in words, "the over-limit lines are missing"),
                          (page.get_by_role("button", name=re.compile(r"^Upgrade to ")).count() >= 1, "no Upgrade button"),
                          (page.get_by_role("button", name="Manage billing").count() == 1, "no Manage billing button (the fixture has a Stripe customer id)")):
             if not ok:
@@ -9923,8 +9931,8 @@ def dashboard_billing_problems(browser, base_url, session_key, fixtures):
         label = "the switch confirmation page"
         dash_land(problems, page, "/app/billing/switch/scale/", None, label, in_place=False)
         found = page.evaluate("() => ({ heading: (document.querySelector('main h1') || { textContent: '' }).textContent.trim(), layout: document.body.dataset.layout || '', forms: document.querySelectorAll('main form[method=post] input[name=csrfmiddlewaretoken]').length })")
-        if urlsplit(page.url).path != "/app/billing/switch/scale/" or not found["heading"].startswith("Switch to Scale") or found["layout"] != "" or found["forms"] != 1:
-            problems.append(f"{label}: at {page.url} reads {found['heading']!r}, data-layout {found['layout']!r} and {found['forms']} POST forms; an ordinary page that asks 'Switch to Scale ...?' with one form")
+        if urlsplit(page.url).path != "/app/billing/switch/scale/" or not found["heading"].startswith("Do you want to switch to Scale") or found["layout"] != "" or found["forms"] != 1:
+            problems.append(f"{label}: at {page.url} reads {found['heading']!r}, data-layout {found['layout']!r} and {found['forms']} POST forms; an ordinary page that asks 'Do you want to switch to Scale ($12/mo)?' with one form")
         problems += page_problems(page, f"{label} at 1280px")
         set_screen(page, 375, 667)
         problems += sideways_problems(page, f"{label} at 375px")

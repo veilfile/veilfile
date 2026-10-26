@@ -271,7 +271,7 @@ class FormTemplateConventionTests(SimpleTestCase):
                        "{% include 'components/form_errors.html' with errors='Bad.' only %}"):
             self.assertEqual(len(string_errors(source)), 1, f"{where}: string_errors must find errors given as a string literal in either quote")
         for source in ('{% include "components/field.html" with id="x" errors=form.email.errors only %}',
-                       '{% include "components/form_errors.html" with message="Invalid username, email, or password. Try again." only %}',
+                       '{% include "components/form_errors.html" with message="The username, email, or password is incorrect. Try again." only %}',
                        '{# {% include "components/field.html" with errors="Bad." only %} #}'):
             self.assertEqual(string_errors(source), [], f"{where}: string_errors must pass a variable, a message and a comment")
 
@@ -451,8 +451,8 @@ class FormErrorsTests(SimpleTestCase):
         self.assertEqual(re.findall(r"<p>([^<]*)</p>", html), ["Your current password is incorrect.", "Try again."], f"{self.FILE}: one <p> for each error, in order")
 
     def test_a_message_is_one_sentence_before_the_errors(self):
-        html = form_errors(message="Invalid username, email, or password. Try again.", errors=["Second."])
-        self.assertEqual(re.findall(r"<p>([^<]*)</p>", html), ["Invalid username, email, or password. Try again.", "Second."],
+        html = form_errors(message="The username, email, or password is incorrect. Try again.", errors=["Second."])
+        self.assertEqual(re.findall(r"<p>([^<]*)</p>", html), ["The username, email, or password is incorrect. Try again.", "Second."],
                          f"{self.FILE}: message first, then each error")
 
     def test_sentences_are_escaped(self):
@@ -462,7 +462,7 @@ class FormErrorsTests(SimpleTestCase):
 
     def test_the_page_can_ask_for_the_summary_to_take_focus(self):
         # A sentence that is on the page when it loads is announced inconsistently, so a page whose only error is the form's own focuses it; tabindex -1 is what lets a div take focus.
-        for inputs in ({"errors": ["Your current password is incorrect."]}, {"message": "Invalid username, email, or password. Try again."}):
+        for inputs in ({"errors": ["Your current password is incorrect."]}, {"message": "The username, email, or password is incorrect. Try again."}):
             with self.subTest(inputs=list(inputs)):
                 box = tags(form_errors(focus=True, **inputs), "div")[0]
                 self.assertEqual(box.get("tabindex"), "-1", f'{self.FILE}: tabindex="-1" on the summary when focus is true')
@@ -724,7 +724,7 @@ class FormCatalogTests(TestCase):
 
     def test_the_form_errors_are_alerts_in_both_states(self):
         self.assertEqual(self.html.count('<div class="form-errors" role="alert">'), 4 * 2)
-        self.assertIn("Invalid username, email, or password. Try again.", self.html)
+        self.assertIn("The username, email, or password is incorrect. Try again.", self.html)
 
 
 class CatalogStatesTests(SimpleTestCase):

@@ -264,7 +264,7 @@ def password_reset_throttled_response(request):
     return throttled_response(
         request,
         "Too many password reset requests",
-        "Too many password reset requests from this network or for this "
+        "Password reset has been requested too many times from this network or for this "
         "address.",
         PASSWORD_RESET_WINDOW_SECONDS,
     )
@@ -323,7 +323,7 @@ def verification_throttled_response(request, reason):
         return throttled_response(
             request,
             "Verification email already sent",
-            "One went out a moment ago. Check your inbox and your spam folder.",
+            "A verification email went out a moment ago. Check your inbox and your spam folder.",
             wait,
             sign_in_links=False,
         )
