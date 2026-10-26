@@ -628,7 +628,7 @@ seven rules are the whole of it; the recipes below point here instead of repeati
    empty states, the questions before a link, and every search description.
    - Before: "Key revoked." After: "The key is revoked."
 6. `docs/llms.txt` follows the same rule. Data stays terse as a label and its value with no
-   full stop ("Max upload size: 25 MiB"), while anything that explains, qualifies or warns
+   full stop ("Upload rate limit: 100 uploads/hour per credential (shared by REST and MCP uploads)"), while anything that explains, qualifies or warns
    is a complete sentence. Its structure, sections and exact values do not change.
 7. The older rules stay: no em dashes, no exclamation marks, none of the banned words
    (`BANNED` in `backend/pages/tests_chapters.py`), American spelling ("canceled", not
@@ -1107,7 +1107,7 @@ functions, never a DRF view, and reaches Stripe only through `drop_billing.accou
    caps are read from `backend/drop_core/plans.py`, never typed ("Pricing changes").
 7. Actions. Every state change is a POST from a `<form method="post">` with `{% csrf_token %}` in the page's own
    template. It answers with a redirect and one line from `messages.success`, `info` or `warning`: a fixed
-   sentence ("The key is revoked."), never anything secret. The layout prints the line as a `.notice` with
+   sentence ("The key is revoked."), never anything secret; every word on a dashboard page follows `## Voice`. The layout prints the line as a `.notice` with
    `role="status"` in whichever dashboard page loads next; a page on the form layout prints none. A GET changes
    nothing, revokes nothing and creates no Stripe session. An action that takes something away (revoke,
    disconnect, a switch between paid plans) goes first to a confirmation page: a GET that only shows a form,
