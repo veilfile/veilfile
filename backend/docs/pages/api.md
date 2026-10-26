@@ -87,7 +87,7 @@ Errors are JSON: `{"error": "<message>", "code": "<code>"}`. Branch on `code`.
 | 404 | `not_found` | Unknown, revoked, or expired |
 | 413 | `file_too_large` | Over 25 MiB |
 | 429 | `monthly_cap_reached` | Monthly upload quota hit |
-You sent too many requests. Wait the number of seconds in `Retry-After`.
+| 429 | `rate_limited` | You sent too many requests. Wait the number of seconds in `Retry-After`. |
 
 The rate limit is 100 uploads per hour for each API key or connected app, and REST and MCP uploads share it.
 
