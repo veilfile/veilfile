@@ -15,7 +15,7 @@
 <form method="post">
 {% csrf_token %}
 <input type="hidden" name="token" value="{{ token }}">
-{% include "components/field.html" with id="id_name" name="name" label="Key name" value=form.name.value autocomplete="off" help="Optional. A name that tells you which agent uses it, such as ci-runner." errors=form.name.errors focus=focus extra='spellcheck="false" autocapitalize="none"' only %}
+{% include "components/field.html" with id="id_name" name="name" label="Key name" value=form.name.value autocomplete="off" help="Give the key a name that tells you which agent uses it, such as ci-runner. This is optional." errors=form.name.errors focus=focus extra='spellcheck="false" autocapitalize="none"' only %}
 <button class="action interactive" type="submit">Create key</button>
 </form>
 {% if rows %}
@@ -43,6 +43,6 @@
 {% endfor %}</tbody>
 </table>
 {% else %}
-<p>No keys yet. Create one above to get started.</p>
+<p>You have no keys yet. Create one above to get started.</p>
 {% endif %}
 {% endblock %}

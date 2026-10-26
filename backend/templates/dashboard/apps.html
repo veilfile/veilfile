@@ -4,7 +4,7 @@
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block app_main %}
 <h1>Connected apps</h1>
-<p>MCP clients you authorized with OAuth, such as Claude Code. They can upload, list, and revoke artifacts, but cannot manage API keys. Revoking an API key does not disconnect them.</p>
+<p>These are the MCP clients you authorized with OAuth, such as Claude Code. They can upload, list, and revoke artifacts, but cannot manage API keys. Revoking an API key does not disconnect them.</p>
 {% if rows %}
 <table class="rows">
 <caption>Connected apps</caption>
@@ -26,6 +26,6 @@
 {% endfor %}</tbody>
 </table>
 {% else %}
-<p>No connected apps.</p>
+<p>You have no connected apps.</p>
 {% endif %}
 {% endblock %}

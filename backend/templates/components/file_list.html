@@ -22,7 +22,7 @@
 {% elif newest_url %}
 <p>There are no older files.</p>
 {% else %}
-<p>No files yet. Create a key under Keys, point your agent at its variable name, and uploads will appear here.</p>
+<p>You have no files yet. Create a key under Keys, point your agent at its variable name, and uploads will appear here.</p>
 <p class="form-links"><a class="label interactive" href="{% url 'app-keys' %}">Go to Keys</a></p>
 {% endif %}
 {% if newest_url or older_url %}<nav class="files__pager" aria-label="More files">{% if newest_url %}<a class="files__newest label interactive" href="{{ newest_url }}">Newest</a>{% endif %}{% if older_url %}<a class="files__older label interactive" href="{{ older_url }}" rel="next">Older files</a>{% endif %}</nav>

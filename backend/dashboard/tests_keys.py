@@ -330,7 +330,7 @@ class KeysPageTests(SignedInCase):
         client.force_login(User.objects.create_user("fresh", email="fresh@example.com"))
         response = client.get(KEYS_URL)
         self.assertEqual(response.status_code, 200, f"{KEYS_VIEW}: a person's first visit to Keys makes the workspace (get_or_create_workspace), as the JSON endpoint does")
-        self.assertIn("No keys yet.", response.content.decode())
+        self.assertIn("You have no keys yet.", response.content.decode())
 
     def test_the_page_says_what_a_key_is_for(self):
         main = main_of(self.keys_page().content.decode())
@@ -339,7 +339,7 @@ class KeysPageTests(SignedInCase):
 
     def test_a_workspace_without_keys_is_told_so(self):
         main = main_of(self.keys_page().content.decode())
-        self.assertIn("No keys yet. Create one above to get started.", main, f"{KEYS_PAGE}: say there are no keys when there are none")
+        self.assertIn("You have no keys yet. Create one above to get started.", main, f"{KEYS_PAGE}: say there are no keys when there are none")
         self.assertNotIn("<table", main, f"{KEYS_PAGE}: no table without rows")
 
     def test_the_list_shows_every_key_with_its_state_and_times(self):
@@ -770,7 +770,7 @@ class RevokeKeyTests(SignedInCase):
         html = response.content.decode()
         main = main_of(html)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", main), ["Revoke this API key?"], f"{REVOKE_PAGE}: the React dashboard's question is the heading")
+        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", main), ["Do you want to revoke this API key?"], f"{REVOKE_PAGE}: the React dashboard's question is the heading")
         self.assertIn("<p>Agents using it will fail.</p>", main, f"{REVOKE_PAGE}: and its warning")
         self.assertIn("<dd>deploy</dd>", main, f"{REVOKE_PAGE}: name the key")
         self.assertIn(f"<dd><code>{key.key_prefix}</code></dd>", main, f"{REVOKE_PAGE}: and its prefix")
@@ -796,7 +796,7 @@ class RevokeKeyTests(SignedInCase):
         self.assertFalse(key.is_active, f"{KEYS_VIEW}: the POST revokes the key")
         self.assertIsNone(APIKey.verify(raw), "the revoked key authenticates no more")
         html = self.client.get(KEYS_URL).content.decode()
-        self.assertEqual(Notices(html).found, ["Key revoked."], "backend/templates/layouts/app.html: a message is a .notice with role=status at the top of <main>")
+        self.assertEqual(Notices(html).found, ["The key is revoked."], "backend/templates/layouts/app.html: a message is a .notice with role=status at the top of <main>")
         row = TableRows(html).rows[0]
         self.assertEqual((row["State"], row["links"]), ("Revoked", []), f"{KEYS_PAGE}: the key stays listed, as Revoked")
 
@@ -804,7 +804,7 @@ class RevokeKeyTests(SignedInCase):
         key, _ = self.make_key("deploy")
         self.client.post(self.url(key))
         self.client.get(KEYS_URL)
-        self.assertNotIn("Key revoked.", self.client.get(KEYS_URL).content.decode(), f"{KEYS_VIEW}: a message is read once; a reload does not repeat it")
+        self.assertNotIn("The key is revoked.", self.client.get(KEYS_URL).content.decode(), f"{KEYS_VIEW}: a message is read once; a reload does not repeat it")
 
     def test_another_workspaces_key_is_a_404_and_stays_active(self):
         theirs, raw = APIKey.create_key(get_or_create_workspace(make_user("other", plan="team")), "theirs")
@@ -884,12 +884,12 @@ class ConnectedAppsTests(SignedInCase):
         self.assertIn("<title>Connected apps | Veilfile</title>", html, "backend/pages/context_processors.py: the section's title")
         self.assertEqual(html.count('<meta name="robots" content="noindex, nofollow">'), 1, f"{APPS_PAGE}: the robots meta, once, in the page's meta block")
         self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", main_of(html)), ["Connected apps"], f"{APPS_PAGE}: one h1, Connected apps")
-        self.assertIn("<p>MCP clients you authorized with OAuth, such as Claude Code. They can upload, list, and revoke artifacts, but cannot manage API keys. "
+        self.assertIn("<p>These are the MCP clients you authorized with OAuth, such as Claude Code. They can upload, list, and revoke artifacts, but cannot manage API keys. "
                       "Revoking an API key does not disconnect them.</p>", main_of(html), f"{APPS_PAGE}: keep the React dashboard's sentence")
 
     def test_no_apps_says_so(self):
         main = main_of(self.client.get(APPS_URL).content.decode())
-        self.assertIn("No connected apps.", main, f"{APPS_PAGE}: say so when there are none")
+        self.assertIn("You have no connected apps.", main, f"{APPS_PAGE}: say so when there are none")
         self.assertNotIn("<table", main)
 
     def test_each_app_is_a_row_with_its_host_and_when_it_was_authorized(self):
@@ -945,7 +945,7 @@ class DisconnectAppTests(SignedInCase):
         html = response.content.decode()
         main = main_of(html)
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", main), ["Disconnect Claude Code?"], f"{DISCONNECT_PAGE}: the React dashboard's question is the heading")
+        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", main), ["Do you want to disconnect Claude Code?"], f"{DISCONNECT_PAGE}: the React dashboard's question is the heading")
         self.assertIn("<p>It loses access now and must ask you again to reconnect.</p>", main, f"{DISCONNECT_PAGE}: and its sentence")
         self.assertIn("<p>It returns to <strong>127.0.0.1:9876</strong>.</p>", main, f"{DISCONNECT_PAGE}: say where the app returns to: the name is the app's own words")
         self.assertIn("<title>Disconnect app | Veilfile</title>", html, f"{DISCONNECT_PAGE}: title the page Disconnect app | Veilfile")
@@ -973,7 +973,7 @@ class DisconnectAppTests(SignedInCase):
         other_refresh.refresh_from_db()
         self.assertIsNone(other_refresh.revoked, "another app of the same person is untouched")
         html = self.client.get(APPS_URL).content.decode()
-        self.assertEqual(Notices(html).found, ["Claude Code disconnected."], f"{KEYS_VIEW}: the line is '<App> disconnected.', shown as a notice")
+        self.assertEqual(Notices(html).found, ["Claude Code is disconnected."], f"{KEYS_VIEW}: the line is '<App> disconnected.', shown as a notice")
         self.assertEqual([row["App"] for row in TableRows(html).rows], ["Other client"], f"{APPS_PAGE}: the app is gone from the list")
 
     def test_a_255_character_name_is_printed_whole_in_the_question(self):
@@ -982,7 +982,7 @@ class DisconnectAppTests(SignedInCase):
         connect(self.user, app)
         response = self.client.get(f"{APPS_URL}{app.pk}/disconnect/")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", main_of(response.content.decode())), [f"Disconnect {name}?"],
+        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", main_of(response.content.decode())), [f"Do you want to disconnect {name}?"],
                          f"{DISCONNECT_PAGE}: print the name whole; the form column wraps it (base.css .form-page)")
 
     def test_the_apps_name_in_the_line_is_escaped(self):
@@ -990,7 +990,7 @@ class DisconnectAppTests(SignedInCase):
         connect(self.user, app)
         self.client.post(f"{APPS_URL}{app.pk}/disconnect/")
         html = self.client.get(APPS_URL).content.decode()
-        self.assertIn("&lt;b&gt;bold&lt;/b&gt; disconnected.", html, "backend/templates/layouts/app.html: print a message escaped: an app's name is its own words")
+        self.assertIn("&lt;b&gt;bold&lt;/b&gt; is disconnected.", html, "backend/templates/layouts/app.html: print a message escaped: an app's name is its own words")
         self.assertNotIn("<b>bold</b>", html)
 
     def test_a_long_name_still_gets_its_line(self):
@@ -999,7 +999,7 @@ class DisconnectAppTests(SignedInCase):
         app = make_app(name)
         connect(self.user, app)
         self.client.post(f"{APPS_URL}{app.pk}/disconnect/")
-        self.assertEqual(Notices(self.client.get(APPS_URL).content.decode()).found, [f"{name} disconnected."],
+        self.assertEqual(Notices(self.client.get(APPS_URL).content.decode()).found, [f"{name} is disconnected."],
                          f"{KEYS_VIEW}: the line must reach the page whatever the app's name")
 
     def test_the_line_is_shown_once(self):

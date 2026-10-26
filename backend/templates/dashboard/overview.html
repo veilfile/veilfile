@@ -2,8 +2,8 @@
 {# Overview: the return from Stripe, the prompt to verify an email, anything over a limit, the plan, the meters and the account, in that order (spec 4.8). The figures come from dashboard/overview_page.py; the words are here. #}
 {% block app_main %}
 <h1>Overview</h1>
-{% if billing_notice.kind == "success" %}<p class="notice" role="status"><strong>Subscription updated.</strong> It can take a moment for the new plan to appear below. Refresh if it doesn't.</p>
-{% elif billing_notice.kind == "cancelled" %}<p class="notice" role="status">Checkout was cancelled. No charges were made.</p>
+{% if billing_notice.kind == "success" %}<p class="notice" role="status"><strong>Your subscription is updated.</strong> It can take a moment for the new plan to appear below. Refresh if it doesn't.</p>
+{% elif billing_notice.kind == "cancelled" %}<p class="notice" role="status">Checkout was canceled. No charges were made.</p>
 {% elif billing_notice.kind == "error" %}<p class="notice" role="alert"><strong>We couldn't start checkout{% if billing_notice.plan %} for the {{ billing_notice.plan }} plan{% endif %}.</strong> Nothing was charged. Try again from <a href="{% url 'app-billing' %}">Billing</a>.</p>
 {% elif billing_notice.kind == "already_subscribed" %}<p class="notice" role="status">You already have a subscription, so no new checkout was started. <a href="{% url 'app-billing' %}">Switch plans or manage billing</a>.</p>
 {% endif %}
@@ -20,7 +20,7 @@
 <section aria-labelledby="overview-usage">
 <h2 id="overview-usage">Usage</h2>
 {% if usage %}<div class="meters">
-{% include "components/meter.html" with id="overview-uploads" label="Successful uploads this month" used=usage.uploads_used cap=usage.uploads_cap note="Counted by calendar month, in UTC." only %}
+{% include "components/meter.html" with id="overview-uploads" label="Successful uploads this month" used=usage.uploads_used cap=usage.uploads_cap note="Uploads are counted by calendar month, in UTC." only %}
 {% include "components/meter.html" with id="overview-storage" label="Storage" used=usage.storage_used_bytes cap=usage.storage_cap_bytes unit="bytes" only %}
 {% include "components/meter.html" with id="overview-keys" label="API keys" used=usage.keys_used cap=usage.keys_cap unlimited=True only %}
 {% include "components/meter.html" with id="overview-ttl" label="Links last up to" used=usage.ttl_days unit="day" only %}

@@ -33,7 +33,7 @@ PAYMENT_FAILED = "The payment for the plan change did not go through, so your pl
 PAST_DUE = "Your last payment failed. Update your payment method under Manage billing before changing plans."
 MULTIPLE_SUBSCRIPTIONS = "This workspace has more than one subscription. Use Manage billing to cancel the extra one, or contact support."
 # The bare codes the API answers with a 400 (invalid_plan, no_billing_account) and the refusals the page itself makes, in words.
-NO_SUCH_PLAN = "Choose one of the plans on this page."
+NO_SUCH_PLAN = "That plan isn't available. Choose one of the plans on this page."
 NO_BILLING_ACCOUNT = "There is no billing account to manage yet. Upgrade to a paid plan to start one."
 NOT_SUBSCRIBED = "You have no subscription to switch yet. Upgrade to a paid plan to start one."
 
@@ -90,7 +90,7 @@ STATUS_WORDS = {
     "incomplete": "Payment not finished",
     "incomplete_expired": "Payment expired",
     "paused": "Paused",
-    "canceled": "Cancelled",
+    "canceled": "Canceled",
 }
 
 
@@ -120,10 +120,10 @@ def switch_result(plan, outcome):
     (switched, unchanged or pending_cancelled); the sentences are the React dashboard's."""
     name = plan_name(plan)
     if outcome == "pending_cancelled":
-        return f"The pending switch was cancelled. You stay on the {name} plan."
+        return f"The pending switch was canceled. You stay on the {name} plan."
     if outcome == "unchanged":
         return f"You're already on the {name} plan."
-    return f"Switched to the {name} plan."
+    return f"You're now on the {name} plan."
 
 
 def body_of(answer):

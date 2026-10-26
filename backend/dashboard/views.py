@@ -57,13 +57,13 @@ def overview(request):
 # Files (spec 4.8)
 
 FILES_PER_PAGE = 50
-REVOKED = "File revoked."
+REVOKED = "The file is revoked."
 # Only a live file is revoked here, as only a live file is offered for it. An expired file is dead and the sweep deletes it
 # (the one a failed revoke kept too); a held one is the safety review's to release.
 NOT_LIVE = "That file's link has already stopped working, so there is nothing to revoke."
 # account.revoke_artifact answers 204 with {"storage_deleted": False} when the storage delete failed (services.REVOKE_PENDING_DELETE):
 # the link is dead, the row is kept (expired) and the sweep deletes the file later. The page says so instead of claiming the file is gone.
-REVOKED_PENDING = ("File revoked. Its link has stopped working, but storage did not confirm the delete. "
+REVOKED_PENDING = ("The file is revoked. Its link has stopped working, but storage did not confirm the delete. "
                    "The file will be removed in a later cleanup.")
 
 

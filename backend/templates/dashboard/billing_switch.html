@@ -3,7 +3,7 @@
 {% block title %}Switch plan | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block form_page %}
-<h1>Switch to {{ target.name }} (${{ target.price }}/mo)?</h1>
+<h1>Do you want to switch to {{ target.name }} (${{ target.price }}/mo)?</h1>
 {% if upgrade %}
 <p>You'll be charged now for the prorated difference for the rest of this billing period, then ${{ target.price }}/mo from your next renewal. If that payment doesn't go through, you stay on {{ current.name }}.</p>
 {% else %}
@@ -13,5 +13,5 @@
 {% csrf_token %}
 <button class="action interactive" type="submit">Switch to {{ target.name }}</button>
 </form>
-<p class="form-links">Not now? <a class="label interactive" href="{% url 'app-billing' %}">Back to billing</a></p>
+<p class="form-links"><a class="label interactive" href="{% url 'app-billing' %}">Back to billing</a></p>
 {% endblock %}

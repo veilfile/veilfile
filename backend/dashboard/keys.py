@@ -120,7 +120,7 @@ def key_revoke(request, key_id):
     if request.method == "POST":
         if account.revoke_key(request.user, key.pk).status != 204:
             return not_found(request)
-        messages.success(request, "Key revoked.")
+        messages.success(request, "The key is revoked.")
         return redirect("app-keys")
     return render(request, "dashboard/key_revoke.html", {"key": key})
 
@@ -144,6 +144,6 @@ def app_disconnect(request, app_id):
     if request.method == "POST":
         if account.disconnect_grant(request.user, app_id).status != 204:
             return not_found(request)
-        messages.success(request, f"{app['name']} disconnected.")
+        messages.success(request, f"{app['name']} is disconnected.")
         return redirect("app-apps")
     return render(request, "dashboard/app_disconnect.html", {"app": app})

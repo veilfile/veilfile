@@ -3,7 +3,7 @@
 {# The list is components/file_list.html. Its stylesheet is linked from shell.html, because an in-place change from another section brings none. #}
 {% block app_main %}
 <h1>Files</h1>
-<p>What your agents have pushed, newest first. A secret flag means the scan found text shaped like a secret: the link still works until the file expires or you revoke it. The link of an expired or held file no longer opens.</p>
+<p>Your agents' files appear here, newest first. A secret flag means the scan found text shaped like a secret: the link still works until the file expires or you revoke it. The link of an expired or held file no longer opens.</p>
 {% if bad_cursor %}<p class="notice" role="status">That link to older files is not valid. Here are your newest files.</p>
 {% endif %}{% include "components/file_list.html" with files=files id_prefix="file" older_url=older_url newest_url=newest_url only %}
 {% endblock %}

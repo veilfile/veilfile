@@ -361,13 +361,13 @@ class FileListComponentTests(SimpleTestCase):
     def test_no_files_says_so_and_points_to_keys(self):
         html = render_list([])
         self.assertNotIn("<table", html, f"{self.FILE}: an empty list is words, not a table with no rows")
-        self.assertIn("No files yet. Create a key under Keys, point your agent at its variable name, and uploads will appear here.", html)
+        self.assertIn("You have no files yet. Create a key under Keys, point your agent at its variable name, and uploads will appear here.", html)
         self.assertEqual(href_of(html, "Go to Keys"), "/app/keys/")
 
     def test_a_page_past_the_oldest_file_says_so_and_offers_the_way_back(self):
         html = render_list([], newest_url="/app/files/")
         self.assertIn("There are no older files.", html)
-        self.assertNotIn("No files yet", html)
+        self.assertNotIn("You have no files yet", html)
         self.assertEqual(href_of(html, "Newest"), "/app/files/")
 
     def test_a_rows_controls_are_buttons_and_links_that_answer_the_cursor(self):
@@ -447,7 +447,7 @@ class FilesPageTests(FilesCase):
 
     def test_a_workspace_with_no_files_says_so(self):
         html = self.client.get(LIST).content.decode()
-        self.assertIn("No files yet.", html)
+        self.assertIn("You have no files yet.", html)
         self.assertEqual(href_of(html, "Go to Keys"), "/app/keys/")
         self.assertEqual((href_of(html, "Older files"), href_of(html, "Newest")), (None, None))
 
@@ -457,7 +457,7 @@ class FilesPageTests(FilesCase):
         client.force_login(fresh)
         response = client.get(LIST)
         self.assertEqual(response.status_code, 200)
-        self.assertIn("No files yet.", response.content.decode())
+        self.assertIn("You have no files yet.", response.content.decode())
 
     def test_the_page_names_what_a_flag_and_a_closed_link_mean(self):
         html = main_of(self.client.get(LIST).content.decode())
@@ -467,7 +467,7 @@ class FilesPageTests(FilesCase):
     def test_a_revoked_file_message_shows_once_as_a_notice(self):
         artifact = self.make_file()
         page = self.client.post(self.revoke_url(artifact), follow=True)
-        self.assertEqual(notices(page.content.decode()), ["File revoked."],
+        self.assertEqual(notices(page.content.decode()), ["The file is revoked."],
                          "backend/templates/layouts/app.html shows each message as <p class=\"notice\" role=\"status\"> at the top of <main>")
         self.assertEqual(notices(self.client.get(LIST).content.decode()), [], "a message is shown once")
 
@@ -583,7 +583,7 @@ class FileRevokePageTests(FilesCase):
         response = self.client.get(self.revoke_url(artifact))
         html = response.content.decode()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", html, re.S), ["Revoke this file?"])
+        self.assertEqual(re.findall(r"<h1[^>]*>(.*?)</h1>", html, re.S), ["Do you want to revoke this file?"])
         self.assertIn("<p><strong>quarterly-report.pdf</strong></p>", html, "backend/templates/dashboard/file_revoke.html names the file")
         self.assertIn("Its link stops working at once and the file is deleted. This cannot be undone.", html)
         self.assertEqual(main_of(html).count("<form"), 1, "backend/templates/dashboard/file_revoke.html: one form in <main>")
@@ -681,13 +681,13 @@ class FileRevokeTests(FilesCase):
         page = self.client.post(self.revoke_url(artifact), follow=True)
         html = page.content.decode()
         self.assertEqual(page.redirect_chain, [(LIST, 302)])
-        self.assertEqual(notices(html), ["File revoked."])
+        self.assertEqual(notices(html), ["The file is revoked."])
         self.assertEqual([row["cells"]["File"] for row in rows_in(html)], ["keep-me.txt"])
 
     def test_a_message_never_carries_a_name_or_a_link(self):
         artifact = self.make_file(HOSTILE)
         html = self.client.post(self.revoke_url(artifact), follow=True).content.decode()
-        self.assertEqual(notices(html), ["File revoked."], "nothing of the file goes into a message: it is stored in the session or a cookie")
+        self.assertEqual(notices(html), ["The file is revoked."], "nothing of the file goes into a message: it is stored in the session or a cookie")
         self.assertNotIn(artifact.token, html)
 
     def test_a_second_post_for_the_same_file_is_not_found(self):
@@ -712,7 +712,7 @@ class FileRevokeTests(FilesCase):
             page = self.client.post(self.revoke_url(artifact), follow=True)
         html = page.content.decode()
         self.assertEqual(page.redirect_chain, [(LIST, 302)])
-        self.assertEqual(notices(html), ["File revoked. Its link has stopped working, but storage did not confirm the delete. The file will be removed in a later cleanup."],
+        self.assertEqual(notices(html), ["The file is revoked. Its link has stopped working, but storage did not confirm the delete. The file will be removed in a later cleanup."],
                          "backend/dashboard/views.py: REVOKED_PENDING, when revoke_artifact kept the row because the storage delete failed")
         kept = Artifact.objects.get(pk=artifact.pk)
         self.assertTrue(kept.is_expired(), "services.revoke_artifact kills the link first, then keeps the row for the sweep")
@@ -724,9 +724,9 @@ class FileRevokeTests(FilesCase):
 
     def test_the_two_outcomes_have_two_sentences(self):
         revoked, pending = dashboard_views.REVOKED, dashboard_views.REVOKED_PENDING
-        self.assertEqual(revoked, "File revoked.")
+        self.assertEqual(revoked, "The file is revoked.")
         self.assertNotEqual(revoked, pending)
-        self.assertTrue(pending.startswith(revoked), "the pending sentence still begins File revoked.: the link is dead")
+        self.assertTrue(pending.startswith(revoked), "the pending sentence still begins The file is revoked.: the link is dead")
 
     def test_a_row_kept_after_a_storage_failure_is_left_to_the_sweep(self):
         artifact = self.make_file()

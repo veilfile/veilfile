@@ -9216,7 +9216,7 @@ def dashboard_section_problems(browser, base_url, session_key, fixtures):
         lines = page.evaluate("""() => ({ notice: (document.querySelector('main .notice strong') || { textContent: '' }).textContent, items: document.querySelectorAll('main .notice li').length,
           over: document.querySelectorAll('main .meter--over').length, figures: [...document.querySelectorAll('main .meter__figures')].map((p) => p.textContent.replace(/\\s+/g, ' ').trim()),
           values: [...document.querySelectorAll('main [role=meter]')].map((m) => Number(m.getAttribute('aria-valuenow')) <= Number(m.getAttribute('aria-valuemax'))) })""")
-        if "over the free plan" not in lines["notice"] or lines["items"] != 4 or lines["over"] != 3 or not all(lines["values"]):
+        if "over the Free plan" not in lines["notice"] or lines["items"] != 4 or lines["over"] != 3 or not all(lines["values"]):
             problems.append(f"/app/ of the downgraded user: the over-limit notice reads {lines['notice']!r} with {lines['items']} lines (keys, storage, link lifetime, uploads: four), {lines['over']} meters over their limit (three) "
                             f"and the bars' values {'within' if all(lines['values']) else 'past'} their ends (templates/dashboard/over_limits.html, components/meter.html; {FIXTURES_STALE})")
         if not any("2.0 GB of 1.0 GB" in figures for figures in lines["figures"]):
@@ -9635,9 +9635,9 @@ def dashboard_key_problems(browser, base_url, session_key, fixtures):
 
 
 REVOKES = (   # what, the section, the column of the name, the confirmation's link ending, its heading, Keep, its button, the line after
-    ("key", "/app/keys/", "Name", "/revoke/", "Revoke this API key?", "Keep this key", "Revoke key", "Key revoked."),
-    ("file", "/app/files/", "File", "/revoke/", "Revoke this file?", "Keep it", "Revoke file", "File revoked."),
-    ("app", "/app/apps/", "App", "/disconnect/", "Disconnect {name}?", "Keep connected", "Disconnect", "{name} disconnected."),
+    ("key", "/app/keys/", "Name", "/revoke/", "Do you want to revoke this API key?", "Keep this key", "Revoke key", "The key is revoked."),
+    ("file", "/app/files/", "File", "/revoke/", "Do you want to revoke this file?", "Keep it", "Revoke file", "The file is revoked."),
+    ("app", "/app/apps/", "App", "/disconnect/", "Do you want to disconnect {name}?", "Keep connected", "Disconnect", "{name} is disconnected."),
 )
 
 
@@ -9649,7 +9649,7 @@ def dash_row(page, label, name):
 
 def dashboard_revoke_problems(browser, base_url, session_key, fixtures):
     """A revoke, end to end, for a key, a file and a connected app of the owner: the row's link opens a confirmation page (an ordinary load that changes nothing: Keep goes back with the row
-    as it was), whose button revokes and goes back with the one line "Key revoked." (read once: a reload has it gone) and the row revoked, gone or disconnected. The confirmation page is a
+    as it was), whose button revokes and goes back with the one line "The key is revoked." (read once: a reload has it gone) and the row revoked, gone or disconnected. The confirmation page is a
     form page: one h1 with the name, a POST form with a token, the section marked in the menu, Sign out, axe and no sideways scroll at 1280, 375 and 320."""
     problems, owner = [], fixtures["owner"]
     names = {"key": owner["revoke_key"], "file": owner["revoke_file"], "app": owner["apps"]["gone"]}
@@ -9891,7 +9891,7 @@ def dashboard_billing_problems(browser, base_url, session_key, fixtures):
         words = page.locator("main").inner_text()
         for ok, what in (("Current plan: Free" in words, "the plan line does not read 'Current plan: Free'"),
                          ("unpaid invoice" in words, "the stored unpaid status shows no warning (the Subscription row of the fixture)"),
-                         ("over the free plan" in words, "the over-limit lines are missing"),
+                         ("over the Free plan" in words, "the over-limit lines are missing"),
                          (page.get_by_role("button", name=re.compile(r"^Upgrade to ")).count() >= 1, "no Upgrade button"),
                          (page.get_by_role("button", name="Manage billing").count() == 1, "no Manage billing button (the fixture has a Stripe customer id)")):
             if not ok:
@@ -9923,7 +9923,7 @@ def dashboard_billing_problems(browser, base_url, session_key, fixtures):
         label = "the switch confirmation page"
         dash_land(problems, page, "/app/billing/switch/scale/", None, label, in_place=False)
         found = page.evaluate("() => ({ heading: (document.querySelector('main h1') || { textContent: '' }).textContent.trim(), layout: document.body.dataset.layout || '', forms: document.querySelectorAll('main form[method=post] input[name=csrfmiddlewaretoken]').length })")
-        if urlsplit(page.url).path != "/app/billing/switch/scale/" or not found["heading"].startswith("Switch to Scale") or found["layout"] != "" or found["forms"] != 1:
+        if urlsplit(page.url).path != "/app/billing/switch/scale/" or not found["heading"].startswith("Do you want to switch to Scale") or found["layout"] != "" or found["forms"] != 1:
             problems.append(f"{label}: at {page.url} reads {found['heading']!r}, data-layout {found['layout']!r} and {found['forms']} POST forms; an ordinary page that asks 'Switch to Scale ...?' with one form")
         problems += page_problems(page, f"{label} at 1280px")
         set_screen(page, 375, 667)

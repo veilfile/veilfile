@@ -30,7 +30,7 @@ NOINDEX = "noindex, nofollow"
 
 def leave_a_message(request):
     """A stand-in for a view that has just done something: it leaves one line and goes to Files."""
-    messages.success(request, request.GET.get("line", "File revoked."))
+    messages.success(request, request.GET.get("line", "The file is revoked."))
     return redirect("app-files")
 
 
@@ -198,11 +198,11 @@ class MessagesTests(TestCase):
     def test_a_line_left_by_a_view_is_a_status_notice_at_the_top_of_the_page_and_is_read_once(self):
         client = signed_in_client()
         html = client.get("/leave-a-message/", follow=True).content.decode()
-        notice = '<p class="notice" role="status">File revoked.</p>'
+        notice = '<p class="notice" role="status">The file is revoked.</p>'
         self.assertIn(notice, html, "backend/templates/layouts/app.html: every message is a .notice with role=status, at the top of the page")
         self.assertLess(html.index("<main"), html.index(notice))
         self.assertLess(html.index(notice), html.index("<h1"), "the notice comes before the heading")
-        self.assertNotIn("File revoked.", client.get("/app/files/").content.decode(), "a message is shown once")
+        self.assertNotIn("The file is revoked.", client.get("/app/files/").content.decode(), "a message is shown once")
 
     def test_the_line_is_escaped(self):
         client = signed_in_client()
@@ -213,8 +213,8 @@ class MessagesTests(TestCase):
     def test_whichever_dashboard_page_reads_it_first_shows_it(self):
         client = signed_in_client()
         client.get("/leave-a-message/")
-        self.assertNotIn("File revoked.", client.get("/about/").content.decode(), "a public page does not draw messages")
-        self.assertIn("File revoked.", client.get("/app/apps/").content.decode(), "backend/templates/layouts/app.html: every section reads the messages, not only the one a view redirects to")
+        self.assertNotIn("The file is revoked.", client.get("/about/").content.decode(), "a public page does not draw messages")
+        self.assertIn("The file is revoked.", client.get("/app/apps/").content.decode(), "backend/templates/layouts/app.html: every section reads the messages, not only the one a view redirects to")
 
 
 @override_settings(DEBUG=False, ROOT_URLCONF="dashboard.tests_app")

@@ -6,7 +6,7 @@
 {% block styles %}<link rel="stylesheet" href="{% static 'css/pages/catalog.css' %}">{% endblock %}
 {% block main %}
 <h1 class="catalog__title">Components</h1>
-<p class="catalog__lede">Every component in Paper and Ink, with Motion on and off. Staff only.</p>
+<p class="catalog__lede">This page shows every component in Paper and Ink, with Motion on and off. Only staff can see it.</p>
 {% for item in components %}
 <section class="catalog__entry" aria-labelledby="component-{{ item.entry.name }}">
 <h2 class="catalog__name label" id="component-{{ item.entry.name }}">{{ item.entry.name }}</h2>

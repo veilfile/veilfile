@@ -66,7 +66,7 @@ class CatalogSampleTests(TestCase):
     def test_the_plan_entry_shows_team_whatever_order_the_cards_come_in(self):
         entry = next(entry for entry in catalog.entries() if entry.name == "plan")
         self.assertEqual(entry.context["plan"]["slug"], "team")
-        self.assertIn("here Team", entry.note)
+        self.assertIn("Here the plan is Team", entry.note)
 
 
 class CatalogCoverageTests(TestCase):
