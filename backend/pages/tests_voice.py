@@ -5,6 +5,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 from django.conf import settings
+from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
@@ -121,6 +122,14 @@ class HeadingStopTests(TestCase):
             problems += stops_in(html_headings(response.content.decode()), url)
         self.assertEqual(problems, [], "\n" + "\n".join(problems))
 
+    def test_rendered_error_pages(self):
+        problems = []
+        for name, context in (("404.html", {}), ("404.html (gone link)", {"gone_link": True}),
+                              ("403.html", {}), ("403_csrf.html", {}), ("500.html", {})):
+            html = render_to_string(name.split(" ")[0], context)
+            problems += stops_in(html_headings(html), f"templates/{name} (rendered)")
+        self.assertEqual(problems, [], "\n" + "\n".join(problems))
+
 
 def prose_lines():
     """(path, line number, line) for the Markdown pages and llms.txt, outside fenced code, inline code removed."""
@@ -179,3 +188,16 @@ class WrongClaimTests(SimpleTestCase):
                     f"{relative}: the old wording {phrase!r} is back; it was wrong, so use the corrected wording")
         self.assertIn("apparent child sexual exploitation", (REPO / "docs" / "llms.txt").read_text(),
                       "docs/llms.txt: the report line must say 'apparent child sexual exploitation'")
+
+
+class ClaudeAppsTwinTests(SimpleTestCase):
+    longMessage = False
+
+    def test_begin_and_the_docs_give_the_same_claude_apps_steps(self):
+        for relative in ("backend/templates/chapters/begin.html", "backend/docs/pages/agent.md"):
+            text = (REPO / relative).read_text()
+            for step in ("Customize, then Connectors", "Register automatically"):
+                with self.subTest(file=relative, step=step):
+                    self.assertIn(
+                        step, text,
+                        f"{relative}: the Claude apps steps must say {step!r}, as Begin and the Docs give the same steps")

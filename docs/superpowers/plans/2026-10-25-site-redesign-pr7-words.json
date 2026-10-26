@@ -1509,7 +1509,7 @@
   "group": "dashboard-frames",
   "file": "backend/pages/catalog.py",
   "old": "Give an agent a Veilfile key: env var setup, curl upload examples, MCP connection, key rotation.",
-  "new": "Connect an agent to Veilfile over MCP, or over REST when it has no MCP.",
+  "new": "Connect Claude and other MCP clients to Veilfile, with setup for each client and what to do when a secret is flagged.",
   "mode": "replace"
  },
  {

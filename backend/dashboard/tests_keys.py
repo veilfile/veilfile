@@ -973,7 +973,7 @@ class DisconnectAppTests(SignedInCase):
         other_refresh.refresh_from_db()
         self.assertIsNone(other_refresh.revoked, "another app of the same person is untouched")
         html = self.client.get(APPS_URL).content.decode()
-        self.assertEqual(Notices(html).found, ["Claude Code is disconnected."], f"{KEYS_VIEW}: the line is '<App> disconnected.', shown as a notice")
+        self.assertEqual(Notices(html).found, ["Claude Code is disconnected."], f"{KEYS_VIEW}: the line is '<App> is disconnected.', shown as a notice")
         self.assertEqual([row["App"] for row in TableRows(html).rows], ["Other client"], f"{APPS_PAGE}: the app is gone from the list")
 
     def test_a_255_character_name_is_printed_whole_in_the_question(self):

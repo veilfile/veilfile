@@ -2,7 +2,7 @@
 
 Stripe is never reached. These tests patch the Stripe library the way drop_billing.tests_fix_billing does, and its base class points
 the library's API address at a closed port, so a call that a test forgot to patch fails at once. They pin what a visitor reads:
-the React dashboard's sentences, kept; one fixed sentence in the customer's words on the Billing page for every way Stripe or the
+the React dashboard's sentences, as the voice pass reworded them; one fixed sentence in the customer's words on the Billing page for every way Stripe or the
 setup can refuse, never a 500, and never Stripe's own text, a code or the word "instance" (those, and a reference that finds them, go to
 the log); and that only a POST changes anything.
 
@@ -520,7 +520,7 @@ class BillingPageTests(BillingCase):
                 self.lapse(status)
                 self.assertEqual(warnings_shown(), [status], f"{PAGE}: a lapsed subscription named {status} gets its own sentence, and no other")
         self.subscribe("team", status="unpaid")
-        self.assertEqual(warnings_shown(), [], f"{PAGE}: the three lapsed-subscription sentences say the workspace is on the free plan, so they are for a workspace with no subscription (React's rule)")
+        self.assertEqual(warnings_shown(), [], f"{PAGE}: the three lapsed-subscription sentences say the workspace is on the Free plan, so they are for a workspace with no subscription (React's rule)")
         self.subscribe("team", status="active")
         self.assertEqual(warnings_shown(), [], f"{PAGE}: an active subscription has no warning")
 

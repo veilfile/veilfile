@@ -1,8 +1,7 @@
 """The device flow's pages on the shell (spec 4.7): the code entry, the approval, its two results and the refusal.
 
-The five templates in backend/templates/device/ extend layouts/form.html. Their words are the old pages' (the voice pass,
-PR 7, rewrites them), so what these tests hold is what must not change with the move: the form's fields and addresses, the
-escaping of what a stranger's terminal sent, the confirmation the approval needs, the keys offered at the plan's cap, and the
+The five templates in backend/templates/device/ extend layouts/form.html. Their words are the voice pass's, so what these tests hold is what must not change with them: the form's fields and
+addresses, the escaping of what a stranger's terminal sent, the confirmation the approval needs, the keys offered at the plan's cap, and the
 two other flows that meet these pages (the CLI's link, and the OAuth consent's refusal, which renders device/device_error.html).
 
 Every class sets longMessage = False, so that a failure prints its own message, which names the file and the fix, and not the
@@ -34,7 +33,7 @@ PAGE_TEMPLATES = {"device_enter_code.html", "device_consent.html", "device_succe
                   "device_error.html"}
 DASH = "\N{EM DASH}"  # the voice rules ban it, in a stylesheet's comments too
 ELLIPSIS = "\N{HORIZONTAL ELLIPSIS}"
-# The <title> of each state a visitor can meet: the old pages' words, in the shell's form (Name | Veilfile).
+# The <title> of each state a visitor can meet: the voice pass's words, in the shell's form (Name | Veilfile).
 TITLES = {
     "enter": "Enter device code | Veilfile",
     "enter, wrong code": "Enter device code | Veilfile",
@@ -198,7 +197,7 @@ class DevicePageFrameTests(DeviceCase):
         for label, response in self.every_page().items():
             with self.subTest(page=label):
                 self.says(response.content.decode(), f"<title>{TITLES[label]}</title>",
-                          f"{label}: the title block of its template in backend/templates/device/ (the old page's words, "
+                          f"{label}: the title block of its template in backend/templates/device/ (the voice pass's words, "
                           "then ' | Veilfile' as on every page of the shell); the page")
 
     def test_every_page_is_kept_out_of_search(self):
@@ -387,7 +386,7 @@ class DeviceEnterCodeTests(DeviceCase):
         intro = element_with_id(main, "device-intro")
         self.assertIsNotNone(intro, "the intro paragraph needs id=device-intro: it is the field's description")
         self.assertIn("Enter the code shown in your terminal. Enter only a code from a veilfile login that you started yourself, just now.",
-                      text_of(intro), "the intro keeps its words until the voice pass")
+                      text_of(intro), "the intro keeps the voice pass's words")
 
     def test_after_a_wrong_code_the_sentence_is_tied_to_the_field_and_the_field_takes_focus(self):
         main = self.entry(user_code="NOPE-NOPE")
@@ -468,7 +467,7 @@ class DeviceConsentTests(DeviceCase):
             "of 1 API key. It is sent only to the terminal; this browser never sees it.",
         ):
             self.says(words, needle, "backend/templates/device/device_consent.html or includes/grant_summary.html "
-                      "(the words stay until the voice pass, and the summary must stay accurate)")
+                      "(the words are the voice pass's, and the summary must stay accurate)")
 
     def test_the_form_posts_the_same_fields_to_the_same_two_addresses(self):
         grant, main = self.consent()

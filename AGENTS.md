@@ -187,7 +187,7 @@ fill; below a device's own first step (0.8 to 1.2, or from 0.65 on a phone) the 
 its grain down by how many times coarser the canvas is than that step (`u_soft`), so a phone at 0.28 is less rough at its edge than at its first step,
 and a healthy device at its first step asks the shader for `u_soft` 1 and draws the crisp ragged wash, nothing changed), the page fading out along the top of a phone
 (over the cloth, and over the still grain), the install box's backdrop blur
-seeing the cloth, the film grain (read with the cloth told to draw only the paper: drifting about 1.5 cycles a second, not a fresh value each frame, bell-shaped, zero-mean, weaker in Ink; `cloth_grain_problems`), the resolution (it follows the screen: 0.4 of the device pixel ratio, kept between 0.8, or 0.65 on a phone, and 1.2, then
+(the grain's spread with the blur against without it, so a blur that sees nothing fails), the film grain (read with the cloth told to draw only the paper: drifting about 1.5 cycles a second, not a fresh value each frame, bell-shaped, zero-mean, weaker in Ink; `cloth_grain_problems`), the resolution (it follows the screen: 0.4 of the device pixel ratio, kept between 0.8, or 0.65 on a phone, and 1.2, then
 three quarters of the step above down to 0.35, or 0.28 on a phone: the checks' Chromium has a pixel ratio of 1 unless a context sets
 `device_scale_factor`, so the presence, canvas-box, adaptive and soft-edge cases set 2 and 3 for the 0.8 and 1.2 starts), a device that cannot keep up
 (on the short ladder of a phone at ratio 1 and the long one at ratio 3; frames that a smaller canvas shortens keep the lower scale, and a step that brings them under the limit is kept however little it shortened them; frames held at 30 a second
@@ -742,7 +742,7 @@ How it works, Begin, Promises and Plans.
    there type prices; change those only through "Pricing changes".
 7. Check it:
    `cd backend && DJANGO_DEBUG=True DJANGO_SECRET_KEY=dev-only-key ../venv/bin/python manage.py test pages`.
-   A failure in the words markers, the voice rules, a figure typed into Plans
+   A failure in the words markers, the voice rules in `## Voice`, a figure typed into Plans
    or Begin's snippets names the file and the fix; any other failure only
    shows the text a test expected, which is the pinned-sentence case in step 5.
 8. Open a pull request.

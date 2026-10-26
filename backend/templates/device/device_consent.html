@@ -1,6 +1,6 @@
 {% extends "layouts/form.html" %}
 {% load static %}
-{# Form page: the approval of a terminal's login (spec 4.7). The words are the old page's until the voice pass (PR 7). Approve and Deny are one form with the same fields; Deny only changes where it posts (formaction). A refusal is the page's one error and no field shows one, so its summary takes focus (focus=True). #}
+{# Form page: the approval of a terminal's login (spec 4.7). The words are the voice pass's. Approve and Deny are one form with the same fields; Deny only changes where it posts (formaction). A refusal is the page's one error and no field shows one, so its summary takes focus (focus=True). #}
 {% block title %}Approve terminal login | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex">{% endblock %}
 {% block styles %}{{ block.super }}<link rel="stylesheet" href="{% static 'css/pages/device.css' %}">{% endblock %}

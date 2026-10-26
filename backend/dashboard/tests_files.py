@@ -726,7 +726,7 @@ class FileRevokeTests(FilesCase):
         revoked, pending = dashboard_views.REVOKED, dashboard_views.REVOKED_PENDING
         self.assertEqual(revoked, "The file is revoked.")
         self.assertNotEqual(revoked, pending)
-        self.assertTrue(pending.startswith(revoked), "the pending sentence still begins The file is revoked.: the link is dead")
+        self.assertTrue(pending.startswith(revoked), "the pending sentence still begins 'The file is revoked.', because the link is dead")
 
     def test_a_row_kept_after_a_storage_failure_is_left_to_the_sweep(self):
         artifact = self.make_file()

@@ -485,7 +485,7 @@ class FailureTests(OverviewTestCase):
 
 
 class VoiceTests(SimpleTestCase):
-    """The words of the page and its include keep the site's voice (spec 5): no em dash, no exclamation mark, none of the banned words. Voice is the owner's, and PR 7 reads these words again."""
+    """The words of the page and its include keep the site's voice (spec 5): no em dash, no exclamation mark, none of the banned words. Voice is the owner's, and the voice pass (PR 7) wrote these words."""
     longMessage = False
 
     def test_the_templates_keep_the_voice(self):

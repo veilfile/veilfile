@@ -3489,7 +3489,7 @@ def cloth_backdrop_problems(browser, base_url, session_key):
         page.evaluate("() => { delete window.__cloth.force.u_cloth; window.__cloth.drawAll = false; }")
         if blurred > 0.92 * sharp:
             problems.append(f"{label}: the box's backdrop blur leaves the grain behind it as it is (spread {blurred:.4f} of luma with the blur, "
-                            f"{sharp:.4f} without); it should see the cloth and smooth it by about a fifth (<main> is named "
+                            f"{sharp:.4f} without); the blur should smooth the grain, so that the spread with it is under 0.92 of the spread without (<main> is named "
                             f"{page.evaluate(MAIN_NAME)!r} for view transitions)")
         problems += [f"{label}: console: {error}" for error in errors]
         context.close()
@@ -9928,7 +9928,7 @@ def dashboard_billing_problems(browser, base_url, session_key, fixtures):
         dash_land(problems, page, "/app/billing/switch/scale/", None, label, in_place=False)
         found = page.evaluate("() => ({ heading: (document.querySelector('main h1') || { textContent: '' }).textContent.trim(), layout: document.body.dataset.layout || '', forms: document.querySelectorAll('main form[method=post] input[name=csrfmiddlewaretoken]').length })")
         if urlsplit(page.url).path != "/app/billing/switch/scale/" or not found["heading"].startswith("Do you want to switch to Scale") or found["layout"] != "" or found["forms"] != 1:
-            problems.append(f"{label}: at {page.url} reads {found['heading']!r}, data-layout {found['layout']!r} and {found['forms']} POST forms; an ordinary page that asks 'Switch to Scale ...?' with one form")
+            problems.append(f"{label}: at {page.url} reads {found['heading']!r}, data-layout {found['layout']!r} and {found['forms']} POST forms; an ordinary page that asks 'Do you want to switch to Scale ($12/mo)?' with one form")
         problems += page_problems(page, f"{label} at 1280px")
         set_screen(page, 375, 667)
         problems += sideways_problems(page, f"{label} at 375px")

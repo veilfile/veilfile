@@ -221,7 +221,7 @@ class ServerErrorPageTests(TestCase):
         html = response.content.decode()
         self.assertEqual(response.status_code, 500)
         self.assertIn("<title>Something went wrong | Veilfile</title>", html)
-        self.assertIn("<h1>Something went wrong.</h1>", html)
+        self.assertIn("<h1>Something went wrong</h1>", html)
         self.assertIn("support@veilfile.com", html)
         self.assertNotIn(SECRET, html, "backend/templates/500.html: never print the exception")
 
@@ -229,7 +229,7 @@ class ServerErrorPageTests(TestCase):
         # Django's own server_error() is called with the request and draws with none; so does this one.
         response = errors.server_error(None)
         self.assertEqual(response.status_code, 500)
-        self.assertIn("Something went wrong.", response.content.decode())
+        self.assertIn("<h1>Something went wrong</h1>", response.content.decode())
 
     def test_it_is_drawn_when_the_static_manifest_is_missing(self):
         with override_settings(STORAGES=manifest_with_nothing_in_it()):
@@ -238,7 +238,7 @@ class ServerErrorPageTests(TestCase):
                 render_to_string("shell.html")
             response = errors.server_error(RequestFactory().get("/"))
         self.assertEqual(response.status_code, 500)
-        self.assertIn("Something went wrong.", response.content.decode(),
+        self.assertIn("<h1>Something went wrong</h1>", response.content.decode(),
                       "backend/templates/500.html: no {% static %} tag; it must draw when the static manifest is missing")
 
     def test_it_is_drawn_when_every_context_processor_raises(self):
@@ -249,7 +249,7 @@ class ServerErrorPageTests(TestCase):
             with self.assertLogs("django.request", level="ERROR"):
                 response = client.get("/boom/")
         self.assertEqual(response.status_code, 500)
-        self.assertIn("Something went wrong.", response.content.decode(),
+        self.assertIn("<h1>Something went wrong</h1>", response.content.decode(),
                       "backend/pages/errors.py: server_error() must draw templates/500.html with no request, so no context processor runs")
 
     def test_its_own_words_can_be_replaced_and_are_escaped(self):
@@ -259,7 +259,7 @@ class ServerErrorPageTests(TestCase):
 
     def test_with_no_words_given_it_says_its_own(self):
         html = render_to_string("500.html")
-        self.assertIn("<h1>Something went wrong.</h1>", html)
+        self.assertIn("<h1>Something went wrong</h1>", html)
         self.assertIn("<title>Something went wrong | Veilfile</title>", html)
 
 

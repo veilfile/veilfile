@@ -18,7 +18,7 @@ Every upload returns a URL with a 256-bit token. The token is the auth. Anyone w
 
 ## Secret scanning
 
-Every upload is scanned for secret-shaped content: API keys, tokens, private-key headers. Matches are reported in `secret_flags`. By default the scan only warns: a flagged upload is stored and its link works. Send `on_secret=reject` to refuse flagged files instead.
+The first 1 MiB of every upload is scanned for secret-shaped content: API keys, tokens, private-key headers. Matches are reported in `secret_flags`. By default the scan only warns: a flagged upload is stored and its link works. Send `on_secret=reject` to refuse flagged files instead.
 
 Check `secret_flags` in every upload response. If it is non-empty and you do not want Veilfile to keep hosting the file, revoke the upload with `DELETE /api/v1/artifacts/<id>` or the `revoke_artifact` MCP tool.
 

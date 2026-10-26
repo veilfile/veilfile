@@ -1,5 +1,5 @@
 {% extends "layouts/form.html" %}
-{# Form page: the device code entry (spec 4.7). The words are the old page's until the voice pass (PR 7). The form is a GET to /device: the link the CLI opens is /device?user_code=XXXX-XXXX, so typing the code here must reach the same address. #}
+{# Form page: the device code entry (spec 4.7). The words are the voice pass's. The form is a GET to /device: the link the CLI opens is /device?user_code=XXXX-XXXX, so typing the code here must reach the same address. #}
 {% block title %}Enter device code | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex">{% endblock %}
 {% block form_page %}

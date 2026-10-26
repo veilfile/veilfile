@@ -742,3 +742,4 @@ class DeviceReviewFollowupTests(_DeviceTestBase):
         grant = self._start()
         page = self.browser.get("/device", {"user_code": grant["user_code"]})
         self.assertContains(page, "disconnect your apps")
+        self.assertContains(page, "It cannot create other API keys, disconnect your apps, or change your billing or account settings.")
