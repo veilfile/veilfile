@@ -29,7 +29,7 @@ const os = require('node:os');
 const path = require('node:path');
 const util = require('node:util');
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const DEFAULT_BASE_URL = 'https://veilfile.com';
 const DEVICE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 const ENV_VAR = 'VEILFILE_API_KEY';
