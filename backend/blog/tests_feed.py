@@ -65,7 +65,7 @@ class FeedTests(FakeJournal, TestCase):
     def test_the_feed_is_titled_veilfile_journal_and_describes_the_journal(self):
         _, channel = self.feed()
         self.assertEqual(channel.findtext("title"), "Veilfile Journal")
-        self.assertEqual(channel.findtext("description"), "Notes on Veilfile: launches, changes, and build notes.")
+        self.assertEqual(channel.findtext("description"), "The Veilfile Journal shares launches, changes, and notes on how Veilfile is built.")
 
     def test_the_feed_declares_the_content_module_and_every_item_carries_the_full_post(self):
         response, channel = self.feed()
