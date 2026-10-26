@@ -3,14 +3,14 @@
 {# Words: edit the text between here and the end marker; keep every tag, class and template tag as it is. #}
 <h1 class="chapter__title">What we promise</h1>
 <dl class="chapter__steps">
-<dt>The link is the only way in.</dt>
-<dd>No public list, nothing indexed, no addresses anyone could guess.</dd>
-<dt>Gone means deleted.</dt>
+<dt>The link is the only way in</dt>
+<dd>Nothing is listed publicly or indexed, and no one can guess an address.</dd>
+<dt>Gone means deleted</dt>
 <dd>When a file expires its link stops working, and a sweep removes the file from storage, usually within a day. It is not hidden; it is gone.</dd>
-<dt>We look only for the shapes of secrets.</dt>
-<dd>Uploads are scanned for anything shaped like a key or a token, and a match is flagged by name. File contents are never logged.</dd>
-<dt>Why not a gist?</dt>
-<dd>A gist stays until someone remembers to delete it, and it keeps every earlier version. Fine for a snippet; wrong for a client’s failing screenshot. See <a href="{% url 'how' %}">how a file lives here</a>.</dd>
+<dt>We flag secret-shaped text and never log contents</dt>
+<dd>Veilfile scans the first 1 MiB of each upload for known key and token formats, and flags a match by name. Unless you ask for rejection, a flagged upload is still stored. File contents are never logged.</dd>
+<dt>Why shouldn’t I use a gist?</dt>
+<dd>A gist stays until someone remembers to delete it, and it keeps every earlier version. A gist suits a snippet but not a client’s failing screenshot. See <a href="{% url 'how' %}">how a file lives here</a>.</dd>
 </dl>
 {# End of words. #}
 {% endblock %}

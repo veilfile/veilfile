@@ -3341,7 +3341,7 @@ def cloth_sheet_ink_problems(browser, base_url, session_key):
         page.wait_for_function("() => location.pathname === '/plans/'", timeout=20000)
         run_frames(page, 30, step=100)   # 3 s of cloth time more
         fall = page.evaluate("() => window.__fall")
-        old, new = "A quiet place for what your agents make.", "Plans"
+        old, new = "A quiet place for what your agents make", "Plans"
         closing = [frame for frame in fall if frame["heading"] == old]
         between = [frame["shader"] for frame in closing if 0.02 < frame["shader"] < 0.98]
         if len(between) < 2:
@@ -4367,7 +4367,7 @@ def chapter_change_problems(browser, base_url, session_key, site_page):
             problems.append(f"{label}: focus does not move to the new heading")
     if clicked:  # there is a change to go back from
         if try_history(problems, page, "back", f"{label}, then back") and \
-                arrive(page, "/about/", "A quiet place for what your agents make.", f"{label}, then back") and \
+                arrive(page, "/about/", "A quiet place for what your agents make", f"{label}, then back") and \
                 (not page.evaluate(stayed) or page.title() != "About | Veilfile"):
             problems.append(f"{label}, then back: About did not come back in place with its title")
         if try_history(problems, page, "forward", f"{label}, then forward"):
@@ -6214,7 +6214,7 @@ FIRST_STEP_MS = 16   # how long after a fade's first frame (which has no time be
 SHEET_CHANGE_BOUND_MS = 6000   # a change from the sheet is over within this, at frames 120 ms apart as at normal speed (it takes about 1 s at most then)
 # The pages a change from the open sheet is tried between (the menu's links): About to How, two chapters, and Terms to Privacy, the two tallest reading
 # pages (about 5,400 px at 375 wide, 16,200 device px at 3x, above the largest texture many mobile browsers take), as (from, to, from's heading, to's heading).
-SHEET_CHANGES = (("/about/", "/how/", "A quiet place for what your agents make.", "The life of a file"),
+SHEET_CHANGES = (("/about/", "/how/", "A quiet place for what your agents make", "The life of a file"),
                  ("/terms/", "/privacy/", "Terms of Service", "Privacy Policy"))
 
 

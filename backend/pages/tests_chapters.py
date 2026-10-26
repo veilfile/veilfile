@@ -89,7 +89,7 @@ class AboutTests(TestCase):
     def test_about_is_short_and_says_what_veilfile_is(self):
         """About is short and says what Veilfile is. That it names no person is held by CI's names job (AGENTS.md, Where CI runs), which keeps the names out of this repository."""
         text = visible_text(self.client.get(reverse("about")).content.decode())
-        self.assertIn("A quiet place for what your agents make.", text)
+        self.assertIn("A quiet place for what your agents make", text)
         self.assertLess(len(text.split()), 300)
 
 
@@ -103,9 +103,9 @@ class HowAndPromisesTests(TestCase):
 
     def test_promises_say_what_we_keep_and_answer_why_not_a_gist(self):
         text = visible_text(self.client.get(reverse("promises")).content.decode())
-        self.assertIn("The link is the only way in.", text)
+        self.assertIn("The link is the only way in", text)
         self.assertIn("File contents are never logged.", text)
-        self.assertIn("Why not a gist?", text)
+        self.assertIn("Why shouldn’t I use a gist?", text)
 
     def test_the_old_trust_address_moves_permanently_to_promises(self):
         response = self.client.get("/trust/")
@@ -133,7 +133,7 @@ class PlansTests(TestCase):
                 self.assertIn(f'href="/accounts/signup/?plan={slug}"', self.html)
 
     def test_says_the_price_includes_tax(self):
-        self.assertIn("Tax included. The price you see is the price you pay.", self.text)
+        self.assertIn("Prices include tax. The price you see is the price you pay.", self.text)
 
     def product(self):
         """The Product block of Plans' JSON-LD."""
@@ -255,7 +255,7 @@ class ThresholdTests(TestCase):
         self.assertEqual(self.response.status_code, 200)
         self.assertIn('data-layout="chapter"', self.html)
         self.assertIn("Some files are meant to be seen for a moment,", self.html)
-        self.assertIn("by the right eyes, and then let go.", self.html)
+        self.assertIn("by the right eyes, and then let go", self.html)
         self.assertIn('<a class="threshold__enter label interactive" href="/begin/" data-come-in>Come in</a>', self.html)
 
     def test_the_install_line_waits_behind_come_in(self):

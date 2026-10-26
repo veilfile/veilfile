@@ -51,7 +51,7 @@ class RegistryTests(SimpleTestCase):
     def test_how_it_works_says_the_link_stops_before_the_file_is_deleted(self):
         # Ruled during PR 2: in search results the order matters (the link stops, then a sweep deletes the
         # file), and the length test alone would let the sentence drift to something that fits and is wrong.
-        self.assertIn("when its days run out the link stops, then the file is deleted",
+        self.assertIn("When its days run out, the link stops working and the file is deleted soon after.",
                       registry.page("how").description)
 
     def test_canonical_urls_use_the_public_origin(self):
