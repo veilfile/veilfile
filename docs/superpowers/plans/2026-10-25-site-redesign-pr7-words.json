@@ -1055,7 +1055,7 @@
   "group": "forms-device-errors",
   "file": "backend/pages/errors.py",
   "old": "    \"404.html\": (\"Not found.\", \"There is nothing at this address.\"),",
-  "new": "    \"404.html\": (\"Not found\", \"There is nothing at this address. Check it for a typo.\"),",
+  "new": "    \"404.html\": (\"Not found\", \"There is nothing at this address. Check it for a typo, or start from the home page.\"),",
   "mode": "replace"
  },
  {
