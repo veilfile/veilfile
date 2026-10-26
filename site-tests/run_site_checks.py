@@ -139,14 +139,18 @@ COVERED = """(selector) => {
 # sheet itself: what is painted on top at its centre is #shell-menu, the nav holding it, or something in the
 # sheet that is not a link. Where the menu is a column (from 64rem up) a link on top is not the sheet: that is the defect
 # menu_reach_problems looks for. Below 64rem the sheet covers the screen and is solid behind its links, so a link on top of
-# the element is the sheet over it too.
+# the element is the sheet over it too. The point looked at is the centre of the part of the element that lies inside the viewport: a
+# footer control on a page a line or so taller than a short screen (About at 667x375 on a runner whose text wrapped one line more, so that
+# the controls' box began at 366 to 375 and its centre fell at or past the bottom edge) shows only a strip at the bottom, the sheet is
+# painted over that strip, and the centre of the whole box, which is off the screen, would read as "not under the sheet".
 UNDER_SHEET = """(selector) => {
   const inert = [...document.querySelectorAll("[inert]")];
   inert.forEach((part) => { part.inert = false; });
   const el = document.querySelector(selector), sheet = document.querySelector("#shell-menu");
   const r = el.getBoundingClientRect();
-  const x = r.left + r.width / 2, y = r.top + r.height / 2;
-  const hit = r.width && y >= 0 && y <= innerHeight ? document.elementFromPoint(x, y) : null;
+  const top = Math.max(r.top, 0), bottom = Math.min(r.bottom, innerHeight);
+  const x = r.left + r.width / 2, y = (top + bottom) / 2;
+  const hit = r.width && bottom > top ? document.elementFromPoint(x, y) : null;
   inert.forEach((part) => { part.inert = true; });
   return Boolean(hit && sheet && !el.contains(hit) && (!hit.closest("a") || matchMedia("(max-width: 63.99rem)").matches)
                  && (sheet.contains(hit) || hit === sheet.closest("[data-menu]")));
