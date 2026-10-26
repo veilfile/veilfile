@@ -17,7 +17,7 @@ REPO = BACKEND.parent
 
 def template_text(source):
     """The source with every {% %}, {{ }} and {# #} removed and the line breaks kept."""
-    return re.sub(r"\{%.*?%\}|\{\{.*?\}\}|\{#.*?#\}", "", source, flags=re.DOTALL)
+    return re.sub(r"\{%.*?%\}|\{\{.*?\}\}|\{#.*?#\}", lambda m: "\n" * m.group().count("\n"), source, flags=re.DOTALL)
 
 
 class _Headings(HTMLParser):
@@ -85,6 +85,9 @@ class HelperTests(SimpleTestCase):
     def test_headings_are_found_with_template_tags_removed(self):
         html = template_text('<h1 class="x">Switch to {{ plan }}.</h1>\n<dt>Why?</dt>')
         self.assertEqual(html_headings(html), [(1, "Switch to ."), (2, "Why?")])
+
+    def test_template_text_keeps_line_breaks_inside_removed_tags(self):
+        self.assertEqual(html_headings(template_text('{# a\nb #}\n<h1>Gone.</h1>')), [(3, "Gone.")])
 
     def test_markdown_headings_skip_fenced_code(self):
         self.assertEqual(markdown_headings("# A\n```\n# not\n```\n## B.\n"), [(1, "A"), (5, "B.")])
