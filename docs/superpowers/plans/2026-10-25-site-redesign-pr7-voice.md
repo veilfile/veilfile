@@ -235,7 +235,7 @@ class HelperTests(SimpleTestCase):
   - The Python CLI: expected OK.
   - `python3 -I docs/superpowers/plans/2026-10-25-site-redesign-pr7-apply.py all --verify`: expected `190 applied items verified; 0 missing`. This shows every approved word is in place.
 - [ ] **Step 2: Run the eight browser-check parts locally,** as AGENTS.md "Site checks" describes: `site`, `site-cloth`, `site-ink`, `site-reading`, `site-phone`, `site-forms`, `site-catalog` and `site-dashboard`. Expected: 0 problems in each. A failing check that pins old words in `site-tests/run_site_checks.py` changes to the new words; any other failure is a real problem to fix.
-- [ ] **Step 3: Run the identity gate on the tree.** Run `move/gate/gate.py` from the private `veilfile/ops` repository (the copy on the owner's Mac is in the move folder beside `dev/`) as `python3 <gate.py> . --rev HEAD --tree-only --strict`. Expected: exit 0.
+- [ ] **Step 3: Run the identity gate on the tree.** Run `move/gate/gate.py` from the private `veilfile/ops` repository (a local copy sits in the move folder beside `dev/`) as `<python> <gate.py> . --rev HEAD --tree-only --strict`, with a Python that has fontTools and brotli (the gate's own `.venv`), so the fonts can be read. Expected: exit 0.
 - [ ] **Step 4: Run the whole-branch review** (superpowers:requesting-code-review). Fix what it finds, within the words file and this plan.
 - [ ] **Step 5 (owner's go-ahead): push and open the pull request as Muse.**
   - First check that `gh api user --jq .login` prints `yourimaginationwillbefired`.
