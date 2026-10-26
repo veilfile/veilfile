@@ -470,7 +470,7 @@
   "group": "docs",
   "file": "backend/docs/pages/api.md",
   "old": "| 429 | `rate_limited` | Too many requests. Back off; see `Retry-After`. |",
-  "new": "You sent too many requests. Wait the number of seconds in `Retry-After`.",
+  "new": "| 429 | `rate_limited` | You sent too many requests. Wait the number of seconds in `Retry-After`. |",
   "mode": "replace"
  },
  {
