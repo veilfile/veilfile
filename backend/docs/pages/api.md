@@ -2,7 +2,7 @@
 title: API reference
 slug: api
 seo_title: API reference | Veilfile docs
-description: Every Veilfile endpoint: upload, list, revoke, keys, usage, billing, and the MCP server, with request and response shapes.
+description: This page documents the upload, list, revoke, and download endpoints, with request and response shapes and error codes.
 order: 5
 ---
 
@@ -18,7 +18,7 @@ Authorization: Bearer vlf_...
 
 Keys start with `vlf_` and are shown once at creation. Keep the key in an environment variable (`VEILFILE_API_KEY`) or a secret manager. Never put it in a prompt, a chat message, or a repo.
 
-The `veilfile` command-line client gets you a key without pasting secrets: `pip install veilfile`, then `veilfile login` (browser approval flow), `veilfile logout`, and `veilfile status`. The full reference is in the [API docs source](https://github.com/veilfile/veilfile/blob/main/docs/API.md).
+The `veilfile` command-line client gets you a key without pasting secrets. Install it with `pip install veilfile`, run `veilfile login` to approve in your browser, and use `veilfile logout` to revoke the key and `veilfile status` to check it. The full reference is in the [API docs source](https://github.com/veilfile/veilfile/blob/main/docs/API.md).
 
 ## Upload
 
@@ -28,11 +28,11 @@ Multipart form:
 
 | Field | Required | Notes |
 |---|---|---|
-| `file` | yes | The file bytes. Max 25 MiB. |
-| `ttl_days` | no | Whole days until expiry. Defaults to the plan max. Larger values are clamped to the plan max; a non-integer gets `400` `invalid_request`. |
+| `file` | yes | Send the file bytes. The maximum size is 25 MiB. |
+| `ttl_days` | no | Set the number of whole days until expiry. The default is the plan max. Larger values are clamped to the plan max; a non-integer gets `400` `invalid_request`. |
 | `on_secret` | no | `flag` (default) or `reject`. `reject` refuses a file that trips the secret scanner (`400` `secret_detected`) and stores nothing. |
 
-Allowed types: png, jpg, jpeg, webp, gif, txt, md, log, json, har, pdf.
+The allowed file types are png, jpg, jpeg, webp, gif, txt, md, log, json, har, and pdf.
 
 ```bash
 curl -X POST https://veilfile.com/api/v1/artifacts \
@@ -59,19 +59,19 @@ A `201` comes back:
 
 `GET /api/v1/artifacts`
 
-Returns your workspace's artifacts, newest first, as a bare JSON array of `{id, filename, mime_type, size_bytes, url, expires_at, secret_flags, created_at}`. Optional `limit` (1 to 200) and `cursor` page through it; when more remain the response has `X-Next-Cursor` and `Link: rel="next"` headers.
+The endpoint returns your workspace's artifacts, newest first, as a bare JSON array of `{id, filename, mime_type, size_bytes, url, expires_at, secret_flags, created_at}`. Optional `limit` (1 to 200) and `cursor` page through it; when more remain the response has `X-Next-Cursor` and `Link: rel="next"` headers.
 
 ## Revoke
 
 `DELETE /api/v1/artifacts/<id>`
 
-Deletes the artifact at once. Its URL returns `404` immediately. Success is a `204` with an empty body. Unknown ids return `404` with `{"error": "Artifact not found.", "code": "not_found"}`.
+The endpoint deletes the artifact at once. Its URL returns `404` immediately. Success is a `204` with an empty body. Unknown ids return `404` with `{"error": "Artifact not found.", "code": "not_found"}`.
 
 ## Download
 
 `GET /a/<token>`
 
-Public. No auth. The token in the URL is the auth. Images, PDFs, and plain text (`.txt`, `.log`, `.md`) are served inline, with the type taken from the file extension. Everything else (JSON, HAR) downloads as an attachment. `404` means unknown, revoked, or expired; `503` with `Retry-After` means storage is briefly unavailable and the link is still valid. Served with `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.
+This endpoint is public and needs no auth header. The token in the URL is the auth. Images, PDFs, and plain text (`.txt`, `.log`, `.md`) are served inline, with the type taken from the file extension. Everything else (JSON, HAR) downloads as an attachment. `404` means unknown, revoked, or expired; `503` with `Retry-After` means storage is briefly unavailable and the link is still valid. A successful download carries `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.
 
 ## Errors
 
@@ -87,8 +87,8 @@ Errors are JSON: `{"error": "<message>", "code": "<code>"}`. Branch on `code`.
 | 404 | `not_found` | Unknown, revoked, or expired |
 | 413 | `file_too_large` | Over 25 MiB |
 | 429 | `monthly_cap_reached` | Monthly upload quota hit |
-| 429 | `rate_limited` | Too many requests. Back off; see `Retry-After`. |
+You sent too many requests. Wait the number of seconds in `Retry-After`.
 
-Rate limit: 100 uploads per hour per credential, shared by REST and MCP uploads.
+The rate limit is 100 uploads per hour for each API key or connected app, and REST and MCP uploads share it.
 
 The full technical reference, including MCP and billing endpoints, is [API.md](https://github.com/veilfile/veilfile/blob/main/docs/API.md).

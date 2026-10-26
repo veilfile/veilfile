@@ -1,5 +1,7 @@
 """The registry of public pages (spec 6.5): one place for titles, descriptions and the menu."""
+import re
 from html.parser import HTMLParser
+from pathlib import Path
 
 from django.template.loader import render_to_string
 from django.test import SimpleTestCase, TestCase
@@ -117,3 +119,12 @@ class RegistryMatchesRenderedPagesTests(TestCase):
                 self.assertEqual(head.title.strip(), page.title)
                 self.assertEqual(head.description, page.description)
                 self.assertEqual(head.canonical, registry.canonical_url(page.url_name))
+
+
+class DocsIndexDescriptionTests(SimpleTestCase):
+    def test_the_docs_index_description_matches_its_front_matter(self):
+        text = (Path(__file__).resolve().parent.parent / "docs" / "pages" / "index.md").read_text(encoding="utf-8")
+        front_matter = re.search(r"^description:[ \t]*(.+?)[ \t]*$", text, re.MULTILINE).group(1)
+        self.assertEqual(
+            registry.page("docs-index").description, front_matter,
+            "backend/pages/registry.py and backend/docs/pages/index.md: the Docs index description must be the same words in both")

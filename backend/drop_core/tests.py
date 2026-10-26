@@ -1023,7 +1023,7 @@ class DocsTests(TestCase):
     def test_index_renders(self):
         response = self.client.get("/docs/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "New here? Start with the")
+        self.assertContains(response, "If you're new here, start with the")
         self.assertContains(response, "/docs/quickstart/")
 
     def test_index_slug_renders(self):

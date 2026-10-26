@@ -195,7 +195,7 @@ class DocsPageTests(TestCase):
 
     def test_the_index_keeps_its_own_words(self):
         _, html = self.get("/docs/")
-        self.assertIn("New here? Start with the", main_of(html), "backend/templates/docs/index.html: the index prints the words of backend/docs/pages/index.md")
+        self.assertIn("If you're new here, start with the", main_of(html), "backend/templates/docs/index.html: the index prints the words of backend/docs/pages/index.md")
 
     def test_a_page_opens_with_the_list_of_its_sections(self):
         for page in loader.load_pages():

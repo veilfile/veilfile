@@ -62,8 +62,8 @@ PAGES = (
          "and that file contents are never logged.",
          layout="chapter"),
     Page("docs-index", "Veilfile docs | REST API, MCP, and agent setup",
-         "Start here: five-minute quickstart, agent key setup, how uploads and expiry work, "
-         "and the full REST and MCP API reference.",
+         "Start with the quickstart, then set up an agent key, learn how uploads and expiry work, "
+         "and look up the upload, list, revoke, and download endpoints.",
          layout="reading"),
     Page("blog-index", "Veilfile blog | launches and build notes",
          "Read notes on how Veilfile is built, including launches, changes, pricing, and the reasoning behind them. "
