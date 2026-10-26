@@ -3455,7 +3455,11 @@ def cloth_backdrop_problems(browser, base_url, session_key):
     is painted inside it, which is nothing. At 1280 (below 64rem the top fade's mask makes <main> a backdrop root too,
     for which nothing is checked), on the threshold after Come in, with the cloth held still: the spread of the luma
     along the box's top padding, where there is no text, with its blur and with the same frame without it, must be at
-    least 8% lower with it. A blur that sees the cloth lowers it by about 20%; one that sees nothing, by none."""
+    least 8% lower with it. The cloth is told to draw none of its folds (u_cloth forced to 0, as in cloth_grain_problems),
+    so that what is measured is the film grain alone, which is what the blur is meant to smooth: the folds are low in
+    frequency, the slight blur does not remove them, and a fold under the strip would make the ratio depend on where
+    the box sits (moving the box up 9.75 px raised it from about 0.85 to 0.93). A blur that sees the grain lowers its
+    spread to 0.34 to 0.83 of the sharp frame's; one that sees nothing leaves it at exactly 1.000."""
     problems = []
     for theme in ("light", "dark"):
         label = f"/ cloth at 1280px, {theme}, the install box's backdrop blur"
@@ -3476,13 +3480,13 @@ def cloth_backdrop_problems(browser, base_url, session_key):
         run_frames(page, 30)
         box = page.evaluate(BOX_RECT, ".install-line__panel:not([hidden]) .install-line__box")
         clip = {"x": box["x"] + 4, "y": box["y"] + 2, "width": box["width"] - 8, "height": 8}   # inside the border, above the text
-        page.evaluate("() => { window.__cloth.drawAll = true; }")
+        page.evaluate("() => { window.__cloth.force.u_cloth = 0; window.__cloth.drawAll = true; }")   # the grain alone, no folds
         page.evaluate(NEXT_FRAMES)
         blurred = png_luma(page.screenshot(clip=clip))[1]
         page.add_style_tag(content=".install-line__box { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }")
         page.evaluate(NEXT_FRAMES)
         sharp = png_luma(page.screenshot(clip=clip))[1]
-        page.evaluate("() => { window.__cloth.drawAll = false; }")
+        page.evaluate("() => { delete window.__cloth.force.u_cloth; window.__cloth.drawAll = false; }")
         if blurred > 0.92 * sharp:
             problems.append(f"{label}: the box's backdrop blur leaves the grain behind it as it is (spread {blurred:.4f} of luma with the blur, "
                             f"{sharp:.4f} without); it should see the cloth and smooth it by about a fifth (<main> is named "
