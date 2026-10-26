@@ -1,0 +1,1788 @@
+[
+ {
+  "id": "F001",
+  "group": "chapters",
+  "file": "backend/pages/install.py",
+  "old": "Add it to your agent as a remote MCP server; sign in when it asks.",
+  "new": "Add this address to your agent as a remote MCP server, and sign in if the agent asks.",
+  "mode": "replace"
+ },
+ {
+  "id": "F002",
+  "group": "chapters",
+  "file": "backend/pages/install.py",
+  "old": "\"command\": \"npm install -g veilfile\",\n     \"then\": \"then\", \"then_code\": \"veilfile login\"},",
+  "new": "\"command\": \"npm install -g veilfile\",\n     \"then\": \"Then run\", \"then_code\": \"veilfile login\"},",
+  "mode": "replace"
+ },
+ {
+  "id": "F003",
+  "group": "chapters",
+  "file": "backend/pages/install.py",
+  "old": "\"command\": \"pip install veilfile\",\n     \"then\": \"then\", \"then_code\": \"veilfile login\"},",
+  "new": "\"command\": \"pip install veilfile\",\n     \"then\": \"Then run\", \"then_code\": \"veilfile login\"},",
+  "mode": "replace"
+ },
+ {
+  "id": "F004",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Private file hosting for AI agents. Upload screenshots, logs, and bundles via REST or MCP.",
+  "new": "Veilfile hosts private files for AI agents. Upload files via REST or MCP.",
+  "mode": "replace"
+ },
+ {
+  "id": "F005",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Unguessable links that expire on schedule.",
+  "new": "Links are unguessable and expire on schedule.",
+  "mode": "replace"
+ },
+ {
+  "id": "F006",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Free to $12/mo.",
+  "new": "Plans cost $0 to $12 a month.",
+  "mode": "replace"
+ },
+ {
+  "id": "F007",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "No public repository, no bucket, no paste that lives forever.",
+  "new": "Nothing sits in a public repository, a bucket, or a paste that lives forever.",
+  "mode": "replace"
+ },
+ {
+  "id": "F008",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "The life of a file on Veilfile: your agent pushes it, gets an unguessable link and shares it; \"\n         \"when its days run out the link stops, then the file is deleted.",
+  "new": "An agent uploads a file and gets an unguessable link to share. \"\n         \"When its days run out, the link stops working and the file is deleted soon after.",
+  "mode": "replace"
+ },
+ {
+  "id": "F009",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Set up Veilfile: connect your agent to the MCP server at veilfile.com/mcp, install the command line \"\n         \"with npm or pip",
+  "new": "Connect your agent to the MCP server at veilfile.com/mcp, install the command-line tool \"\n         \"with npm or pip",
+  "mode": "replace"
+ },
+ {
+  "id": "F010",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Veilfile plans: Free ($0), Team ($4/month), Scale ($12/month).",
+  "new": "Veilfile has three plans: Free ($0), Team ($4/month), and Scale ($12/month).",
+  "mode": "replace"
+ },
+ {
+  "id": "F011",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Tax included.",
+  "new": "Prices include tax.",
+  "mode": "replace"
+ },
+ {
+  "id": "F012",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "What Veilfile promises: the link is the only way in, expired files are deleted from storage, \"\n         \"and uploads are scanned for secrets without logging contents.",
+  "new": "Veilfile promises that the link is the only way in, that expired files are deleted from storage, \"\n         \"and that file contents are never logged.",
+  "mode": "replace"
+ },
+ {
+  "id": "F014",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Notes from building Veilfile: launches, changes, pricing, and the reasoning behind each decision.",
+  "new": "Read notes on how Veilfile is built, including launches, changes, pricing, and the reasoning behind them.",
+  "mode": "replace"
+ },
+ {
+  "id": "F015",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Updated twice a month. ",
+  "new": "",
+  "mode": "replace"
+ },
+ {
+  "id": "F016",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "RSS available.",
+  "new": "An RSS feed is available.",
+  "mode": "replace"
+ },
+ {
+  "id": "F017",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Veilfile's terms: acceptable use, accounts and API keys, data retention, billing and refunds, \"\n         \"liability limits, and how to contact us.",
+  "new": "Veilfile's terms cover acceptable use, accounts and API keys, data retention, billing and refunds, \"\n         \"liability limits, and how to contact us.",
+  "mode": "replace"
+ },
+ {
+  "id": "F018",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "What Veilfile collects, why, how long files and metadata are kept, subprocessors, \"\n         \"and how to request access or deletion.",
+  "new": "Read what Veilfile collects and why, how long it keeps files and metadata, which subprocessors it uses, \"\n         \"and how to request access or deletion.",
+  "mode": "replace"
+ },
+ {
+  "id": "F019",
+  "group": "chapters",
+  "file": "backend/pages/registry.py",
+  "old": "Report a file on Veilfile that violates our terms. Email abuse@veilfile.com with the link \"\n         \"and a description. CSAM reports go to NCMEC first.",
+  "new": "Report a file that violates our terms by emailing abuse@veilfile.com with the link \"\n         \"and details. We report apparent child sexual exploitation to NCMEC.",
+  "mode": "replace"
+ },
+ {
+  "id": "F020",
+  "group": "chapters",
+  "file": "backend/templates/blog/index.html",
+  "old": "<p>Nothing here yet.</p>",
+  "new": "<p>The Journal has no posts yet.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F021",
+  "group": "chapters",
+  "file": "backend/templates/chapters/about.html",
+  "old": "A quiet place for what your agents make.</h1>",
+  "new": "A quiet place for what your agents make</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F022",
+  "group": "chapters",
+  "file": "backend/templates/chapters/about.html",
+  "old": "No public repository, no bucket to lock down, no paste that lives forever.",
+  "new": "Nothing sits in a public repository, a bucket to lock down, or a paste that lives forever.",
+  "mode": "replace"
+ },
+ {
+  "id": "F023",
+  "group": "chapters",
+  "file": "backend/templates/chapters/begin.html",
+  "old": "<p>In <code>~/.cursor/mcp.json</code>:</p>",
+  "new": "<p>Add this to <code>~/.cursor/mcp.json</code>:</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F024",
+  "group": "chapters",
+  "file": "backend/templates/chapters/begin.html",
+  "old": "<p>Add a custom connector with the address above, and sign in when it asks.</p>",
+  "new": "<p>In a Claude app, go to Customize, then Connectors, then Add custom connector, name it Veilfile and enter <code>https://veilfile.com/mcp</code> as its URL. If the dialog asks for an OAuth client, choose Register automatically, then sign in.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F025",
+  "group": "chapters",
+  "file": "backend/templates/chapters/begin.html",
+  "old": "Every other client, and each option in full: <a href=\"{% url 'docs-page' 'agent' %}\">agent setup, in the Docs</a>.",
+  "new": "The Docs cover every other client and each option in <a href=\"{% url 'docs-page' 'agent' %}\">agent setup</a>.",
+  "mode": "replace"
+ },
+ {
+  "id": "F026",
+  "group": "chapters",
+  "file": "backend/templates/chapters/begin.html",
+  "old": "Agents can read everything they need in one file: <a href=\"/llms.txt\">llms.txt</a>.",
+  "new": "Agents can read a plain-text guide in one file, <a href=\"/llms.txt\">llms.txt</a>.",
+  "mode": "replace"
+ },
+ {
+  "id": "F027",
+  "group": "chapters",
+  "file": "backend/templates/chapters/how.html",
+  "old": "Uploads are checked for anything shaped like a secret, and flagged.",
+  "new": "Veilfile scans each upload for known secret formats, such as API keys and tokens, and flags any match.",
+  "mode": "replace"
+ },
+ {
+  "id": "F028",
+  "group": "chapters",
+  "file": "backend/templates/chapters/plans.html",
+  "old": "Tax included. The price you see is the price you pay.",
+  "new": "Prices include tax. The price you see is the price you pay.",
+  "mode": "replace"
+ },
+ {
+  "id": "F029",
+  "group": "chapters",
+  "file": "backend/templates/chapters/plans.html",
+  "old": "Already subscribed? Switch between Team and Scale in the billing section of <a href=\"/app/\">your dashboard</a>; the change is prorated.",
+  "new": "If you already subscribe, switch between Team and Scale in the billing section of <a href=\"/app/\">your dashboard</a>. The change is prorated.",
+  "mode": "replace"
+ },
+ {
+  "id": "F030",
+  "group": "chapters",
+  "file": "backend/templates/chapters/promises.html",
+  "old": "No public list, nothing indexed, no addresses anyone could guess.",
+  "new": "Nothing is listed publicly or indexed, and no one can guess an address.",
+  "mode": "replace"
+ },
+ {
+  "id": "F031",
+  "group": "chapters",
+  "file": "backend/templates/chapters/promises.html",
+  "old": "<dt>We look only for the shapes of secrets.</dt>",
+  "new": "<dt>We flag secret-shaped text and never log contents</dt>",
+  "mode": "replace"
+ },
+ {
+  "id": "F032",
+  "group": "chapters",
+  "file": "backend/templates/chapters/promises.html",
+  "old": "Uploads are scanned for anything shaped like a key or a token, and a match is flagged by name. File contents are never logged.",
+  "new": "Veilfile scans the first 1 MiB of each upload for known key and token formats, and flags a match by name. Unless you ask for rejection, a flagged upload is still stored. File contents are never logged.",
+  "mode": "replace"
+ },
+ {
+  "id": "F033",
+  "group": "chapters",
+  "file": "backend/templates/chapters/promises.html",
+  "old": "<dt>Why not a gist?</dt>",
+  "new": "<dt>Why shouldn’t I use a gist?</dt>",
+  "mode": "replace"
+ },
+ {
+  "id": "F034",
+  "group": "chapters",
+  "file": "backend/templates/chapters/promises.html",
+  "old": "Fine for a snippet; wrong for a client’s failing screenshot.",
+  "new": "A gist suits a snippet but not a client’s failing screenshot.",
+  "mode": "replace"
+ },
+ {
+  "id": "X-chapters-promises_dt_stops",
+  "group": "chapters",
+  "file": "backend/templates/chapters/promises.html",
+  "old": "<dt>The link is the only way in.</dt>",
+  "new": "<dt>The link is the only way in</dt>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-chapters-promises_dt_stops_2",
+  "group": "chapters",
+  "file": "backend/templates/chapters/promises.html",
+  "old": "<dt>Gone means deleted.</dt>",
+  "new": "<dt>Gone means deleted</dt>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-chapters-rule4-threshold",
+  "group": "chapters",
+  "file": "backend/templates/chapters/threshold.html",
+  "old": "by the right eyes, and then let go.</h1>",
+  "new": "by the right eyes, and then let go</h1>",
+  "mode": "replace",
+  "note": "Design rule 4: no heading ends with a full stop, even a full sentence. No new words."
+ },
+ {
+  "id": "F112",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "description: Give an agent a Veilfile key: env var setup, curl upload examples, MCP connection, key rotation, and instant revocation.",
+  "new": "description: Connect Claude and other MCP clients to Veilfile, with setup for each client and what to do when a secret is flagged.",
+  "mode": "replace"
+ },
+ {
+  "id": "F113",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "The server exposes four tools: `upload_artifact`, `create_upload_url`, `list_artifacts`, `revoke_artifact`.",
+  "new": "The server exposes four tools: `upload_artifact`, `create_upload_url`, `list_artifacts`, and `revoke_artifact`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F114",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "Or in `~/.codex/config.toml`:",
+  "new": "Or add this to `~/.codex/config.toml`:",
+  "mode": "replace"
+ },
+ {
+  "id": "F115",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "In `~/.gemini/config/mcp_config.json` (Antigravity uses `serverUrl`):",
+  "new": "Add this to `~/.gemini/config/mcp_config.json`, where Antigravity uses `serverUrl`:",
+  "mode": "replace"
+ },
+ {
+  "id": "F116",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "If the variable is not expanded, paste the key value directly.",
+  "new": "If Antigravity does not expand the variable, paste the key value directly and keep that file out of any repository.",
+  "mode": "replace"
+ },
+ {
+  "id": "F117",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "In `~/.gemini/settings.json` (Gemini CLI uses `httpUrl` for Streamable HTTP):",
+  "new": "Add this to `~/.gemini/settings.json`, where Gemini CLI uses `httpUrl` for Streamable HTTP:",
+  "mode": "replace"
+ },
+ {
+  "id": "F118",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "In `~/.cursor/mcp.json` (Cursor expands `${env:...}`, so the raw key never sits in the file):",
+  "new": "Add this to `~/.cursor/mcp.json`, where Cursor expands `${env:...}` so the raw key never sits in the file:",
+  "mode": "replace"
+ },
+ {
+  "id": "F119",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "Or install in one click (uses the config above; you paste your own key in Cursor):",
+  "new": "Or install in one click. The link uses the config above, and you paste your own key in Cursor.",
+  "mode": "replace"
+ },
+ {
+  "id": "F120",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "In `.vscode/mcp.json` (remote entries need `\"type\": \"http\"`; VS Code prompts for the key once and stores it):",
+  "new": "Add this to `.vscode/mcp.json`, where remote entries need `\"type\": \"http\"` and VS Code prompts for the key once and stores it:",
+  "mode": "replace"
+ },
+ {
+  "id": "F121",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "In `~/.codeium/windsurf/mcp_config.json`:",
+  "new": "Add this to `~/.codeium/windsurf/mcp_config.json`:",
+  "mode": "replace"
+ },
+ {
+  "id": "F122",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "For never-host semantics, check `secret_flags` in every upload response. Call `revoke_artifact` (or `DELETE /api/v1/artifacts/<id>`) when it is non-empty.",
+  "new": "To stop hosting a flagged file, check `secret_flags` in every upload response. Call `revoke_artifact` (or `DELETE /api/v1/artifacts/<id>`) when it is non-empty.",
+  "mode": "replace"
+ },
+ {
+  "id": "F123",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "## No MCP? Use REST",
+  "new": "## Use REST without MCP",
+  "mode": "replace"
+ },
+ {
+  "id": "X-docs-claude-apps-section",
+  "group": "docs",
+  "file": "backend/docs/pages/agent.md",
+  "old": "",
+  "new": "## Claude apps\n\nThe Claude apps sign in with OAuth, so there is no key to paste.\n\n1. Open Customize, then Connectors, then Add custom connector.\n2. Give the connector a name, such as Veilfile, and enter `https://veilfile.com/mcp` as its MCP server URL.\n3. If the dialog asks for an OAuth client, choose Register automatically, because Veilfile does not support Claude's published identity. If it shows Advanced settings instead, leave the OAuth client ID and secret blank.\n4. Sign in to Veilfile and approve the connection.\n\nA Free Claude account can add one custom connector. On Team and Enterprise plans, an Owner adds the connector in Organization settings, under Connectors, and members then connect to it from Customize, then Connectors. Connectors added on the web or in Claude Desktop also work in the phone apps.\n\n",
+  "mode": "insert_before",
+  "anchor": "## When a secret is flagged\n"
+ },
+ {
+  "id": "F124",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "description: Every Veilfile endpoint: upload, list, revoke, keys, usage, billing, and the MCP server, with request and response shapes.",
+  "new": "description: This page documents the upload, list, revoke, and download endpoints, with request and response shapes and error codes.",
+  "mode": "replace"
+ },
+ {
+  "id": "F125",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "The `veilfile` command-line client gets you a key without pasting secrets: `pip install veilfile`, then `veilfile login` (browser approval flow), `veilfile logout`, and `veilfile status`.",
+  "new": "The `veilfile` command-line client gets you a key without pasting secrets. Install it with `pip install veilfile`, run `veilfile login` to approve in your browser, and use `veilfile logout` to revoke the key and `veilfile status` to check it.",
+  "mode": "replace"
+ },
+ {
+  "id": "F126",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "| `file` | yes | The file bytes. Max 25 MiB. |",
+  "new": "| `file` | yes | Send the file bytes. The maximum size is 25 MiB. |",
+  "mode": "replace"
+ },
+ {
+  "id": "F127",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "Whole days until expiry. Defaults to the plan max. Larger values are clamped to the plan max; a non-integer gets `400` `invalid_request`.",
+  "new": "Set the number of whole days until expiry. The default is the plan max. Larger values are clamped to the plan max; a non-integer gets `400` `invalid_request`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F128",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "Allowed types: png, jpg, jpeg, webp, gif, txt, md, log, json, har, pdf.",
+  "new": "The allowed file types are png, jpg, jpeg, webp, gif, txt, md, log, json, har, and pdf.",
+  "mode": "replace"
+ },
+ {
+  "id": "F129",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "Returns your workspace's artifacts, newest first,",
+  "new": "The endpoint returns your workspace's artifacts, newest first,",
+  "mode": "replace"
+ },
+ {
+  "id": "F130",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "Deletes the artifact at once.",
+  "new": "The endpoint deletes the artifact at once.",
+  "mode": "replace"
+ },
+ {
+  "id": "F131",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "Public. No auth. The token in the URL is the auth.",
+  "new": "This endpoint is public and needs no auth header. The token in the URL is the auth.",
+  "mode": "replace"
+ },
+ {
+  "id": "F132",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "Served with `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.",
+  "new": "A successful download carries `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F133",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "| 429 | `rate_limited` | Too many requests. Back off; see `Retry-After`. |",
+  "new": "You sent too many requests. Wait the number of seconds in `Retry-After`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F134",
+  "group": "docs",
+  "file": "backend/docs/pages/api.md",
+  "old": "Rate limit: 100 uploads per hour per credential, shared by REST and MCP uploads.",
+  "new": "The rate limit is 100 uploads per hour for each API key or connected app, and REST and MCP uploads share it.",
+  "mode": "replace"
+ },
+ {
+  "id": "F135",
+  "group": "docs",
+  "file": "backend/docs/pages/how-it-works.md",
+  "old": "description: Plans, TTLs, upload limits, secret scanning, and what happens to a file from upload to expiry and deletion. Storage caps and 402 behavior.",
+  "new": "description: Learn how Veilfile links expire, how uploads are scanned for secrets, and what each plan allows.",
+  "mode": "replace"
+ },
+ {
+  "id": "F136",
+  "group": "docs",
+  "file": "backend/docs/pages/how-it-works.md",
+  "old": "Anyone with the link can open the file, no login needed.",
+  "new": "Anyone with the link can open the file without logging in.",
+  "mode": "replace"
+ },
+ {
+  "id": "F137",
+  "group": "docs",
+  "file": "backend/docs/pages/how-it-works.md",
+  "old": "If it is non-empty and you want never-host semantics, revoke the upload: `DELETE /api/v1/artifacts/<id>`, or the `revoke_artifact` MCP tool.",
+  "new": "If it is non-empty and you do not want Veilfile to keep hosting the file, revoke the upload with `DELETE /api/v1/artifacts/<id>` or the `revoke_artifact` MCP tool.",
+  "mode": "replace"
+ },
+ {
+  "id": "F138",
+  "group": "docs",
+  "file": "backend/docs/pages/how-it-works.md",
+  "old": "- 100 uploads per hour per credential.",
+  "new": "- Each API key or connected app can make 100 uploads per hour.",
+  "mode": "replace"
+ },
+ {
+  "id": "F139",
+  "group": "docs",
+  "file": "backend/docs/pages/how-it-works.md",
+  "old": "Downloads send `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`. Nothing caches the bytes. Artifact URLs are never indexed.",
+  "new": "Downloads send `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, which ask caches not to keep the bytes and crawlers not to index the URL.",
+  "mode": "replace"
+ },
+ {
+  "id": "F140",
+  "group": "docs",
+  "file": "backend/docs/pages/index.md",
+  "old": "description: Start here: five-minute quickstart, agent key setup, how uploads and expiry work, and the full REST and MCP API reference.",
+  "new": "description: Start with the quickstart, then set up an agent key, learn how uploads and expiry work, and look up the upload, list, revoke, and download endpoints.",
+  "mode": "replace"
+ },
+ {
+  "id": "F141",
+  "group": "docs",
+  "file": "backend/docs/pages/index.md",
+  "old": "No public bucket to configure. Nothing to clean up.",
+  "new": "There is no public bucket to configure and nothing to clean up.",
+  "mode": "replace"
+ },
+ {
+  "id": "F142",
+  "group": "docs",
+  "file": "backend/docs/pages/index.md",
+  "old": "If you are an agent, skip the tour: [llms.txt](/llms.txt) is the machine-readable manual.",
+  "new": "If you are an agent, skip the tour: [llms.txt](/llms.txt) is the machine-readable manual.",
+  "mode": "unchanged"
+ },
+ {
+  "id": "F143",
+  "group": "docs",
+  "file": "backend/docs/pages/index.md",
+  "old": "New here? Start with the [Quickstart](/docs/quickstart/).",
+  "new": "If you're new here, start with the [Quickstart](/docs/quickstart/).",
+  "mode": "replace"
+ },
+ {
+  "id": "F144",
+  "group": "docs",
+  "file": "backend/docs/pages/index.md",
+  "old": "Reference for machines: [llms.txt](/llms.txt) is the agent manual. The full technical reference is",
+  "new": "The full technical reference is",
+  "mode": "replace"
+ },
+ {
+  "id": "F145",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "description: Sign up, verify your email, create a workspace, issue an API key, and upload your first artifact. Five minutes from signup to first URL.",
+  "new": "description: Sign up, verify your email, create an API key, and upload your first artifact in about five minutes.",
+  "mode": "replace"
+ },
+ {
+  "id": "F146",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "Three steps from signup to your first unguessable link.",
+  "new": "Three steps take you from signup to your first unguessable link.",
+  "mode": "replace"
+ },
+ {
+  "id": "F147",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "Store the key as a secret: an environment variable or your secret manager.",
+  "new": "Store the key as a secret in an environment variable or your secret manager.",
+  "mode": "replace"
+ },
+ {
+  "id": "F148",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "It takes effect immediately and persists in new terminals.",
+  "new": "It takes effect in this terminal at once.",
+  "mode": "replace"
+ },
+ {
+  "id": "F149",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "Swap in any file for `@screenshot.png`:",
+  "new": "Replace `@screenshot.png` with another file of an allowed type (see Limits below):",
+  "mode": "replace"
+ },
+ {
+  "id": "F150",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "- Allowed types: png, jpg, jpeg, webp, gif, txt, md, log, json, har, pdf.",
+  "new": "- The allowed file types are png, jpg, jpeg, webp, gif, txt, md, log, json, har, and pdf.",
+  "mode": "replace"
+ },
+ {
+  "id": "F151",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "- 100 uploads per hour per API key.",
+  "new": "- Each API key or connected app can make 100 uploads per hour.",
+  "mode": "replace"
+ },
+ {
+  "id": "F152",
+  "group": "docs",
+  "file": "backend/docs/pages/quickstart.md",
+  "old": "- Monthly upload quotas and hard storage caps per plan. An upload that would exceed the cap fails with `402 storage_cap_reached`.",
+  "new": "- Each plan has a monthly upload quota and a hard storage cap. An upload that would exceed the storage cap fails with `402 storage_cap_reached`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F013",
+  "group": "docs",
+  "file": "backend/pages/registry.py",
+  "old": "Start here: five-minute quickstart, agent key setup, how uploads and expiry work, \"\n         \"and the full REST and MCP API reference.",
+  "new": "Start with the quickstart, then set up an agent key, learn how uploads and expiry work, \"\n         \"and look up the upload, list, revoke, and download endpoints.",
+  "mode": "replace"
+ },
+ {
+  "id": "F035",
+  "group": "journal-llms",
+  "file": "backend/blog/feeds.py",
+  "old": "\"Notes on Veilfile: launches, changes, and build notes.\"",
+  "new": "\"The Veilfile Journal shares launches, changes, and notes on how Veilfile is built.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F036",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "A screenshot of what the agent just built.",
+  "new": "One saves a screenshot of what it just built.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F037",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "A log bundle from a run that failed at 2 a.m.",
+  "new": "Another saves a log bundle from a run that failed at 2 a.m.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F038",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "A HAR file from a debugging session.",
+  "new": "A third saves a HAR file from a debugging session.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F039",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "A public gist.",
+  "new": "It can post a public gist.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F040",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "A repo it probably should not be committing to.",
+  "new": "It can commit to a repo where the file probably does not belong.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F041",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "A chat upload that lives in scrollback forever.",
+  "new": "It can upload to a chat, where the file lives in scrollback forever.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F042",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "Private screenshots, meant for someone's eyes only, sitting in the open because the tooling made public the path of least resistance.",
+  "new": "Private screenshots, meant for someone's eyes only, sat in the open because the tooling made public the path of least resistance.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F043",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "Public by default, and then everyone acts surprised.",
+  "new": "The options are public by default, and then everyone acts surprised.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F044",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "Last week made the cost concrete. Around September 29, more than 13,000 images leaked to public GitHub in what people are calling the PixelLeak incident.",
+  "new": "On September 29, 2026, Glow Labs disclosed the PixelLeak incident, which made the cost concrete: AI coding agents had left more than 13,000 internal images in public GitHub repositories.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F045",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "Whoever holds the link can see the file. No one else can.",
+  "new": "Only someone who holds the link can see the file.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F046",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "Nothing is archived, nothing lingers.",
+  "new": "Deletion is automatic and cannot be undone.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F047",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "The API manual lives at veilfile.com/llms.txt and is written for machine readers.",
+  "new": "The agent guide lives at veilfile.com/llms.txt and is written for machine readers.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F048",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "Keys are issued per agent and can be revoked in one call.",
+  "new": "Keys belong to your account. A key can revoke itself in one call, and you can revoke any key from the dashboard.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F049",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "seven days on the free tier",
+  "new": "seven days on the Free plan",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F050",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "Uploads are verified by file contents, not by extension.",
+  "new": "Each upload needs an allowed file extension, and its contents are checked against that type.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F051",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "We run a monitored abuse@ address with a public reporting page, and verified email is required on every account, so there is always a reachable owner.",
+  "new": "We run a monitored abuse@ address with a public reporting page. We issue API keys only to accounts with a verified email, so every key has an owner we can reach.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "F052",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "The free plan covers 100 uploads a month.",
+  "new": "The Free plan covers 100 uploads a month.",
+  "mode": "covered",
+  "covered_by": "X-journal-llms-journal-full"
+ },
+ {
+  "id": "X-journal-llms-journal-full",
+  "group": "journal-llms",
+  "file": "backend/blog/posts/introducing-veilfile.md",
+  "old": "",
+  "new": "Agents stash files constantly. One saves a screenshot of what it just built. Another saves a log bundle from a run that failed at 2 a.m. A third saves a HAR file from a debugging session. The file needs to go somewhere a human can open it, and the agent has about three bad options. It can post a public gist. It can commit to a repo where the file probably does not belong. It can upload to a chat, where the file lives in scrollback forever.\n\nOn September 29, 2026, Glow Labs disclosed the PixelLeak incident, which made the cost concrete: AI coding agents had left more than 13,000 internal images in public GitHub repositories. Private screenshots, meant for someone's eyes only, sat in the open because the tooling made public the path of least resistance. That is the failure mode of the current options. The options are public by default, and then everyone acts surprised.\n\nWe are building Veilfile because the private option should be the easy one. You upload through a REST API or an MCP server. You get back a URL that is unguessable and expires on its own. Only someone who holds the link can see the file. When the time runs out, the file is deleted. Deletion is automatic and cannot be undone.\n\nIt is built for agents from the start, not adapted to them. The agent guide lives at veilfile.com/llms.txt and is written for machine readers. Keys belong to your account. A key can revoke itself in one call, and you can revoke any key from the dashboard. Expiry is set by your plan: seven days on the Free plan, up to a full year on paid plans.\n\nA file host open to the public has to take abuse seriously, so the screening runs before anything is stored. Each upload needs an allowed file extension, and its contents are checked against that type. Secrets pasted into uploads by accident get flagged. We run a monitored abuse@ address with a public reporting page. We issue API keys only to accounts with a verified email, so every key has an owner we can reach. Confirmed abuse is removed and reported.\n\nThe Free plan covers 100 uploads a month. Team is $4 a month: 2,000 uploads, 90-day expiry, 25 GB of storage. Scale is $12 a month: 10,000 uploads, year-long expiry, 100 GB. Prices include tax, everywhere in the world.\n\nStart at veilfile.com. The whole thing is designed so the next PixelLeak does not have to happen.\n",
+  "mode": "replace_body"
+ },
+ {
+  "id": "F153",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "A sanctioned place to put artifacts",
+  "new": "Veilfile gives agents a sanctioned place to put artifacts,",
+  "mode": "replace"
+ },
+ {
+  "id": "F154",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "instead of a public repo or\npasting secrets into chat.",
+  "new": "so they do not have to use a public repo or paste secrets into chat.",
+  "mode": "replace"
+ },
+ {
+  "id": "F155",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Base URL: `https://YOUR-DEPLOY` (replace with your deploy; local dev is\n`http://localhost:8000`).",
+  "new": "Base URL: `https://YOUR-DEPLOY`\nIf the base URL above still reads YOUR-DEPLOY, replace it with the address of your own deploy. Local development uses `http://localhost:8000`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F156",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": " (plus `ttl_adjusted: true`\n   whenever the applied TTL differs from what you sent: above-max values are\n   clamped down and sub-1 values are clamped up to 1 day; a `ttl_days` that is\n   not a whole number gets `400` `invalid_request`; plus a `warning` string\n   only when `secret_flags` is non-empty).",
+  "new": ". The response adds `ttl_adjusted: true`\n   whenever the applied TTL differs from what you sent: above-max values are\n   clamped down and sub-1 values are clamped up to 1 day. A `ttl_days` that is\n   not a whole number gets `400` `invalid_request`. The response adds a\n   `warning` string only when `secret_flags` is non-empty.",
+  "mode": "replace"
+ },
+ {
+  "id": "F157",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "multipart upload (`file`, optional `ttl_days`, `on_secret`); max 25 MiB; allowed types: png, jpg, jpeg, webp, gif, txt, md, log, json, har, pdf.",
+  "new": "upload a file as multipart form data (`file`, optional `ttl_days`, `on_secret`). The maximum size is 25 MiB. The allowed types are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf.",
+  "mode": "replace"
+ },
+ {
+  "id": "F158",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "minted by `create_upload_url` (no auth; the token is the auth).",
+  "new": "minted by `create_upload_url`. It needs no auth header, because the token authorizes the request.",
+  "mode": "replace"
+ },
+ {
+  "id": "F159",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "download; public, no auth (the 256-bit token is the auth); images, PDF and `.txt`/`.log`/`.md` inline, everything else (JSON, HAR) as an attachment; 404 when expired/revoked, 503 with `Retry-After` during a storage outage.",
+  "new": "download a file. It is public and needs no auth, because the 256-bit token authorizes the request. Images, PDF and `.txt`/`.log`/`.md` files display inline, and everything else (JSON, HAR) downloads as an attachment. An expired or revoked file returns 404, and a storage outage returns 503 with `Retry-After`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F160",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Served with `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`:\ntelling caches not to store the bytes and crawlers not to index them.",
+  "new": "The response carries `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, which ask caches not to store the bytes and crawlers not to index them.",
+  "mode": "replace"
+ },
+ {
+  "id": "F161",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Optional `limit` (1 to 200) and `cursor`; the next page is in the `X-Next-Cursor` and `Link: rel=\"next\"` headers.",
+  "new": "It accepts an optional `limit` (1 to 200) and `cursor`. The `X-Next-Cursor` and `Link: rel=\"next\"` headers point to the next page.",
+  "mode": "replace"
+ },
+ {
+  "id": "F162",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "revoke early (key auth); 204.",
+  "new": "revoke early (key auth). It returns 204 on success.",
+  "mode": "replace"
+ },
+ {
+  "id": "F163",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "plan, monthly uploads, key and storage meters (key or session auth).",
+  "new": "return the plan, the monthly upload count, and the key and storage meters (key or session auth).",
+  "mode": "replace"
+ },
+ {
+  "id": "F164",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "MCP server (key auth): `initialize`, `notifications/initialized`, `ping`, `tools/list`, `tools/call`.",
+  "new": "accept MCP requests (key auth). The methods are `initialize`, `notifications/initialized`, `ping`, `tools/list` and `tools/call`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F165",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "`/api/v1/billing/*`: dashboard session auth only (an API key may list keys and revoke itself).",
+  "new": "`/api/v1/billing/*` need dashboard session auth. An API key may list keys and revoke itself.",
+  "mode": "replace"
+ },
+ {
+  "id": "F166",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "liveness probe, `200 {\"status\":\"ok\"}`.",
+  "new": "check liveness. It returns `200 {\"status\":\"ok\"}`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F167",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Pass as `Authorization: Bearer vlf_...`.",
+  "new": "Pass a key as `Authorization: Bearer vlf_...`.",
+  "mode": "replace"
+ },
+ {
+  "id": "F168",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Uploads are secret-scanned on arrival (flags returned, never blocking by default). Pass `on_secret=reject` per upload (`flag` or `reject`, case-insensitive; anything else is `400` `invalid_request`) to reject flagged files with `400` (`secret_detected`) instead of storing them. Never upload credentials on purpose; `reject` is the recommended setting. Flagged responses include `secret_flag_locations` (`{flag: [{line, offset}]}`, first 20 per flag; `secret_flag_locations_truncated: true` when capped); AWS secret access keys are detected independently of key IDs.",
+  "new": "Uploads are secret-scanned on arrival, and flags are returned without blocking by default. Pass `on_secret=reject` per upload to reject flagged files with `400` (`secret_detected`) instead of storing them. The `on_secret` values `flag` and `reject` are case-insensitive, and anything else is `400` `invalid_request`. Never upload credentials on purpose; `reject` is the recommended setting. Flagged responses include `secret_flag_locations` as `{flag: [{line, offset}]}`, with the first 20 locations per flag. When a flag has more than 20 locations, the response also sets `secret_flag_locations_truncated: true`. AWS secret access keys are detected independently of key IDs.",
+  "mode": "replace"
+ },
+ {
+  "id": "F169",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Limits: 100 uploads/hour per credential (shared by REST and MCP uploads); plan monthly caps (Free 100/mo, Team $4 2,000/mo, Scale $12 10,000/mo) counting successful uploads only (rejected 4xx uploads never consume quota); hard storage caps (Free 1 GB, Team 25 GB, Scale 100 GB).",
+  "new": "Upload rate limit: 100 uploads/hour per credential (shared by REST and MCP uploads)\nMonthly upload caps: Free 100/mo, Team $4 2,000/mo, Scale $12 10,000/mo\nHard storage caps: Free 1 GB, Team 25 GB, Scale 100 GB\nOnly successful uploads count toward the monthly cap, and rejected 4xx uploads never consume quota.",
+  "mode": "replace"
+ },
+ {
+  "id": "F170",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "- Plan TTL maxima: Free 7 days, Team 90 days, Scale 365 days.",
+  "new": "- Plan TTL maxima: Free 7 days, Team 90 days, Scale 365 days",
+  "mode": "replace"
+ },
+ {
+  "id": "F171",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "A flagged upload IS stored and its link works.",
+  "new": "A flagged upload is stored, and its link works.",
+  "mode": "replace"
+ },
+ {
+  "id": "F172",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Reports of child sexual abuse material are\nprioritized above everything else and go to NCMEC (the National Center for\nMissing and Exploited Children), as federal law requires.",
+  "new": "Reports of child sexual abuse material are\nprioritized above everything else. Confirmed abusive content is removed, and\napparent child sexual exploitation is reported to the National Center for\nMissing and Exploited Children (NCMEC), as federal law requires.",
+  "mode": "replace"
+ },
+ {
+  "id": "F173",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Keys are issued from the dashboard (`POST /api/v1/keys` with a signed-in\nsession; an API key gets `403 session_required`) or by `veilfile login` (the\n",
+  "new": "Keys are issued from the dashboard (`POST /api/v1/keys` with a signed-in\nsession) or by `veilfile login`, which uses the device flow. An API key that\ncalls `POST /api/v1/keys` gets `403 session_required`. ",
+  "mode": "replace"
+ },
+ {
+  "id": "F174",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "device flow; those keys count toward the plan key cap (Free 1 key, Team 5\nkeys, Scale unlimited keys), and at the cap the consent page asks which key\nto replace). Rotate by",
+  "new": "Every active key counts toward the plan key cap (Free 1 key, Team 5\nkeys, Scale unlimited keys). At the cap, the `veilfile login` consent page asks\nwhich key to replace. Rotate by",
+  "mode": "replace"
+ },
+ {
+  "id": "F175",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Full reference: https://veilfile.com/docs/api/. Human-readable docs (quickstart, agent setup,\nhow it works, API): https://veilfile.com/docs/.",
+  "new": "Full reference: https://veilfile.com/docs/api/\nHuman-readable docs (quickstart, agent setup, how it works, API): https://veilfile.com/docs/",
+  "mode": "replace"
+ },
+ {
+  "id": "X-journal-llms-llms-decoded",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "enforced on the DECODED bytes",
+  "new": "enforced on the decoded bytes",
+  "mode": "replace"
+ },
+ {
+  "id": "X-journal-llms-llms-not",
+  "group": "journal-llms",
+  "file": "docs/llms.txt",
+  "old": "Revoking a key does NOT invalidate download links",
+  "new": "Revoking a key does not invalidate download links",
+  "mode": "replace"
+ },
+ {
+  "id": "F053",
+  "group": "forms-device-errors",
+  "file": "backend/drop_core/email_verification.py",
+  "old": "\"Your Veilfile email address is being changed\",",
+  "new": "\"Someone asked to change your Veilfile email address\",",
+  "mode": "replace"
+ },
+ {
+  "id": "F065",
+  "group": "forms-device-errors",
+  "file": "backend/drop_core/oauth.py",
+  "old": "            description = getattr(context.get(\"error\"), \"description\", None) or \"This request is incomplete\"\n            return self._error_page(\n                \"Invalid request\",\n                f\"{description.rstrip('.')}. Nothing was authorized. Go back to the app and start again.\",",
+  "new": "            return self._error_page(\n                \"Invalid request\",\n                \"The request from the app is incomplete or not valid. Nothing was authorized. Go back to the app and start again.\",",
+  "mode": "replace"
+ },
+ {
+  "id": "F054",
+  "group": "forms-device-errors",
+  "file": "backend/drop_core/throttle.py",
+  "old": "\"Too many password reset requests from this network or for this \"\n        \"address.\",",
+  "new": "\"Password reset has been requested too many times from this network or for this \"\n        \"address.\",",
+  "mode": "replace"
+ },
+ {
+  "id": "F055",
+  "group": "forms-device-errors",
+  "file": "backend/drop_core/throttle.py",
+  "old": "\"One went out a moment ago. Check your inbox and your spam folder.\",",
+  "new": "\"A verification email went out a moment ago. Check your inbox and your spam folder.\",",
+  "mode": "replace"
+ },
+ {
+  "id": "F066",
+  "group": "forms-device-errors",
+  "file": "backend/drop_core/views.py",
+  "old": "\"Artifact temporarily unavailable. Try again shortly.\",",
+  "new": "\"This file is temporarily unavailable. Try again in about 30 seconds.\",",
+  "mode": "replace"
+ },
+ {
+  "id": "F195",
+  "group": "forms-device-errors",
+  "file": "backend/pages/catalog.py",
+  "old": "\"Invalid username, email, or password. Try again.\"",
+  "new": "\"The username, email, or password is incorrect. Try again.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F103",
+  "group": "forms-device-errors",
+  "file": "backend/pages/errors.py",
+  "old": "    \"404.html\": (\"Not found.\", \"There is nothing at this address.\"),",
+  "new": "    \"404.html\": (\"Not found\", \"There is nothing at this address. Check it for a typo.\"),",
+  "mode": "replace"
+ },
+ {
+  "id": "F104",
+  "group": "forms-device-errors",
+  "file": "backend/pages/errors.py",
+  "old": "    \"403.html\": (\"Not allowed.\", \"You do not have access to this page.\"),",
+  "new": "    \"403.html\": (\"Not allowed\", \"You do not have access to this page. If you expected to, sign in with the account that does.\"),",
+  "mode": "replace"
+ },
+ {
+  "id": "F105",
+  "group": "forms-device-errors",
+  "file": "backend/pages/errors.py",
+  "old": "(\"Form not sent.\", \"Go back,",
+  "new": "(\"Form not sent\", \"Go back,",
+  "mode": "replace"
+ },
+ {
+  "id": "F106",
+  "group": "forms-device-errors",
+  "file": "backend/pages/errors.py",
+  "old": "GONE_WORDS = (\"Nothing here.\", \"If this link was shared with you, its moment may have passed.\")",
+  "new": "GONE_WORDS = (\"Nothing here\", \"This link does not lead to a file. If someone shared it with you, ask them for a new link.\")",
+  "mode": "replace"
+ },
+ {
+  "id": "F107",
+  "group": "forms-device-errors",
+  "file": "backend/templates/403.html",
+  "old": "<h1 class=\"chapter__title\">Not allowed.</h1>",
+  "new": "<h1 class=\"chapter__title\">Not allowed</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F108",
+  "group": "forms-device-errors",
+  "file": "backend/templates/403_csrf.html",
+  "old": "<h1 class=\"chapter__title\">Form not sent.</h1>",
+  "new": "<h1 class=\"chapter__title\">Form not sent</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F109",
+  "group": "forms-device-errors",
+  "file": "backend/templates/404.html",
+  "old": "<h1 class=\"chapter__title\">Nothing here.</h1>",
+  "new": "<h1 class=\"chapter__title\">Nothing here</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F110",
+  "group": "forms-device-errors",
+  "file": "backend/templates/404.html",
+  "old": "<p>If this link was shared with you, its moment may have passed.</p>",
+  "new": "<p>This link does not lead to a file. If someone shared it with you, ask them for a new link.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F111",
+  "group": "forms-device-errors",
+  "file": "backend/templates/404.html",
+  "old": "<h1 class=\"chapter__title\">Not found.</h1>",
+  "new": "<h1 class=\"chapter__title\">Not found</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-forms-device-errors-device_consent-copy",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/device_consent.html",
+  "old": "<p>A terminal is asking for an API key to your workspace.</p>\n<p class=\"device-warning\"><strong>Only approve if you just ran <code>veilfile login</code> yourself</strong> and the code below matches the one in your terminal. If someone sent you this link or asked you to approve it, click Deny: approving would give them access to your files.</p>",
+  "new": "<p>A terminal is asking for an API key to your workspace. Approving gives it that key.</p>\n<p class=\"device-warning\"><strong>Approve only if you just ran <code>veilfile login</code> yourself</strong> and the code below matches the one in your terminal. If someone else sent you this link or asked you to approve it, choose Deny. Denying issues no key.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F067",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/device_denied.html",
+  "old": "<p>Denied. No key was issued. If you didn't start this request, rotate your keys from the dashboard.</p>",
+  "new": "<p>You denied this request, so no key was issued and nothing in your account changed.</p>\n<p>If you did not start this login, you can close this window. To check your account, review your API keys in the dashboard.</p>",
+  "mode": "covered",
+  "covered_by": "X-forms-device-errors-device_denied-copy"
+ },
+ {
+  "id": "X-forms-device-errors-device_denied-copy",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/device_denied.html",
+  "old": "<p>Denied. No key was issued. If you didn't start this request, rotate your keys from the dashboard.</p>",
+  "new": "<p>You denied this request, so no key was issued and nothing in your account changed.</p>\n<p>If you did not start this login, you can close this window. To check your account, review your API keys in the dashboard.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-forms-device-errors-device_enter_code-copy",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/device_enter_code.html",
+  "old": "{% if error %}\n<p>This code doesn't match a pending login. Codes expire after 10 minutes and work once, so run <code>veilfile login</code> again for a fresh one, or re-type the code your terminal shows.</p>\n{% else %}\n<p id=\"device-intro\">Enter the code shown in your terminal. Only enter a code from a <code>veilfile login</code> you ran yourself.</p>\n{% endif %}",
+  "new": "{% if error %}\n<p>This code does not match a pending login. Codes expire after 10 minutes and work only once. Type the code your terminal shows again, or run <code>veilfile login</code> for a fresh one.</p>\n{% else %}\n<p id=\"device-intro\">Enter the code shown in your terminal. Enter only a code from a <code>veilfile login</code> that you started yourself, just now.</p>\n{% endif %}",
+  "mode": "replace"
+ },
+ {
+  "id": "X-forms-device-errors-device_error-copy",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/device_error.html",
+  "old": "<h1>{{ error_title }}</h1>\n<p>{{ error_message }}</p>",
+  "new": "<h1>{{ error_title }}</h1>\n<p>{{ error_message }}</p>",
+  "mode": "unchanged"
+ },
+ {
+  "id": "F068",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/device_success.html",
+  "old": "<p>Approved. Return to your terminal: it receives its key on its next check, within a few seconds. You can close this window.</p>",
+  "new": "<p>You approved this login. Return to your terminal: it receives its key on its next check, within a few seconds. You can close this window.</p>",
+  "mode": "covered",
+  "covered_by": "X-forms-device-errors-device_success-copy"
+ },
+ {
+  "id": "X-forms-device-errors-device_success-copy",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/device_success.html",
+  "old": "<p>Approved. Return to your terminal: it receives its key on its next check, within a few seconds. You can close this window.</p>\n{% if replace_key %}\n<p>When it does, <strong>{{ replace_key.name }}</strong> (<code>{{ replace_key.key_prefix }}…</code>) is revoked.</p>\n{% endif %}\n<p>If the terminal already stopped waiting, no key is created. Run veilfile login again.</p>",
+  "new": "<p>You approved this login. Return to your terminal: it receives its key on its next check, within a few seconds. You can close this window.</p>\n{% if replace_key %}\n<p>When it does, <strong>{{ replace_key.name }}</strong> (<code>{{ replace_key.key_prefix }}…</code>) is revoked.</p>\n{% endif %}\n<p>If the terminal already stopped waiting, no key is created, so run <code>veilfile login</code> again. You can revoke the key at any time in the dashboard.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F069",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/includes/grant_summary.html",
+  "old": "<p>Approving creates an API key for your workspace. Whoever holds it can:</p>",
+  "new": "<p>Approving creates an API key for your workspace. Whoever holds the key can do these things:</p>",
+  "mode": "covered",
+  "covered_by": "X-forms-device-errors-grant_summary-block"
+ },
+ {
+  "id": "F070",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/includes/grant_summary.html",
+  "old": "<li>List the workspace's API keys and revoke any of them</li>",
+  "new": "<li>List the workspace's API keys and revoke only the key in use</li>",
+  "mode": "covered",
+  "covered_by": "X-forms-device-errors-grant_summary-block"
+ },
+ {
+  "id": "F071",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/includes/grant_summary.html",
+  "old": "    <li>Disconnect every app connected to your account (OAuth / MCP clients)</li>\n",
+  "new": "",
+  "mode": "covered",
+  "covered_by": "X-forms-device-errors-grant_summary-block"
+ },
+ {
+  "id": "X-forms-device-errors-grant_summary-block",
+  "group": "forms-device-errors",
+  "file": "backend/templates/device/includes/grant_summary.html",
+  "old": "<div class=\"device-grant\">\n  <p>Approving creates an API key for your workspace. Whoever holds it can:</p>\n  <ul>\n    <li>Upload files and create share links</li>\n    <li>List every artifact in the workspace and download each one through its link</li>\n    <li>Revoke artifacts</li>\n    <li>List the workspace's API keys and revoke any of them</li>\n    <li>Disconnect every app connected to your account (OAuth / MCP clients)</li>\n    <li>See the account email and plan usage</li>\n  </ul>\n  <p class=\"device-grant__foot\">\n    The key does not expire: it works until you revoke it in the dashboard.\n    {% if key_cap %}It counts toward your plan's limit of {{ key_cap }} API key{{ key_cap|pluralize }}.{% endif %}\n    It is sent only to the terminal; this browser never sees it.\n  </p>\n</div>",
+  "new": "<div class=\"device-grant\">\n  <p>Approving creates an API key for your workspace. Whoever holds the key can do these things:</p>\n  <ul>\n    <li>Upload files and create share links</li>\n    <li>List every artifact in the workspace and download each one through its link</li>\n    <li>Revoke artifacts</li>\n    <li>List the workspace's API keys and revoke only the key in use</li>\n    <li>See the account email and plan usage</li>\n  </ul>\n  <p class=\"device-grant__foot\">\n    It cannot create other API keys, disconnect your apps, or change your billing or account settings.\n    The key does not expire: it works until you revoke it in the dashboard.\n    {% if key_cap %}It counts toward your plan's limit of {{ key_cap }} API key{{ key_cap|pluralize }}.{% endif %}\n    It is sent only to the terminal; this browser never sees it.\n  </p>\n</div>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-forms-device-errors-authorize-copy",
+  "group": "forms-device-errors",
+  "file": "backend/templates/oauth/authorize.html",
+  "old": "<p>An unverified third-party app is asking for access to your workspace.</p>\n<div class=\"consent__app\">\n{# client_name is attacker-controlled: auto-escaped, framed as unverified #}\n<p class=\"label consent__label\">App</p>\n<p class=\"consent__name\">{{ application.name|default:\"Unnamed app\" }}</p>\n<p><strong>Unverified app:</strong> this name is what the app claims to be, not something we checked.</p>\n<p>It will send you back to <code>{{ redirect_host }}</code> after you decide.</p>",
+  "new": "<p>An unverified third-party app is asking for access to your workspace. Authorize it only if you started this connection yourself, just now, from an app you trust.</p>\n<div class=\"consent__app\">\n{# client_name is attacker-controlled: auto-escaped, framed as unverified #}\n<p class=\"label consent__label\">App</p>\n<p class=\"consent__name\">{{ application.name|default:\"Unnamed app\" }}</p>\n<p><strong>Unverified app:</strong> this name is what the app claims to be, not something we checked.</p>\n<p>It will send you back to <code>{{ redirect_host }}</code> after you decide. If you deny, the app gets no access.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F072",
+  "group": "forms-device-errors",
+  "file": "backend/templates/oauth/includes/grant_summary_oauth.html",
+  "old": "Approving lets the app act on your workspace. It can:",
+  "new": "Approving lets the app act on your workspace. It can do these things:",
+  "mode": "covered",
+  "covered_by": "X-forms-device-errors-grant_summary_oauth-block"
+ },
+ {
+  "id": "X-forms-device-errors-grant_summary_oauth-block",
+  "group": "forms-device-errors",
+  "file": "backend/templates/oauth/includes/grant_summary_oauth.html",
+  "old": "<div class=\"grant\">\n<p class=\"grant__head\">Approving lets the app act on your workspace. It can:</p>\n<ul>\n<li>Upload files and create share links, list your artifacts, and revoke them</li>\n<li>See your plan, usage, and account email address</li>\n</ul>\n<p class=\"grant__head\">It cannot create, list, or revoke API keys, disconnect your other apps, or touch billing or your account settings.</p>\n<ul>\n<li>Access lasts until you disconnect it: the app renews its access while in use, and it lapses after about two weeks unused</li>\n<li>Disconnect it any time under <strong>Connected apps</strong> on your dashboard</li>\n</ul>\n</div>",
+  "new": "<div class=\"grant\">\n<p class=\"grant__head\">Approving lets the app act on your workspace. It can do these things:</p>\n<ul>\n<li>Upload files and create share links, list your artifacts, and revoke them</li>\n<li>See your plan, usage, and account email address</li>\n</ul>\n<p class=\"grant__head\">It cannot create, list, or revoke API keys, disconnect your other apps, or touch billing or your account settings.</p>\n<ul>\n<li>Access lasts until you disconnect it: the app renews its access while in use, and it lapses after about two weeks unused</li>\n<li>Disconnect it any time under <strong>Connected apps</strong> on your dashboard</li>\n</ul>\n</div>",
+  "mode": "replace"
+ },
+ {
+  "id": "F056",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/checkout_confirm.html",
+  "old": "Not now? <a class=\"label interactive\" href=\"/app/\">Go to your dashboard</a>",
+  "new": "You can subscribe later. <a class=\"label interactive\" href=\"/app/\">Go to your dashboard</a>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-forms-device-errors-checkout_confirm-heading--not-a-finding-",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/checkout_confirm.html",
+  "old": "<h1>Subscribe to the {{ plan_name }} plan (${{ price_usd }}/mo, tax included).</h1>",
+  "new": "<h1>Subscribe to the {{ plan_name }} plan (${{ price_usd }}/mo, tax included)</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F057",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/email_change_notice_email.txt",
+  "old": "Someone signed in to the Veilfile account \"{{ username }}\" asked to change",
+  "new": "Someone who is signed in to the Veilfile account \"{{ username }}\" asked to change",
+  "mode": "replace"
+ },
+ {
+  "id": "F058",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/login.html",
+  "old": "<p>Private, ephemeral artifact hosting for AI agents.</p>",
+  "new": "<p>Veilfile hosts your agents’ files privately and deletes them after they expire.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F059",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/login.html",
+  "old": "message=\"Invalid username, email, or password. Try again.\"",
+  "new": "message=\"The username, email, or password is incorrect. Try again.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F060",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/login.html",
+  "old": "No account? <a class=\"label interactive\" href=\"{% url 'signup' %}",
+  "new": "Do you need an account? <a class=\"label interactive\" href=\"{% url 'signup' %}",
+  "mode": "replace"
+ },
+ {
+  "id": "F061",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/login.html",
+  "old": "Forgot password?</a>",
+  "new": "Forgot password?</a>",
+  "mode": "unchanged"
+ },
+ {
+  "id": "F062",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/signup.html",
+  "old": "Already have an account? <a class=\"label interactive\"",
+  "new": "Do you already have an account? <a class=\"label interactive\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F063",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/verify_email.html",
+  "old": "Verification link sent. Check your inbox.",
+  "new": "We sent the verification link. Check your inbox.",
+  "mode": "replace"
+ },
+ {
+  "id": "F064",
+  "group": "forms-device-errors",
+  "file": "backend/templates/registration/verify_email_invalid.html",
+  "old": "{% block title %}Link expired | Veilfile{% endblock %}\n{% block meta %}<meta name=\"robots\" content=\"noindex\">{% endblock %}\n{% block form_page %}\n<h1>Link expired</h1>",
+  "new": "{% block title %}Link not valid | Veilfile{% endblock %}\n{% block meta %}<meta name=\"robots\" content=\"noindex\">{% endblock %}\n{% block form_page %}\n<h1>Link not valid</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F073",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/billing_page.py",
+  "old": "Choose one of the plans on this page.",
+  "new": "That plan isn't available. Choose one of the plans on this page.",
+  "mode": "replace"
+ },
+ {
+  "id": "F074",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/billing_page.py",
+  "old": "\"canceled\": \"Cancelled\",",
+  "new": "\"canceled\": \"Canceled\",",
+  "mode": "replace"
+ },
+ {
+  "id": "F075",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/billing_page.py",
+  "old": "The pending switch was cancelled. You stay on the {name} plan.",
+  "new": "The pending switch was canceled. You stay on the {name} plan.",
+  "mode": "replace"
+ },
+ {
+  "id": "F076",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/billing_page.py",
+  "old": "return f\"Switched to the {name} plan.\"",
+  "new": "return f\"You're now on the {name} plan.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F077",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/billing_page.py",
+  "old": "{NOT_CONFIGURED if answer.status == 503 else STRIPE_FAILED} Reference: {ref}",
+  "new": "{NOT_CONFIGURED if answer.status == 503 else STRIPE_FAILED} Reference: {ref}",
+  "mode": "unchanged"
+ },
+ {
+  "id": "F078",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/keys.py",
+  "old": "messages.success(request, \"Key revoked.\")",
+  "new": "messages.success(request, \"The key is revoked.\")",
+  "mode": "replace"
+ },
+ {
+  "id": "F079",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/keys.py",
+  "old": "messages.success(request, f\"{app['name']} disconnected.\")",
+  "new": "messages.success(request, f\"{app['name']} is disconnected.\")",
+  "mode": "replace"
+ },
+ {
+  "id": "F080",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/views.py",
+  "old": "REVOKED = \"File revoked.\"",
+  "new": "REVOKED = \"The file is revoked.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F081",
+  "group": "dashboard-frames",
+  "file": "backend/dashboard/views.py",
+  "old": "(\"File revoked. Its link has stopped working, but storage did not confirm the delete. \"",
+  "new": "(\"The file is revoked. Its link has stopped working, but storage did not confirm the delete. \"",
+  "mode": "replace"
+ },
+ {
+  "id": "F176",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Entry(\"mark\", \"The Let go mark on its own, in the current text color.\"",
+  "new": "Entry(\"mark\", \"This is the Let go mark on its own, in the current text color.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F177",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Top left on every page: the mark alone, linking to the threshold.",
+  "new": "The mark sits alone at the top left of every page and links to the threshold.",
+  "mode": "replace"
+ },
+ {
+  "id": "F178",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Top right on every page: MENU and its three groups, here signed out with About current. Inside the dashboard group 1 lists its five sections, \"\n                      \"group 2 is Docs, Journal and Site and ends with a Sign out button (a form that posts the page's token), here with Files current.\"",
+  "new": "The menu sits at the top right of every page, shown here signed out with About current. Inside the dashboard, group 1 lists its five sections, \"\n                      \"and group 2 holds Docs, Journal and Site and ends with a Sign out button (a form that posts the page's token), shown here with Files current.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F179",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "The bottom corners on every page: the appearance switch bottom left and the motion switch (FX) bottom right, \"\n                          \"each alone there (a corner passes show); shown here together, with no show.\"",
+  "new": "The appearance switch sits at the bottom left of every page and the motion switch (FX) at the bottom right, \"\n                          \"each alone in its corner (a corner passes show). Here they are shown together, with no show.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F180",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "One plan on the Plans chapter, here Team: name, price, limits and a link into sign-up.",
+  "new": "Each plan on the Plans chapter shows its name, price, limits and a link into sign-up. Here the plan is Team.",
+  "mode": "replace"
+ },
+ {
+  "id": "F181",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "The threshold after Come in: MCP, npm and pip, Copy, and the line after Copy.",
+  "new": "After Come in, the threshold shows tabs for MCP, npm and pip, a Copy button, and the line after Copy.",
+  "mode": "replace"
+ },
+ {
+  "id": "F182",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "A code snippet on Begin, in the Docs and in the Journal: a scroll box with Copy in a row of its own along its top, at the right, so the code keeps the whole width.",
+  "new": "Begin, the Docs and the Journal show a code snippet in a scroll box, with Copy in a row of its own along the top at the right, so the code keeps the whole width.",
+  "mode": "replace"
+ },
+ {
+  "id": "F183",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "The dashboard's Files section: a stacked row for each file",
+  "new": "The dashboard's Files section shows a stacked row for each file",
+  "mode": "replace"
+ },
+ {
+  "id": "F184",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Shown with five files",
+  "new": "It appears with five files",
+  "mode": "replace"
+ },
+ {
+  "id": "F185",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "document: links to its sections, left out when there are fewer than two.",
+  "new": "document shows links to its sections, and leaves them out when there are fewer than two.",
+  "mode": "replace"
+ },
+ {
+  "id": "F186",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "The end of a Journal post or a Docs page: the page before and the page after, ",
+  "new": "The end of a Journal post or a Docs page links to the page before and the page after. ",
+  "mode": "replace"
+ },
+ {
+  "id": "F187",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "here the neighbours of How it works.",
+  "new": "Here they are the neighbors of How it works.",
+  "mode": "replace"
+ },
+ {
+  "id": "F188",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "index: each page's title, date and description; a Docs page has no date.",
+  "new": "index list each page's title, date and description, though a Docs page has no date.",
+  "mode": "replace"
+ },
+ {
+  "id": "F189",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Give an agent a Veilfile key: env var setup, curl upload examples, MCP connection, key rotation.",
+  "new": "Connect an agent to Veilfile over MCP, or over REST when it has no MCP.",
+  "mode": "replace"
+ },
+ {
+  "id": "F190",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "One form field on every form page: a mono label above a hairline input, the help line above the input and the errors under it.",
+  "new": "Each form field has a mono label above a hairline input, with the help line above the input and the errors under it.",
+  "mode": "replace"
+ },
+ {
+  "id": "F191",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Shown blank, with a help line,",
+  "new": "The field appears blank, with a help line,",
+  "mode": "replace"
+ },
+ {
+  "id": "F192",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "An account with this email address already exists.",
+  "new": "An account with this email address already exists.",
+  "mode": "unchanged"
+ },
+ {
+  "id": "F193",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "The top of a form that has something to say as a whole: a summary with a solid ink line down its left, the mark Check this and each sentence in full ink.",
+  "new": "A form that has something to say as a whole opens with a summary that has a solid ink line down its left, the mark Check this and each sentence in full ink.",
+  "mode": "replace"
+ },
+ {
+  "id": "F194",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Shown with one sentence of the page's own, and with the form's errors.",
+  "new": "It appears with one sentence of the page's own and with the form's errors.",
+  "mode": "replace"
+ },
+ {
+  "id": "F196",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "Your current password is incorrect.",
+  "new": "Your current password is incorrect.",
+  "mode": "unchanged"
+ },
+ {
+  "id": "F197",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "The dashboard's Overview: one figure against its limit,",
+  "new": "The dashboard's Overview shows one figure against its limit,",
+  "mode": "replace"
+ },
+ {
+  "id": "F198",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "\"Shown with a limit, as a size,",
+  "new": "\"It appears with a limit, as a size,",
+  "mode": "replace"
+ },
+ {
+  "id": "F199",
+  "group": "dashboard-frames",
+  "file": "backend/pages/catalog.py",
+  "old": "\"note\": \"Counted by calendar month, in UTC.\"",
+  "new": "\"note\": \"Uploads are counted by calendar month, in UTC.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F082",
+  "group": "dashboard-frames",
+  "file": "backend/templates/components/file_list.html",
+  "old": "<p>No files yet. Create a key under Keys,",
+  "new": "<p>You have no files yet. Create a key under Keys,",
+  "mode": "replace"
+ },
+ {
+  "id": "F084",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/app_disconnect.html",
+  "old": "<h1>Disconnect {{ app.name }}?</h1>",
+  "new": "<h1>Do you want to disconnect {{ app.name }}?</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-dashboard-frames-app_disconnect_comment",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/app_disconnect.html",
+  "old": "\"<App> disconnected.\"",
+  "new": "\"<App> is disconnected.\"",
+  "mode": "replace"
+ },
+ {
+  "id": "F085",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/apps.html",
+  "old": "MCP clients you authorized with OAuth, such as Claude Code. They can",
+  "new": "These are the MCP clients you authorized with OAuth, such as Claude Code. They can",
+  "mode": "replace"
+ },
+ {
+  "id": "F086",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/apps.html",
+  "old": "<p>No connected apps.</p>",
+  "new": "<p>You have no connected apps.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F087",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/billing.html",
+  "old": "so this workspace is on the free plan. Pay it,",
+  "new": "so this workspace is on the Free plan. Pay it,",
+  "mode": "replace"
+ },
+ {
+  "id": "F088",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/billing.html",
+  "old": "so this workspace is on the free plan. Resume",
+  "new": "so this workspace is on the Free plan. Resume",
+  "mode": "replace"
+ },
+ {
+  "id": "F089",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/billing_switch.html",
+  "old": "<h1>Switch to {{ target.name }} (${{ target.price }}/mo)?</h1>",
+  "new": "<h1>Do you want to switch to {{ target.name }} (${{ target.price }}/mo)?</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F090",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/billing_switch.html",
+  "old": "You'll be charged now for the prorated difference for the rest of this billing period, then ${{ target.price }}/mo from your next renewal.",
+  "new": "You'll be charged now for the prorated difference for the rest of this billing period, then ${{ target.price }}/mo from your next renewal.",
+  "mode": "unchanged"
+ },
+ {
+  "id": "F091",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/billing_switch.html",
+  "old": "Not now? <a class=\"label interactive\" href=\"{% url 'app-billing' %}\">Back to billing</a>",
+  "new": "<a class=\"label interactive\" href=\"{% url 'app-billing' %}\">Back to billing</a>",
+  "mode": "replace"
+ },
+ {
+  "id": "F092",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/file_revoke.html",
+  "old": "<h1>Revoke this file?</h1>",
+  "new": "<h1>Do you want to revoke this file?</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "F093",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/files.html",
+  "old": "What your agents have pushed, newest first. A secret flag",
+  "new": "Your agents' files appear here, newest first. A secret flag",
+  "mode": "replace"
+ },
+ {
+  "id": "F094",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/key_revoke.html",
+  "old": "<h1>Revoke this API key?</h1>",
+  "new": "<h1>Do you want to revoke this API key?</h1>",
+  "mode": "replace"
+ },
+ {
+  "id": "X-dashboard-frames-key_revoke_comment",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/key_revoke.html",
+  "old": "goes back to Keys with \"Key revoked.\".",
+  "new": "goes back to Keys with \"The key is revoked.\".",
+  "mode": "replace"
+ },
+ {
+  "id": "F095",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/keys.html",
+  "old": "Optional. A name that tells you which agent uses it, such as ci-runner.",
+  "new": "Give the key a name that tells you which agent uses it, such as ci-runner. This is optional.",
+  "mode": "replace"
+ },
+ {
+  "id": "F096",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/keys.html",
+  "old": "<p>No keys yet. Create one above to get started.</p>",
+  "new": "<p>You have no keys yet. Create one above to get started.</p>",
+  "mode": "replace"
+ },
+ {
+  "id": "F097",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/over_limits.html",
+  "old": "{% if status.plan %}{{ status.plan }}{% else %}{{ usage.plan }}{% endif %} plan's limits.",
+  "new": "{% if status.plan %}{{ status.plan|title }}{% else %}{{ usage.plan|title }}{% endif %} plan's limits.",
+  "mode": "replace"
+ },
+ {
+  "id": "F098",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/over_limits.html",
+  "old": "{{ status.active_keys }} active API keys; the plan allows {{ status.caps.keys }}. Existing keys",
+  "new": "You have {{ status.active_keys }} active API keys, and the plan allows {{ status.caps.keys }}. Existing keys",
+  "mode": "replace"
+ },
+ {
+  "id": "F099",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/over_limits.html",
+  "old": "{{ status.storage_used_bytes|bytes }} stored; the plan allows {{ status.caps.storage_gb }} GB.",
+  "new": "You have {{ status.storage_used_bytes|bytes }} stored, and the plan allows {{ status.caps.storage_gb }} GB.",
+  "mode": "replace"
+ },
+ {
+  "id": "F100",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/over_limits.html",
+  "old": "{{ usage.uploads_used }} uploads this month; the plan allows {{ usage.uploads_cap }}.",
+  "new": "You have made {{ usage.uploads_used }} upload{{ usage.uploads_used|pluralize }} this month, and the plan allows {{ usage.uploads_cap }}.",
+  "mode": "replace"
+ },
+ {
+  "id": "F083",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/overview.html",
+  "old": "note=\"Counted by calendar month, in UTC.\"",
+  "new": "note=\"Uploads are counted by calendar month, in UTC.\"",
+  "mode": "replace",
+  "note": "The sweep named components/meter.html; the words live in the include call in dashboard/overview.html."
+ },
+ {
+  "id": "F101",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/overview.html",
+  "old": "<strong>Subscription updated.</strong>",
+  "new": "<strong>Your subscription is updated.</strong>",
+  "mode": "replace"
+ },
+ {
+  "id": "F102",
+  "group": "dashboard-frames",
+  "file": "backend/templates/dashboard/overview.html",
+  "old": "Checkout was cancelled. No charges were made.",
+  "new": "Checkout was canceled. No charges were made.",
+  "mode": "replace"
+ },
+ {
+  "id": "F200",
+  "group": "dashboard-frames",
+  "file": "backend/templates/pages/catalog.html",
+  "old": "Every component in Paper and Ink, with Motion on and off. Staff only.",
+  "new": "This page shows every component in Paper and Ink, with Motion on and off. Only staff can see it.",
+  "mode": "replace"
+ },
+ {
+  "id": "F201",
+  "group": "dashboard-frames",
+  "file": "backend/templates/robots.txt",
+  "old": "# AI crawlers explicitly welcome on the public pages.",
+  "new": "# AI crawlers are explicitly welcome on the public pages.",
+  "mode": "replace"
+ },
+ {
+  "id": "F202",
+  "group": "dashboard-frames",
+  "file": "backend/templates/robots.txt",
+  "old": "that bearer link. Training and indexing crawlers may not.",
+  "new": "that bearer link. Training and indexing crawlers may not open /a/ links.",
+  "mode": "replace"
+ }
+]
