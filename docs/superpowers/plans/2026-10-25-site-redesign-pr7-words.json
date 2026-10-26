@@ -51,8 +51,8 @@
   "id": "F007",
   "group": "chapters",
   "file": "backend/pages/registry.py",
-  "old": "No public repository, no bucket, no paste that lives forever.",
-  "new": "Nothing sits in a public repository, a bucket, or a paste that lives forever.",
+  "old": "Veilfile gives each file your agents make a private link, and lets it go when its time is up. \"\n         \"No public repository, no bucket, no paste that lives forever.",
+  "new": "Each file your agents make gets a private link that stops when its time is up. \"\n         \"Nothing sits in a public repository, a bucket, or a paste that lives forever.",
   "mode": "replace"
  },
  {
