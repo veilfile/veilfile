@@ -32,7 +32,7 @@ MCP_MANIFEST = {
     "remotes": [
         {
             "type": "streamable-http",
-            "url": "https://veilfile.com/mcp",
+            "url": "https://veilfile.com/mcp/",
             "headers": [
                 {
                     "name": "Authorization",
