@@ -2,21 +2,90 @@
 title: Quickstart
 slug: quickstart
 seo_title: Quickstart | Veilfile docs
-description: Sign up, verify your email, create an API key, and upload your first artifact in about five minutes.
+description: Sign up, verify your email, install the CLI, log in, and upload your first artifact in about five minutes.
 order: 2
 ---
 
 Three steps take you from signup to your first unguessable link.
 
-## 1. Create an API key
+## 1. Install the CLI
 
 Sign up at [veilfile.com](https://veilfile.com). We email you a verification link. Click it. You cannot create an API key until your email is verified.
+
+Install the `veilfile` command with pip, which needs Python 3.9 or later:
+
+<div class="command-group" data-tabs>
+<div class="command">
+<div class="command__line">
+<span class="command__prompt" aria-hidden="true">$</span>
+<code id="shellcmd-install" tabindex="0">pip install veilfile</code>
+<button type="button" class="command__copy label interactive" data-copy="shellcmd-install" aria-label="Copy install command">Copy</button>
+</div>
+</div>
+<span class="visually-hidden" role="status" data-copy-status></span>
+</div>
+
+If you use Node 18.3 or later, you can run `npm install -g veilfile` instead. Install only one of the two, because both install a command named `veilfile`.
+
+## 2. Log in
+
+Run this command. It prints a web address and a code, then tries to open that page in your browser.
+
+<div class="command-group" data-tabs>
+<div class="command">
+<div class="command__line">
+<span class="command__prompt" aria-hidden="true">$</span>
+<code id="shellcmd-login" tabindex="0">veilfile login</code>
+<button type="button" class="command__copy label interactive" data-copy="shellcmd-login" aria-label="Copy login command">Copy</button>
+</div>
+</div>
+<span class="visually-hidden" role="status" data-copy-status></span>
+</div>
+
+Check that the code on the page matches the one in your terminal, tick the confirmation box, and press Approve. The terminal receives its key within a few seconds. The code expires after 10 minutes and works once. If it expires, run `veilfile login` again.
+
+If the browser does not open, open the printed address on any device and approve it there. The terminal keeps waiting until the code expires.
+
+A login creates one API key, and that key counts toward your plan's key limit. Free allows one key, so if you already have one, the approval page asks you to choose a key to replace, and anything still using that key stops working.
+
+The CLI saves the key in a credentials file that only you can read. By default that file is `~/.config/veilfile/credentials` on macOS and Linux, and `%APPDATA%\veilfile\credentials` on Windows. The CLI does not print the key unless you ask it to.
+
+## 3. Push
+
+Replace `screenshot.png` with another file of an allowed type (see Limits below):
+
+<div class="command-group" data-tabs>
+<div class="command">
+<div class="command__line">
+<span class="command__prompt" aria-hidden="true">$</span>
+<code id="shellcmd-push" tabindex="0">veilfile push screenshot.png</code>
+<button type="button" class="command__copy label interactive" data-copy="shellcmd-push" aria-label="Copy push command">Copy</button>
+</div>
+</div>
+<span class="visually-hidden" role="status" data-copy-status></span>
+</div>
+
+The command prints the share link. Anyone who has the link can open it in a browser with no login. The token in the URL is the auth.
+
+The link lasts as long as your plan allows, which is 7 days on Free. Add `--ttl-days 1` to shorten it.
+
+Run `veilfile logout` when you are done with a machine. It revokes the key and deletes the credentials file, and the links you already made keep working until they expire.
+
+Next: [connect an agent via MCP](/docs/agent/), or read [how it works](/docs/how-it-works/).
+
+## Without the browser login
+
+Use this route on a machine that runs unattended, such as a CI runner, or when an agent needs its key in `VEILFILE_API_KEY`. A key saved by `veilfile login` stays in the credentials file, and the key-based MCP setups in the agent docs read `VEILFILE_API_KEY` instead.
+
+### Create an API key
+
+On Free, which allows one key, first revoke the key from `veilfile login`, either in the dashboard or with `veilfile logout`.
 
 Open the [dashboard](https://veilfile.com/app/keys/) and create a key. It is shown exactly once. Copy it now.
 
 Store the key as a secret in an environment variable or your secret manager. Your agent gets the variable name, `VEILFILE_API_KEY`. It never gets the value in a prompt.
 
-## 2. Save it in your shell
+### Save it in your shell
 
 Pick your shell. Replace `PASTE_YOUR_KEY_HERE` with the key, paste the line, press enter. It takes effect in this terminal at once.
 
@@ -71,7 +140,7 @@ Pick your shell. Replace `PASTE_YOUR_KEY_HERE` with the key, paste the line, pre
 <span class="visually-hidden" role="status" data-copy-status></span>
 </div>
 
-## 3. Upload
+### Upload with curl
 
 With the variable set, this runs as written. Replace `@screenshot.png` with another file of an allowed type (see Limits below):
 
@@ -96,8 +165,6 @@ curl -X DELETE https://veilfile.com/api/v1/artifacts/<id> \
 ```
 
 Replace `<id>` with the id from the upload. Success is a `204` with an empty body. The link returns `404` from that moment on.
-
-Next: [connect an agent via MCP](/docs/agent/), or read [how it works](/docs/how-it-works/).
 
 ## Limits
 

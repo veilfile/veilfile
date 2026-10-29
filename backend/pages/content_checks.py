@@ -25,7 +25,7 @@ HEADING = re.compile(r"^#{1,6}\s+(.*?)\s*#*\s*$")
 IMAGE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)")
 # Docs pages that carry raw HTML, and why. Remove an entry when its page has none left (a test fails while an entry is stale).
 RAW_HTML_ALLOWED = {
-    "backend/docs/pages/quickstart.md": "the shell switcher (five tabs over one command each) and the upload command: each command sits beside its prompt, "
+    "backend/docs/pages/quickstart.md": "the shell switcher (five tabs over one command each) and the install, login, push and upload commands: each command sits beside its prompt, "
                                         "outside what Copy copies, and Markdown has no way to write tabs. The markup carries the data-tabs and data-copy "
                                         "attributes that static/js/behaviors/tabs.js and copy.js run (a fenced block needs none of this: render_reading "
                                         "gives it a code block with its own Copy)",

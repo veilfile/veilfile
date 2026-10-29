@@ -326,8 +326,8 @@ class QuickstartSwitcherTests(TestCase):
 
     def test_every_copy_button_names_its_command_and_has_a_status_line(self):
         buttons = [element for element in self.elements if "command__copy" in classes(element)]
-        self.assertEqual(len(buttons), 6,
-                         f"{QUICKSTART}: one Copy button (class command__copy) for each of the five shells and one for the upload command, found {len(buttons)}")
+        self.assertEqual(len(buttons), 9,
+                         f"{QUICKSTART}: one Copy button (class command__copy) for each of the five shells and one each for the install, login, push and upload commands, found {len(buttons)}")
         for button in buttons:
             name = button["attrs"].get("data-copy", "")
             with self.subTest(button=name):
@@ -346,13 +346,13 @@ class QuickstartSwitcherTests(TestCase):
                 self.assertEqual(status[0]["attrs"].get("role"), "status")
 
     def test_the_fenced_command_is_a_code_block_and_the_raw_html_commands_are_not(self):
-        # The revoke command is a fence, so render_reading gives it a code block's Copy. The six commands above it are raw HTML
+        # The revoke command is a fence, so render_reading gives it a code block's Copy. The nine commands above it are raw HTML
         # with their own tabs and Copy, and must not be wrapped in a code block as well.
         blocks = [element for element in self.elements if "data-code-block" in element["attrs"]]
         self.assertEqual(len(blocks), 1, f"{QUICKSTART}: one fenced block (the revoke command), so one code block on the page, found {len(blocks)}")
         boxes = [element for element in self.elements if element["tag"] == "pre" and inside(element, blocks[0])]
         self.assertTrue(boxes and "curl -X DELETE" in boxes[0]["text"], f"{QUICKSTART}: the code block holds the revoke command, found {[box['text'] for box in boxes]}")
-        for shell in ("bash", "zsh", "fish", "powershell", "cmd", "upload"):
+        for shell in ("install", "login", "push", "bash", "zsh", "fish", "powershell", "cmd", "upload"):
             command = self.by_id.get(f"shellcmd-{shell}")
             self.assertIsNotNone(command, f"{QUICKSTART}: no element has id=\"shellcmd-{shell}\"")
             self.assertFalse(any("data-code-block" in parent["attrs"] for parent in command["parents"]),
@@ -360,7 +360,7 @@ class QuickstartSwitcherTests(TestCase):
 
     def test_copy_takes_the_command_and_not_its_prompt(self):
         lines = [element for element in self.elements if "command__line" in classes(element)]
-        self.assertEqual(len(lines), 6, f"{QUICKSTART}: six command lines, each a div with class command__line, found {len(lines)}")
+        self.assertEqual(len(lines), 9, f"{QUICKSTART}: nine command lines, each a div with class command__line, found {len(lines)}")
         for number, line in enumerate(lines, start=1):
             prompt = [e for e in self.elements if inside(e, line) and "command__prompt" in classes(e)]
             code = [e for e in self.elements if inside(e, line) and e["tag"] == "code"]
