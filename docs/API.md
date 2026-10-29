@@ -93,8 +93,7 @@ Response `201 Created`:
 `secret_flags` is a list like `["github_token"]`; empty when clean.
 When the requested `ttl_days` was clamped to the plan maximum, the response
 also includes `"ttl_adjusted": true`. When `secret_flags` is non-empty, it
-also includes a `warning` string advising you to ask the user whether to keep
-or revoke the upload before sharing the link. Both fields are additive and
+also includes a `warning` string: *"The scan flagged this file as possibly containing a secret; see secret_flags. Ask the user whether to keep or revoke the file before sharing its link."* Both fields are additive and
 appear only when applicable.
 
 ### `PUT /api/v1/uploads/<token>`: complete a one-time upload
@@ -184,7 +183,7 @@ curl -s -X DELETE https://YOUR-DEPLOY/api/v1/artifacts/b3f7c2a1-4d5e-4f6a-9b1c-2
 ```
 
 Response `204 No Content` on success. Unknown ids (or ids in another
-workspace) return `404` with `{"error": "Artifact not found.", "code": "not_found"}`.
+workspace) return `404` with `{"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"}`.
 If the storage backend is unreachable, the URL still dies at once and the
 file is deleted by the next expiry sweep; the artifact shows as expired in
 the list until then.
@@ -560,7 +559,7 @@ Methods:
 | `notifications/initialized` | Client ready → `202` with empty body |
 | `ping` | Returns `{}` |
 | `tools/list` | The tools below with their `inputSchema`s |
-| `tools/call` | Dispatch by `params.name`; unknown tool → JSON-RPC `-32602` |
+| `tools/call` | Dispatch by `params.name`. An unknown tool gets JSON-RPC `-32602` |
 
 A message with no `id` is a notification: a valid one gets `202` with an empty
 body whatever its method. A JSON-RPC response object sent by a client also
@@ -568,23 +567,20 @@ gets `202`. Requests must carry `"jsonrpc": "2.0"` and a string `method`.
 
 Tools:
 
-**`upload_artifact`**: *"Upload a file you generated (screenshot, log, HAR,
-report) to Veilfile and get back a private, expiring URL to share with the
-user. Never upload credentials, keys or other secrets: every file is
-secret-scanned, and on_secret="reject" (recommended) refuses a file that trips
-the scanner without storing it. ... For files larger than a few MB, use
-create_upload_url instead of base64."* (Full text in `tools/list`.)
+Every tool has a `title` and `annotations`. The titles are "Upload a file", "Create an upload URL", "List files" and "Revoke a file". `list_artifacts` is read-only and idempotent. `revoke_artifact` is destructive and idempotent. `upload_artifact` and `create_upload_url` are not read-only, not destructive and not idempotent. No tool reaches outside Veilfile, so `openWorldHint` is `false` on all four.
+
+**`upload_artifact`** (title "Upload a file"): *"Upload a file from base64 content and return its id, its private share link as url, expires_at, size_bytes and secret_flags. The link stops working when the file expires. The decoded file can be up to 25 MiB; for larger files, create_upload_url takes the bytes by PUT instead. The secret scan reads the first 1 MiB of the file, and secret_flags names each kind of secret-shaped content it finds. With on_secret "flag", the default, a flagged file is stored and the result adds a warning and secret_flag_locations. With on_secret "reject", a flagged file is not stored and the call returns the secret_detected error."*
 
 ```json
 {
   "type": "object",
   "required": ["filename", "content_base64"],
   "properties": {
-    "filename":       {"type": "string",  "description": "File name including extension, e.g. \"screenshot.png\"."},
-    "content_base64": {"type": "string",  "description": "Standard base64 of the file bytes. Line breaks and a \"data:<mime>;base64,\" prefix are accepted. Decoded size must be <= 25 MiB."},
-    "mime_type":      {"type": "string",  "description": "Accepted but ignored: the stored type is derived from the filename extension."},
-    "ttl_days":       {"type": "integer", "description": "Optional days until the link expires; above the plan maximum is clamped down."},
-    "on_secret":      {"type": "string",  "description": "Optional: \"reject\" (recommended) rejects the upload when any secret flag fires (nothing stored); default \"flag\" stores it and reports flags with a warning."}
+    "filename":       {"type": "string",  "description": "This is the file name, including its extension, such as screenshot.png. The allowed extensions are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf, and the file's contents must match its extension."},
+    "content_base64": {"type": "string",  "description": "This is the file's content as standard base64. Line breaks and a data:<mime>;base64, prefix are accepted. The decoded file can be up to 25 MiB."},
+    "mime_type":      {"type": "string",  "description": "The server does not use this value; it takes the file's type from the extension in filename. If you send it, it must be a string."},
+    "ttl_days":       {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The result's expires_at is the applied expiry."},
+    "on_secret":      {"type": "string",  "description": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"flag\", a file with secret-shaped content is stored, and the result lists secret_flags and adds a warning and secret_flag_locations. With \"reject\", that file is not stored and the call returns the secret_detected error."}
   }
 }
 ```
@@ -592,16 +588,16 @@ create_upload_url instead of base64."* (Full text in `tools/list`.)
 Result (in `result.content[0].text` as JSON):
 `{id, url, expires_at, size_bytes, secret_flags}` (plus `ttl_adjusted: true` when clamping changed your value; plus `warning` and `secret_flag_locations` (`{flag: [{line, offset}]}`) when flags are non-empty).
 
-**`create_upload_url`**: *"Mint a one-time upload URL for a file too large to pass through the model as base64 (screenshots, HAR files, log bundles). PUT the raw file bytes to the returned upload_url from your shell within 15 minutes (e.g. curl --upload-file). The server runs the full upload pipeline on the bytes — type verification, secret scan, storage — and answers 201 with the artifact. The URL is single-use and needs no API key: the token is the auth."*
+**`create_upload_url`** (title "Create an upload URL"): *"Create a one-time upload URL for a file too large to send as base64 through upload_artifact. The result has upload_url, expires_at, max_size_bytes (25 MiB), ttl_days and filename. The URL is valid for 15 minutes and needs no API key. A PUT of the file's raw bytes to it, for example with curl --upload-file, runs the same type check and secret scan as upload_artifact and answers 201 with the same fields that upload_artifact returns. The first successful PUT uses up the URL. A PUT that fails can be retried until the URL expires, except one blocked as content_not_allowed. The URL also stops working if the API key that created it is revoked or the connected app that created it is disconnected."*
 
 ```json
 {
   "type": "object",
   "required": ["filename"],
   "properties": {
-    "filename": {"type": "string", "description": "File name including extension, e.g. \"screenshot.png\"."},
-    "ttl_days": {"type": "integer", "description": "Optional days until the link expires; clamped to the plan maximum. The result reports the applied ttl_days and \"ttl_adjusted\": true when clamping changed your value."},
-    "on_secret": {"type": "string", "description": "Optional \"reject\" to reject the PUT when any secret flag fires."}
+    "filename": {"type": "string", "description": "This is the file name, including its extension, such as screenshot.png. The extension is checked when the URL is created, and the allowed extensions are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf."},
+    "ttl_days": {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The days count from the PUT, and the result's ttl_days is the applied value."},
+    "on_secret": {"type": "string", "description": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"reject\", a PUT of a flagged file fails with the secret_detected error, the file is not stored and the URL stays usable until it expires. With \"flag\", a flagged file is stored and the result lists its secret_flags and adds a warning and secret_flag_locations."}
   }
 }
 ```
@@ -615,11 +611,12 @@ curl -s --upload-file screenshot.png "<upload_url>"
 
 → `201` with the same body as `POST /api/v1/artifacts`. The URL is single-use (replays `404`), expires 15 minutes after minting, and carries no API key.
 
-**`list_artifacts`**: list the workspace's artifacts, newest first.
-Optional `limit` (integer, default `50`, max `200`). Result:
+**`list_artifacts`** (title "List files"): *"List the files in this workspace, newest first. Each entry has id, filename, mime_type, size_bytes, url, expires_at, secret_flags and created_at. Expired files that are not yet deleted are included. The tool changes nothing."*
+The optional `limit` is described as: *"This is the maximum number of files to return. The range is 1 to 200, the default is 50, and a value outside the range is moved to the nearest end of it. Files beyond the limit are not returned, and there is no paging."* Result:
 `{artifacts: [{id, filename, mime_type, size_bytes, url, expires_at, secret_flags, created_at}]}`.
 
-**`revoke_artifact`**: required `id` (string uuid). Result: `{revoked: true|false}`.
+**`revoke_artifact`** (title "Revoke a file"): *"Revoke a file by its id. Its link stops working at once and the file is deleted. The result is revoked: true, or revoked: false when this workspace has no file with that id. If storage could not be reached, the result adds storage_deleted: false and a later sweep finishes the deletion. Repeating the call is harmless."*
+The required `id` is described as: *"This is the id of the file to revoke, a UUID. Both upload_artifact and list_artifacts return it."* Result: `{revoked: true|false}`.
 When storage was unreachable the result also carries `storage_deleted: false`:
 the URL is already dead and the file is deleted by the next expiry sweep.
 
@@ -648,7 +645,7 @@ curl -s -X POST https://YOUR-DEPLOY/mcp \
   }"
 ```
 
-Non-POST requests get `405` with a JSON hint. Invalid JSON → `-32700`;
+Non-POST requests get `405` with a JSON `hint`: *"Send a POST request with a JSON-RPC 2.0 body and the header Content-Type: application/json."* Invalid JSON → `-32700`;
 invalid JSON-RPC (missing `jsonrpc`/`method`, object/array/boolean `id`) →
 `-32600` with HTTP `400`. Unknown method → `-32601`. Malformed arguments or
 an unknown tool → `-32602`. Missing/invalid credentials → `-32001` with HTTP
@@ -684,23 +681,23 @@ extension, and the allowed list.
 
 | HTTP | Code | Meaning |
 |---|---|---|
-| 400 | `secret_detected` | Secret-shaped content detected with `on_secret=reject`; nothing stored |
-| 400 | `invalid_request` | Malformed request (bad JSON, bad `ttl_days`, bad `on_secret`, bad cursor) |
-| 400 | `file_type_not_allowed` | Extension not in the allowed list, or content does not match it |
-| 400 | `content_not_allowed` | Policy rejection (same message as `file_type_not_allowed`); do not retry the same bytes |
-| 400 | `file_missing` | No `file` part in the multipart body |
-| 401 | `unauthorized` | Missing/invalid credentials (MCP: JSON-RPC `-32001`) |
-| 402 | `storage_cap_reached` | Plan's storage cap hit. Delete artifacts or upgrade |
-| 402 | `key_limit_reached` | Plan's API-key cap hit (`POST /api/v1/keys`) |
-| 403 | `forbidden` | Authenticated but not permitted, or a failed CSRF check on a session call |
-| 403 | `session_required` | The endpoint needs a dashboard session, not an API key or OAuth token |
-| 403 | `email_verification_required` | Verify the account email first |
-| 404 | `not_found` | Unknown id/token, revoked, or TTL expired |
-| 405 | `method_not_allowed` | Wrong HTTP method |
-| 413 | `file_too_large` | File (or decoded base64) exceeds 25 MiB |
-| 429 | `monthly_cap_reached` | Plan's monthly upload cap hit. Upgrade to continue |
-| 429 | `rate_limited` | Too many requests. Back off; see `Retry-After` |
-| 502 | `storage_unavailable` | Storage backend failed during an upload; nothing was counted, retry later |
+| 400 | `secret_detected` | The scan found secret-shaped content and `on_secret` is `reject`, so nothing was stored. |
+| 400 | `invalid_request` | The request is malformed, for example bad JSON, a bad `ttl_days`, a bad `on_secret` or a bad cursor. |
+| 400 | `file_type_not_allowed` | The extension is not in the allowed list, or the content does not match it. |
+| 400 | `content_not_allowed` | The file's content is not allowed. Do not retry the same bytes. |
+| 400 | `file_missing` | The multipart body has no `file` part. |
+| 401 | `unauthorized` | The credentials are missing or not valid. MCP answers with JSON-RPC `-32001`. |
+| 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
+| 402 | `key_limit_reached` | The workspace has reached its plan's API key limit (`POST /api/v1/keys`). |
+| 403 | `forbidden` | The caller is signed in but not permitted, or a session call failed the CSRF check. |
+| 403 | `session_required` | The endpoint needs a dashboard session, not an API key or an OAuth token. |
+| 403 | `email_verification_required` | The account email must be verified first. |
+| 404 | `not_found` | The id or token is unknown, or the file is revoked or expired. |
+| 405 | `method_not_allowed` | The HTTP method is not allowed for this URL. The `Allow` header lists the ones that are. |
+| 413 | `file_too_large` | The file, or the decoded base64, is larger than 25 MiB. |
+| 429 | `monthly_cap_reached` | The workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade. |
+| 429 | `rate_limited` | There were too many requests. Wait the number of seconds in `Retry-After`, then try again. |
+| 502 | `storage_unavailable` | Storage failed during an upload, so nothing was stored or counted. Try again in a minute. |
 
 ## Rate limits
 
