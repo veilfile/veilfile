@@ -28,8 +28,10 @@ from drop_core import funnel
 from drop_core.email_verification import client_ip
 from drop_core.models import APIKey, Artifact
 from drop_core.oauth import resolve_oauth_credential
+from drop_core.plans import PLANS
 from drop_core.secrets import SECRET_FLAGS_WARNING
 from drop_core.services import (
+    ALLOWED_EXTENSIONS,
     REVOKE_PENDING_DELETE,
     StorageError,
     mint_upload_url,
@@ -84,54 +86,58 @@ ERR_INVALID_PARAMS = -32602
 ERR_INTERNAL = -32603
 ERR_UNAUTHORIZED = -32001  # server-defined: bad/missing API key
 
+# The order the approved words list the extensions in. Which extensions are
+# listed comes from ALLOWED_EXTENSIONS, so the words follow the code.
+_EXTENSION_ORDER = ('png', 'jpg', 'jpeg', 'webp', 'gif', 'txt', 'md', 'log', 'json', 'har', 'pdf')
+
+
+def _allowed_extensions_text():
+    """Return the allowed extensions from drop_core.services as words, for example "png, jpg and pdf"."""
+    names = [e for e in _EXTENSION_ORDER if e in ALLOWED_EXTENSIONS]
+    names += sorted(ALLOWED_EXTENSIONS - set(_EXTENSION_ORDER))
+    return ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def _plan_ttl_text():
+    """Return the plan maximums as words, for example "7 days on Free, 90 on Team and 365 on Scale"."""
+    free, team, scale = (PLANS[key]['ttl_days'] for key in ('free', 'team', 'scale'))
+    return '%d days on Free, %d on Team and %d on Scale' % (free, team, scale)
+
+
 TOOLS = [
     {
         'name': 'upload_artifact',
-        'description': (
-            'Upload a file you generated (screenshot, log, HAR, report) to '
-            'Veilfile and get back a private, expiring URL to share with the '
-            'user. Never upload credentials, keys or other secrets: every file '
-            'is secret-scanned, and on_secret="reject" (recommended) refuses a '
-            'file that trips the scanner without storing it. If the upload '
-            'response contains non-empty secret_flags, do NOT share the link: '
-            'ask the user whether to keep or revoke the upload first. For files '
-            'larger than a few MB, use create_upload_url instead of base64.'
-        ),
+        'title': 'Upload a file',
+        'description': 'Upload a file from base64 content and return its id, its private share link as url, expires_at, size_bytes and secret_flags. The link stops working when the file expires. The decoded file can be up to 25 MiB; for larger files, create_upload_url takes the bytes by PUT instead. The secret scan reads the first 1 MiB of the file, and secret_flags names each kind of secret-shaped content it finds. With on_secret "flag", the default, a flagged file is stored and the result adds a warning and secret_flag_locations. With on_secret "reject", a flagged file is not stored and the call returns the secret_detected error.',
+        'annotations': {
+            'title': 'Upload a file',
+            'readOnlyHint': False,
+            'destructiveHint': False,
+            'idempotentHint': False,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'filename': {
                     'type': 'string',
-                    'description': 'File name including extension, e.g. "screenshot.png".',
+                    'description': ('This is the file name, including its extension, such as screenshot.png. The allowed extensions are ' + _allowed_extensions_text() + ", and the file's contents must match its extension."),
                 },
                 'content_base64': {
                     'type': 'string',
-                    'description': (
-                        'Standard base64 of the file bytes (A-Z a-z 0-9 + / with = '
-                        'padding). Line breaks and a "data:<mime>;base64," prefix are '
-                        'accepted. Decoded size must be <= 25 MiB.'
-                    ),
+                    'description': "This is the file's content as standard base64. Line breaks and a data:<mime>;base64, prefix are accepted. The decoded file can be up to 25 MiB.",
                 },
                 'mime_type': {
                     'type': 'string',
-                    'description': 'Ignored: the server derives the type from the file extension. Accepted for compatibility.',
+                    'description': "The server does not use this value; it takes the file's type from the extension in filename. If you send it, it must be a string.",
                 },
                 'ttl_days': {
                     'type': 'integer',
-                    'description': (
-                        'Optional days until the link expires. Omitting it gives the plan '
-                        'maximum. Values above the plan maximum are clamped down (never '
-                        'rejected); the result includes "ttl_adjusted": true when clamping '
-                        'changed your value, so always read expires_at.'
-                    ),
+                    'description': ("This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is " + _plan_ttl_text() + ". A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The result's expires_at is the applied expiry."),
                 },
                 'on_secret': {
                     'type': 'string',
-                    'description': (
-                        'Optional. "reject" (recommended) rejects the upload with an '
-                        'error when any secret flag fires (nothing is stored); default '
-                        '"flag" stores the file and reports the flags with a warning.'
-                    ),
+                    'description': 'The value is either "flag" or "reject", and the default is "flag". With "flag", a file with secret-shaped content is stored, and the result lists secret_flags and adds a warning and secret_flag_locations. With "reject", that file is not stored and the call returns the secret_detected error.',
                 },
             },
             'required': ['filename', 'content_base64'],
@@ -139,33 +145,29 @@ TOOLS = [
     },
     {
         'name': 'create_upload_url',
-        'description': (
-            'Mint a one-time upload URL for a file too large to pass through the model '
-            'as base64 (screenshots, HAR files, log bundles). PUT the raw file bytes to '
-            'the returned upload_url from your shell within 15 minutes '
-            '(e.g. curl --upload-file). The server runs the full upload pipeline on the '
-            'bytes — type verification, secret scan, storage — and answers 201 with the '
-            'artifact. The URL is single-use and needs no API key: the token is the auth.'
-        ),
+        'title': 'Create an upload URL',
+        'description': "Create a one-time upload URL for a file too large to send as base64 through upload_artifact. The result has upload_url, expires_at, max_size_bytes (25 MiB), ttl_days and filename. The URL is valid for 15 minutes and needs no API key. A PUT of the file's raw bytes to it, for example with curl --upload-file, runs the same type check and secret scan as upload_artifact and answers 201 with the same fields that upload_artifact returns. The first successful PUT uses up the URL. A PUT that fails can be retried until the URL expires, except one blocked as content_not_allowed. The URL also stops working if the API key that created it is revoked or the connected app that created it is disconnected.",
+        'annotations': {
+            'title': 'Create an upload URL',
+            'readOnlyHint': False,
+            'destructiveHint': False,
+            'idempotentHint': False,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'filename': {
                     'type': 'string',
-                    'description': 'File name including extension, e.g. "screenshot.png".',
+                    'description': ('This is the file name, including its extension, such as screenshot.png. The extension is checked when the URL is created, and the allowed extensions are ' + _allowed_extensions_text() + '.'),
                 },
                 'ttl_days': {
                     'type': 'integer',
-                    'description': (
-                        'Optional days until the link expires. Omitting it gives the plan '
-                        'maximum; above-max values are clamped down. The result reports '
-                        'the applied ttl_days and "ttl_adjusted": true when clamping '
-                        'changed your value.'
-                    ),
+                    'description': ("This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is " + _plan_ttl_text() + ". A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The days count from the PUT, and the result's ttl_days is the applied value."),
                 },
                 'on_secret': {
                     'type': 'string',
-                    'description': 'Optional "reject" to reject the PUT when any secret flag fires.',
+                    'description': 'The value is either "flag" or "reject", and the default is "flag". With "reject", a PUT of a flagged file fails with the secret_detected error, the file is not stored and the URL stays usable until it expires. With "flag", a flagged file is stored and the result lists its secret_flags and adds a warning and secret_flag_locations.',
                 },
             },
             'required': ['filename'],
@@ -173,13 +175,21 @@ TOOLS = [
     },
     {
         'name': 'list_artifacts',
-        'description': 'List this workspace\'s artifacts, newest first.',
+        'title': 'List files',
+        'description': 'List the files in this workspace, newest first. Each entry has id, filename, mime_type, size_bytes, url, expires_at, secret_flags and created_at. Expired files that are not yet deleted are included. The tool changes nothing.',
+        'annotations': {
+            'title': 'List files',
+            'readOnlyHint': True,
+            'destructiveHint': False,
+            'idempotentHint': True,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'limit': {
                     'type': 'integer',
-                    'description': 'Maximum artifacts to return.',
+                    'description': 'This is the maximum number of files to return. The range is 1 to 200, the default is 50, and a value outside the range is moved to the nearest end of it. Files beyond the limit are not returned, and there is no paging.',
                     'default': 50,
                     'minimum': 1,
                     'maximum': 200,
@@ -189,13 +199,21 @@ TOOLS = [
     },
     {
         'name': 'revoke_artifact',
-        'description': 'Revoke (delete) an artifact immediately by its id. The URL stops working at once.',
+        'title': 'Revoke a file',
+        'description': 'Revoke a file by its id. Its link stops working at once and the file is deleted. The result is revoked: true, or revoked: false when this workspace has no file with that id. If storage could not be reached, the result adds storage_deleted: false and a later sweep finishes the deletion. Repeating the call is harmless.',
+        'annotations': {
+            'title': 'Revoke a file',
+            'readOnlyHint': False,
+            'destructiveHint': True,
+            'idempotentHint': True,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'id': {
                     'type': 'string',
-                    'description': 'Artifact id (uuid) as returned by upload_artifact.',
+                    'description': 'This is the id of the file to revoke, a UUID. Both upload_artifact and list_artifacts return it.',
                 },
             },
             'required': ['id'],
@@ -402,8 +420,8 @@ def _unauthenticated(request_id):
     response = _rpc_error(
         request_id,
         ERR_UNAUTHORIZED,
-        'unauthorized: provide a valid API key or OAuth token as '
-        '"Authorization: Bearer <credential>"',
+        'The request has no valid API key or connected app access. Send a current '
+        'API key as Authorization: Bearer <API key>, or reconnect the app.',
         http_status=401,
     )
     metadata_url = (
@@ -462,12 +480,12 @@ def _service_failure(exc):
     if isinstance(exc, StorageError):
         return ToolError(
             exc.code,
-            'Storage is temporarily unavailable; nothing was stored. Retry in a minute.',
+            'Storage is temporarily unavailable, so the file was not stored. Try again in a minute.',
         )
     code = getattr(exc, 'code', '') or str(exc)
     return ToolError(
         code,
-        ERROR_MESSAGES.get(code, 'Upload failed.'),
+        ERROR_MESSAGES.get(code, 'The upload failed. Try again, and check the file and its parameters if it fails again.'),
         detail=getattr(exc, 'detail', ''),
     )
 
@@ -486,17 +504,17 @@ def _check_upload_throttle(request, key):
     retry_after = max(1, math.ceil(wait if wait is not None else throttle.duration))
     raise ToolError(
         'rate_limited',
-        f'Upload rate limit reached ({throttle.rate} per credential, shared with '
-        f'the REST API). Retry after {retry_after} seconds.',
+        f'Too many uploads in the past hour. The limit is {throttle.rate} for each '
+        f'API key or connected app, and the REST API shares it. Wait {retry_after} '
+        'seconds, then try again.',
         retry_after=retry_after,
     )
 
 
 _B64_WHITESPACE = b' \t\n\r\f\v'
 _INVALID_BASE64 = (
-    'content_base64 is not valid base64: use the standard alphabet '
-    '(A-Z a-z 0-9 + /) with = padding; line breaks and a '
-    '"data:<mime>;base64," prefix are accepted'
+    'content_base64 is not valid base64. Send standard base64 (A-Z, a-z, 0-9, + and /) '
+    'with = padding; line breaks and a data:<mime>;base64, prefix are allowed.'
 )
 
 
@@ -540,18 +558,18 @@ def _tool_upload_artifact(key, args, request):
     ttl_days = args.get('ttl_days')
 
     if not isinstance(filename, str) or not filename.strip():
-        raise ValueError('filename is required and must be a non-empty string')
+        raise ValueError('Send filename as a non-empty string.')
     if not isinstance(content_b64, str) or not content_b64:
-        raise ValueError('content_base64 is required and must be a base64 string')
+        raise ValueError('Send content_base64 as a non-empty base64 string.')
     if mime_type is not None and not isinstance(mime_type, str):
-        raise ValueError('mime_type must be a string')
+        raise ValueError('Send mime_type as a string.')
     if ttl_days is not None and (
         isinstance(ttl_days, bool) or not isinstance(ttl_days, int) or ttl_days <= 0
     ):
-        raise ValueError('ttl_days must be a positive integer')
+        raise ValueError('Send ttl_days as a whole number of days, 1 or more.')
     on_secret = args.get('on_secret', 'flag')
     if on_secret not in ('flag', 'reject'):
-        raise ValueError('on_secret must be "flag" or "reject"')
+        raise ValueError('Send on_secret as "flag" or "reject".')
 
     data = _decode_content(content_b64)
 
@@ -608,7 +626,7 @@ def _tool_upload_artifact(key, args, request):
 def _tool_list_artifacts(key, args, request):
     limit = args.get('limit', 50)
     if isinstance(limit, bool) or not isinstance(limit, int):
-        raise ValueError('limit must be an integer')
+        raise ValueError('Send limit as a whole number, such as 50.')
     limit = max(1, min(200, limit))
     artifacts = (
         Artifact.objects.filter(workspace=key.workspace)
@@ -623,13 +641,13 @@ def _tool_create_upload_url(key, args, request):
     on_secret = args.get('on_secret', 'flag')
 
     if not isinstance(filename, str) or not filename.strip():
-        raise ValueError('filename is required and must be a non-empty string')
+        raise ValueError('Send filename as a non-empty string.')
     if ttl_days is not None and (
         isinstance(ttl_days, bool) or not isinstance(ttl_days, int) or ttl_days <= 0
     ):
-        raise ValueError('ttl_days must be a positive integer')
+        raise ValueError('Send ttl_days as a whole number of days, 1 or more.')
     if on_secret not in ('flag', 'reject'):
-        raise ValueError('on_secret must be "flag" or "reject"')
+        raise ValueError('Send on_secret as "flag" or "reject".')
 
     # OAuth-minted URLs remember the client application, so the PUT stops
     # working once the user's grants for it are revoked (API-key URLs
@@ -663,7 +681,7 @@ def _tool_create_upload_url(key, args, request):
 def _tool_revoke_artifact(key, args, request):
     artifact_id = args.get('id')
     if not isinstance(artifact_id, str) or not artifact_id.strip():
-        raise ValueError('id is required and must be a string')
+        raise ValueError('Send id as the id of the file to revoke, a non-empty string.')
     artifact_id = artifact_id.strip()
     try:
         uuid_module.UUID(artifact_id)
@@ -697,12 +715,12 @@ def _handle_tools_call(request, request_id, key, params):
     name = params.get('name')
     arguments = params.get('arguments') or {}
     if not isinstance(name, str):
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'invalid params: name must be a string')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'Send params.name as a string.')
     if not isinstance(arguments, dict):
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'invalid params: arguments must be an object')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'Send params.arguments as an object.')
     handler = _TOOL_HANDLERS.get(name)
     if handler is None:
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, f'unknown tool: {name}')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, f'No tool named {name} exists. The tools are upload_artifact, create_upload_url, list_artifacts and revoke_artifact.')
     try:
         if name in _UPLOAD_TOOLS:
             _check_upload_throttle(request, key)
@@ -714,7 +732,7 @@ def _handle_tools_call(request, request_id, key, params):
         })
     except ValueError as exc:
         # Malformed arguments: a protocol error, per the MCP spec.
-        message = getattr(exc, "detail", "") or str(exc) or "invalid params"
+        message = getattr(exc, "detail", "") or str(exc) or "The arguments are not valid for this tool; check them against its inputSchema."
         return _rpc_error(request_id, ERR_INVALID_PARAMS, message)
     return _rpc_result(request_id, {'content': [{'type': 'text', 'text': json.dumps(result)}]})
 
@@ -729,7 +747,7 @@ def mcp_endpoint(request):
         return JsonResponse(
             {
                 'error': 'method_not_allowed',
-                'hint': 'Send a JSON-RPC 2.0 request body via POST with Content-Type: application/json.',
+                'hint': 'Send a POST request with a JSON-RPC 2.0 body and the header Content-Type: application/json.',
             },
             status=405,
         )
@@ -738,14 +756,14 @@ def mcp_endpoint(request):
     except Exception:
         # Last resort: never Django's HTML error page on the MCP endpoint.
         logger.exception('mcp: unhandled error')
-        return _rpc_error(None, ERR_INTERNAL, 'internal error', http_status=500)
+        return _rpc_error(None, ERR_INTERNAL, 'The server could not complete the request. Try again later.', http_status=500)
 
 
 def _handle_post(request):
     if not _origin_allowed(request):
         return _rpc_error(
             None, ERR_INVALID_REQUEST,
-            'forbidden: requests from this Origin are not allowed', http_status=403,
+            'This Origin is not allowed. Send requests from a Veilfile origin, or without an Origin header.', http_status=403,
         )
 
     # Authenticate from the header before reading the body, so anonymous
@@ -760,22 +778,22 @@ def _handle_post(request):
         _discard_body(request, MAX_DRAIN_BYTES)
         return _rpc_error(
             None, ERR_INVALID_REQUEST,
-            f'request too large: the body limit is {MAX_BODY_BYTES} bytes (a 25 MiB '
-            'file as base64 plus the JSON envelope). To skip base64 for large files, '
-            'call create_upload_url and PUT the raw bytes; files over 25 MiB are '
-            'not accepted.',
+            f'The request is over the body limit of {MAX_BODY_BYTES} bytes, which fits '
+            'a 25 MiB file as base64 plus the JSON envelope. Call create_upload_url '
+            'and PUT the raw bytes to the upload URL it returns. Files over 25 MiB '
+            'are not accepted.',
             http_status=413,
             data={'code': 'file_too_large', 'max_body_bytes': MAX_BODY_BYTES},
         )
     except UnreadablePostError:
-        return _rpc_error(None, ERR_PARSE, 'parse error: request body could not be read', http_status=400)
+        return _rpc_error(None, ERR_PARSE, 'The request body could not be read. Send the request again.', http_status=400)
     if len(body) > PLAIN_BODY_BYTES and not _large_body_is_plain(body):
         return _rpc_error(
             None, ERR_INVALID_REQUEST,
-            f'request too complex: a body over {PLAIN_BODY_BYTES} bytes is accepted '
-            f'only as a plain tools/call (at most {MAX_LARGE_BODY_STRUCTURE} JSON '
-            'structural characters, and no characters above U+00FF such as a '
-            'non-Latin filename). Use an ASCII filename, or call create_upload_url '
+            f'The request is too complex. A body over {PLAIN_BODY_BYTES} bytes is accepted '
+            f'only as a plain tools/call with at most {MAX_LARGE_BODY_STRUCTURE} JSON '
+            'structural characters and no characters above U+00FF, such as a '
+            'non-Latin file name. Use an ASCII file name, or call create_upload_url '
             'and PUT the raw bytes.',
             http_status=413,
             data={'code': 'request_too_complex', 'max_plain_body_bytes': PLAIN_BODY_BYTES},
@@ -790,13 +808,13 @@ def _handle_post(request):
     payload = _PARSE_FAILED if text is None else _parse_json(text)
     del text
     if payload is _PARSE_FAILED:
-        return _rpc_error(None, ERR_PARSE, 'parse error: request body is not valid JSON', http_status=400)
+        return _rpc_error(None, ERR_PARSE, 'The request body is not valid JSON. Send UTF-8 encoded JSON.', http_status=400)
     if isinstance(payload, list) or not isinstance(payload, dict):
-        return _rpc_error(None, ERR_INVALID_REQUEST, 'invalid request: expected a single JSON-RPC object', http_status=400)
+        return _rpc_error(None, ERR_INVALID_REQUEST, 'The request body must be a single JSON-RPC object; this server does not accept batches.', http_status=400)
 
     request_id = payload.get('id')
     if not _valid_id(request_id):
-        return _rpc_error(None, ERR_INVALID_REQUEST, 'invalid request: id must be a string or number', http_status=400)
+        return _rpc_error(None, ERR_INVALID_REQUEST, 'Send id as a string or a number.', http_status=400)
     method = payload.get('method')
     if method is None and ('result' in payload or 'error' in payload):
         # A client's response to a server request. This server sends none;
@@ -805,7 +823,7 @@ def _handle_post(request):
     if payload.get('jsonrpc') != '2.0' or not isinstance(method, str):
         return _rpc_error(
             request_id, ERR_INVALID_REQUEST,
-            'invalid request: expected "jsonrpc": "2.0" and a string "method"',
+            'Send "jsonrpc": "2.0" and a string "method".',
             http_status=400,
         )
     if method != 'initialize':
@@ -814,8 +832,8 @@ def _handle_post(request):
         if version and version.strip() not in SUPPORTED_PROTOCOL_VERSIONS:
             return _rpc_error(
                 request_id, ERR_INVALID_REQUEST,
-                f'unsupported MCP-Protocol-Version header; supported: '
-                f'{", ".join(SUPPORTED_PROTOCOL_VERSIONS)}',
+                f'This MCP-Protocol-Version is not supported; send one of '
+                f'{", ".join(SUPPORTED_PROTOCOL_VERSIONS)}.',
                 http_status=400,
             )
     if 'id' not in payload:
@@ -829,13 +847,13 @@ def _handle_post(request):
         return _dispatch(request, request_id, key, method, payload.get('params'))
     except Exception:
         logger.exception('mcp: unhandled error in %r', method)
-        return _rpc_error(request_id, ERR_INTERNAL, 'internal error', http_status=500)
+        return _rpc_error(request_id, ERR_INTERNAL, 'The server could not complete the request. Try again later.', http_status=500)
 
 
 def _dispatch(request, request_id, key, method, params):
     params = params or {}
     if not isinstance(params, dict):
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'invalid params: params must be an object')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'Send params as an object.')
 
     if method == 'initialize':
         # Negotiate honestly: answer with the client's requested version when
@@ -860,4 +878,4 @@ def _dispatch(request, request_id, key, method, params):
         return _rpc_result(request_id, {'tools': TOOLS})
     if method == 'tools/call':
         return _handle_tools_call(request, request_id, key, params)
-    return _rpc_error(request_id, ERR_METHOD_NOT_FOUND, f'method not found: {method}')
+    return _rpc_error(request_id, ERR_METHOD_NOT_FOUND, f'The method {method} is not supported; use initialize, ping, tools/list or tools/call.')

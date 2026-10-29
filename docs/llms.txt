@@ -61,7 +61,7 @@ Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every fail
 
 ## secret_flags are advisory, not blocking
 
-A flagged upload is stored, and its link works. Blocking on secret-shaped content would break legitimate uploads like test fixtures, so the scan only warns: when `secret_flags` is non-empty, the upload response also carries a `warning` string telling you to ask the human whether to keep or revoke the upload before sharing the link. For never-host semantics, check `secret_flags` in the upload response and call `DELETE /api/v1/artifacts/<id>` (or the `revoke_artifact` MCP tool) when it is non-empty.
+A flagged upload is stored, and its link works. Blocking on secret-shaped content would break legitimate uploads like test fixtures, so the scan only warns: when `secret_flags` is non-empty, the upload response also carries a `warning` string telling you to ask the user whether to keep or revoke the file before sharing its link. For never-host semantics, check `secret_flags` in the upload response and call `DELETE /api/v1/artifacts/<id>` (or the `revoke_artifact` MCP tool) when it is non-empty.
 
 ## MCP upload encoding
 

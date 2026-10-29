@@ -281,17 +281,17 @@ class CreateKeyTests(AccountCase):
         self.assertEqual(account.create_key(self.user, " " + "n" * 255 + " ").status, 201, ACCOUNT)
         answer = account.create_key(self.user, "n" * 256)
         self.assertEqual(
-            answer, Answer(400, {"error": "name must be at most 255 characters.", "code": "invalid_request"}), ACCOUNT
+            answer, Answer(400, {"error": "The name is longer than 255 characters. Use a shorter name.", "code": "invalid_request"}), ACCOUNT
         )
 
     def test_a_name_that_is_not_text_or_holds_a_control_character_is_a_400(self):
         for name, error in (
-            (123, "name must be a string."),
-            (["a"], "name must be a string."),
-            (False, "name must be a string."),
-            (0, "name must be a string."),
-            ("a\x00b", "name must not contain control characters."),
-            ("a\tb", "name must not contain control characters."),
+            (123, "The name must be a string. Send name as text, or leave it out."),
+            (["a"], "The name must be a string. Send name as text, or leave it out."),
+            (False, "The name must be a string. Send name as text, or leave it out."),
+            (0, "The name must be a string. Send name as text, or leave it out."),
+            ("a\x00b", "The name contains control characters. Remove them and try again."),
+            ("a\tb", "The name contains control characters. Remove them and try again."),
         ):
             with self.subTest(name=name):
                 self.assertEqual(account.create_key(self.user, name), Answer(400, {"error": error, "code": "invalid_request"}), ACCOUNT)
@@ -299,7 +299,7 @@ class CreateKeyTests(AccountCase):
 
     def test_a_body_that_is_not_an_object_is_a_400_where_a_bad_name_would_be(self):
         answer = account.create_key(self.user, None, body_is_object=False)
-        self.assertEqual(answer, Answer(400, {"error": "Request body must be a JSON object.", "code": "invalid_request"}), ACCOUNT)
+        self.assertEqual(answer, Answer(400, {"error": "The request body must be a JSON object. Send the body as an object, such as one with a name field.", "code": "invalid_request"}), ACCOUNT)
 
     def test_an_unverified_email_is_refused_first_whatever_else_is_wrong(self):
         user = make_user("unverified", verified=False, plan="team")
@@ -329,7 +329,7 @@ class CreateKeyTests(AccountCase):
         APIKey.create_key(self.workspace, "the one")
         answer = account.create_key(self.user, "second")
         self.assertEqual(
-            answer, Answer(402, {"error": "API key limit for your plan has been reached.", "code": "key_limit_reached"}), ACCOUNT
+            answer, Answer(402, {"error": "Your workspace has reached its plan's API key limit. Revoke a key or upgrade your plan.", "code": "key_limit_reached"}), ACCOUNT
         )
         self.assertEqual(APIKey.objects.filter(workspace=self.workspace).count(), 1, ACCOUNT)
         APIKey.objects.filter(workspace=self.workspace).update(is_active=False)
@@ -375,7 +375,7 @@ class RevokeKeyTests(AccountCase):
 
     def test_another_workspaces_key_and_a_missing_one_are_the_same_404(self):
         theirs, raw = APIKey.create_key(self.strangers_workspace, "theirs")
-        expected = Answer(404, {"error": "No APIKey matches the given query.", "code": "not_found"})
+        expected = Answer(404, {"error": "No API key with that id exists in this workspace. Check the id.", "code": "not_found"})
         self.assertEqual(account.revoke_key(self.user, theirs.pk), expected, f"{WHERE}: a user can reach only their own keys")
         self.assertEqual(account.revoke_key(self.user, 999999), expected, ACCOUNT)
         theirs.refresh_from_db()
@@ -482,7 +482,7 @@ class ListArtifactsTests(AccountCase):
     def test_unusable_paging_is_a_400_that_changes_nothing(self):
         self.files(self.workspace, 2)
         expected = Answer(
-            400, {"error": "limit must be an integer and cursor a value from X-Next-Cursor.", "code": "invalid_request"}
+            400, {"error": "The limit must be a whole number, and the cursor must be a value from the X-Next-Cursor header. Correct the one that is wrong, or leave both out.", "code": "invalid_request"}
         )
         for kwargs in (
             {"limit": "abc"},
@@ -526,7 +526,7 @@ class RevokeArtifactTests(AccountCase):
 
     def test_another_workspaces_file_and_a_missing_one_are_the_same_404_and_change_nothing(self):
         theirs = self.upload(self.strangers_workspace)
-        expected = Answer(404, {"error": "Artifact not found.", "code": "not_found"})
+        expected = Answer(404, {"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"})
         self.assertEqual(account.revoke_artifact(self.user, theirs.id), expected, f"{WHERE}: a user can reach only their own files")
         self.assertEqual(account.revoke_artifact(self.user, "00000000-0000-0000-0000-000000000000"), expected, ACCOUNT)
         row = Artifact.objects.get(pk=theirs.pk)
@@ -584,7 +584,7 @@ class GrantTests(AccountCase):
     def test_an_app_the_user_has_nothing_under_is_a_404_and_changes_nothing(self):
         theirs = self.app("Theirs")
         raw_theirs, _refresh = self.connect(self.stranger, theirs)
-        expected = Answer(404, {"error": "Connected app not found.", "code": "not_found"})
+        expected = Answer(404, {"error": "No connected app with that id exists for you. Check the id under Connected apps on the dashboard.", "code": "not_found"})
         self.assertEqual(account.disconnect_grant(self.user, theirs.pk), expected, f"{WHERE}: a user can reach only their own grants")
         self.assertEqual(account.disconnect_grant(self.user, 999999), expected, ACCOUNT)
         self.assertIsNotNone(resolve_oauth_credential(raw_theirs), ACCOUNT)

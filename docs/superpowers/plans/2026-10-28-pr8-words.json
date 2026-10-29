@@ -1,0 +1,1722 @@
+{
+ "about": "PR 8: the words agents read. Every text below was approved by the owner on 2026-10-29 on the review page, as drafted. 'new' is the approved text exactly as a client receives it; placeholders keep their meaning. Titles go in both the tool's top-level title and annotations.title. C29 has two variants for a one-second wait and for no known wait. Items marked unchanged keep their words.",
+ "annotations": {
+  "list_artifacts": {
+   "readOnlyHint": true,
+   "destructiveHint": false,
+   "idempotentHint": true,
+   "openWorldHint": false
+  },
+  "upload_artifact": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "create_upload_url": {
+   "readOnlyHint": false,
+   "destructiveHint": false,
+   "idempotentHint": false,
+   "openWorldHint": false
+  },
+  "revoke_artifact": {
+   "readOnlyHint": false,
+   "destructiveHint": true,
+   "idempotentHint": true,
+   "openWorldHint": false
+  }
+ },
+ "items": [
+  {
+   "id": "T01",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "89",
+   "kind": "title",
+   "code": "upload_artifact",
+   "trigger": "A client reads this in tools/list as the top-level \"title\" and as \"annotations.title\" of upload_artifact.",
+   "old": "",
+   "new": "Upload a file",
+   "unchanged": false
+  },
+  {
+   "id": "T02",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "91-98",
+   "kind": "tool description",
+   "code": "upload_artifact",
+   "trigger": "A client reads this in tools/list as the description of upload_artifact.",
+   "old": "Upload a file you generated (screenshot, log, HAR, report) to Veilfile and get back a private, expiring URL to share with the user. Never upload credentials, keys or other secrets: every file is secret-scanned, and on_secret=\"reject\" (recommended) refuses a file that trips the scanner without storing it. If the upload response contains non-empty secret_flags, do NOT share the link: ask the user whether to keep or revoke the upload first. For files larger than a few MB, use create_upload_url instead of base64.",
+   "new": "Upload a file from base64 content and return its id, its private share link as url, expires_at, size_bytes and secret_flags. The link stops working when the file expires. The decoded file can be up to 25 MiB; for larger files, create_upload_url takes the bytes by PUT instead. The secret scan reads the first 1 MiB of the file, and secret_flags names each kind of secret-shaped content it finds. With on_secret \"flag\", the default, a flagged file is stored and the result adds a warning and secret_flag_locations. With on_secret \"reject\", a flagged file is not stored and the call returns the secret_detected error.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests.py:294-298 (assertIn \"secret_flags\" and \"ask the user\" in the description)",
+    "backend/drop_mcp/tests_fix_mcp.py:456-464 (assertIn \"on_secret\", \"reject\", \"secret_flags\", \"ask the user\"; assertNotIn \"instead of pasting secrets\")"
+   ]
+  },
+  {
+   "id": "T03",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "105",
+   "kind": "param description",
+   "code": "upload_artifact.filename",
+   "trigger": "A client reads this in the inputSchema of upload_artifact.",
+   "old": "File name including extension, e.g. \"screenshot.png\".",
+   "new": "This is the file name, including its extension, such as screenshot.png. The allowed extensions are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf, and the file's contents must match its extension.",
+   "unchanged": false
+  },
+  {
+   "id": "T04",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "110-112",
+   "kind": "param description",
+   "code": "upload_artifact.content_base64",
+   "trigger": "A client reads this in the inputSchema of upload_artifact.",
+   "old": "Standard base64 of the file bytes (A-Z a-z 0-9 + / with = padding). Line breaks and a \"data:<mime>;base64,\" prefix are accepted. Decoded size must be <= 25 MiB.",
+   "new": "This is the file's content as standard base64. Line breaks and a data:<mime>;base64, prefix are accepted. The decoded file can be up to 25 MiB.",
+   "unchanged": false
+  },
+  {
+   "id": "T05",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "117",
+   "kind": "param description",
+   "code": "upload_artifact.mime_type",
+   "trigger": "A client reads this in the inputSchema of upload_artifact.",
+   "old": "Ignored: the server derives the type from the file extension. Accepted for compatibility.",
+   "new": "The server does not use this value; it takes the file's type from the extension in filename. If you send it, it must be a string.",
+   "unchanged": false
+  },
+  {
+   "id": "T06",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "122-125",
+   "kind": "param description",
+   "code": "upload_artifact.ttl_days",
+   "trigger": "A client reads this in the inputSchema of upload_artifact.",
+   "old": "Optional days until the link expires. Omitting it gives the plan maximum. Values above the plan maximum are clamped down (never rejected); the result includes \"ttl_adjusted\": true when clamping changed your value, so always read expires_at.",
+   "new": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The result's expires_at is the applied expiry.",
+   "unchanged": false
+  },
+  {
+   "id": "T07",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "131-133",
+   "kind": "param description",
+   "code": "upload_artifact.on_secret",
+   "trigger": "A client reads this in the inputSchema of upload_artifact.",
+   "old": "Optional. \"reject\" (recommended) rejects the upload with an error when any secret flag fires (nothing is stored); default \"flag\" stores the file and reports the flags with a warning.",
+   "new": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"flag\", a file with secret-shaped content is stored, and the result lists secret_flags and adds a warning and secret_flag_locations. With \"reject\", that file is not stored and the call returns the secret_detected error.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:466 (assertIn \"recommended\" in the on_secret description)"
+   ]
+  },
+  {
+   "id": "T08",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "141",
+   "kind": "title",
+   "code": "create_upload_url",
+   "trigger": "A client reads this in tools/list as the top-level \"title\" and as \"annotations.title\" of create_upload_url.",
+   "old": "",
+   "new": "Create an upload URL",
+   "unchanged": false
+  },
+  {
+   "id": "T09",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "143-148",
+   "kind": "tool description",
+   "code": "create_upload_url",
+   "trigger": "A client reads this in tools/list as the description of create_upload_url.",
+   "old": "Mint a one-time upload URL for a file too large to pass through the model as base64 (screenshots, HAR files, log bundles). PUT the raw file bytes to the returned upload_url from your shell within 15 minutes (e.g. curl --upload-file). The server runs the full upload pipeline on the bytes — type verification, secret scan, storage — and answers 201 with the artifact. The URL is single-use and needs no API key: the token is the auth.",
+   "new": "Create a one-time upload URL for a file too large to send as base64 through upload_artifact. The result has upload_url, expires_at, max_size_bytes (25 MiB), ttl_days and filename. The URL is valid for 15 minutes and needs no API key. A PUT of the file's raw bytes to it, for example with curl --upload-file, runs the same type check and secret scan as upload_artifact and answers 201 with the same fields that upload_artifact returns. The first successful PUT uses up the URL. A PUT that fails can be retried until the URL expires, except one blocked as content_not_allowed. The URL also stops working if the API key that created it is revoked or the connected app that created it is disconnected.",
+   "unchanged": false
+  },
+  {
+   "id": "T10",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "155",
+   "kind": "param description",
+   "code": "create_upload_url.filename",
+   "trigger": "A client reads this in the inputSchema of create_upload_url.",
+   "old": "File name including extension, e.g. \"screenshot.png\".",
+   "new": "This is the file name, including its extension, such as screenshot.png. The extension is checked when the URL is created, and the allowed extensions are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf.",
+   "unchanged": false
+  },
+  {
+   "id": "T11",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "160-163",
+   "kind": "param description",
+   "code": "create_upload_url.ttl_days",
+   "trigger": "A client reads this in the inputSchema of create_upload_url.",
+   "old": "Optional days until the link expires. Omitting it gives the plan maximum; above-max values are clamped down. The result reports the applied ttl_days and \"ttl_adjusted\": true when clamping changed your value.",
+   "new": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The days count from the PUT, and the result's ttl_days is the applied value.",
+   "unchanged": false
+  },
+  {
+   "id": "T12",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "168",
+   "kind": "param description",
+   "code": "create_upload_url.on_secret",
+   "trigger": "A client reads this in the inputSchema of create_upload_url.",
+   "old": "Optional \"reject\" to reject the PUT when any secret flag fires.",
+   "new": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"reject\", a PUT of a flagged file fails with the secret_detected error, the file is not stored and the URL stays usable until it expires. With \"flag\", a flagged file is stored and the result lists its secret_flags and adds a warning and secret_flag_locations.",
+   "unchanged": false
+  },
+  {
+   "id": "T13",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "175",
+   "kind": "title",
+   "code": "list_artifacts",
+   "trigger": "A client reads this in tools/list as the top-level \"title\" and as \"annotations.title\" of list_artifacts.",
+   "old": "",
+   "new": "List files",
+   "unchanged": false
+  },
+  {
+   "id": "T14",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "176",
+   "kind": "tool description",
+   "code": "list_artifacts",
+   "trigger": "A client reads this in tools/list as the description of list_artifacts.",
+   "old": "List this workspace's artifacts, newest first.",
+   "new": "List the files in this workspace, newest first. Each entry has id, filename, mime_type, size_bytes, url, expires_at, secret_flags and created_at. Expired files that are not yet deleted are included. The tool changes nothing.",
+   "unchanged": false
+  },
+  {
+   "id": "T15",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "182",
+   "kind": "param description",
+   "code": "list_artifacts.limit",
+   "trigger": "A client reads this in the inputSchema of list_artifacts.",
+   "old": "Maximum artifacts to return.",
+   "new": "This is the maximum number of files to return. The range is 1 to 200, the default is 50, and a value outside the range is moved to the nearest end of it. Files beyond the limit are not returned, and there is no paging.",
+   "unchanged": false
+  },
+  {
+   "id": "T16",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "191",
+   "kind": "title",
+   "code": "revoke_artifact",
+   "trigger": "A client reads this in tools/list as the top-level \"title\" and as \"annotations.title\" of revoke_artifact.",
+   "old": "",
+   "new": "Revoke a file",
+   "unchanged": false
+  },
+  {
+   "id": "T17",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "192",
+   "kind": "tool description",
+   "code": "revoke_artifact",
+   "trigger": "A client reads this in tools/list as the description of revoke_artifact.",
+   "old": "Revoke (delete) an artifact immediately by its id. The URL stops working at once.",
+   "new": "Revoke a file by its id. Its link stops working at once and the file is deleted. The result is revoked: true, or revoked: false when this workspace has no file with that id. If storage could not be reached, the result adds storage_deleted: false and a later sweep finishes the deletion. Repeating the call is harmless.",
+   "unchanged": false
+  },
+  {
+   "id": "T18",
+   "group": "mcp-tools",
+   "file": "backend/drop_mcp/views.py",
+   "line": "198",
+   "kind": "param description",
+   "code": "revoke_artifact.id",
+   "trigger": "A client reads this in the inputSchema of revoke_artifact.",
+   "old": "Artifact id (uuid) as returned by upload_artifact.",
+   "new": "This is the id of the file to revoke, a UUID. Both upload_artifact and list_artifacts return it.",
+   "unchanged": false
+  },
+  {
+   "id": "M01",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "465",
+   "kind": "tool error",
+   "code": "storage_unavailable",
+   "trigger": "A tool call that fails because the storage backend is down returns this in an isError result (JSON {\"error\",\"code\"}).",
+   "old": "Storage is temporarily unavailable; nothing was stored. Retry in a minute.",
+   "new": "Storage is temporarily unavailable, so the file was not stored. Try again in a minute.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:361 (assertIn \"retry\" in error.lower())"
+   ]
+  },
+  {
+   "id": "M02",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "489-490",
+   "kind": "tool error",
+   "code": "rate_limited",
+   "trigger": "An upload_artifact or create_upload_url call over the 100/hour per-credential budget returns this in an isError result, with retry_after (integer seconds) beside it.",
+   "old": "Upload rate limit reached ({throttle.rate} per credential, shared with the REST API). Retry after {retry_after} seconds.",
+   "new": "Too many uploads in the past hour. The limit is {throttle.rate} for each API key or connected app, and the REST API shares it. Wait {retry_after} seconds, then try again.",
+   "unchanged": false
+  },
+  {
+   "id": "M03",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "470",
+   "kind": "tool error",
+   "code": "any code without an ERROR_MESSAGES entry",
+   "trigger": "A tool call whose upload fails with a code that ERROR_MESSAGES does not list returns this in an isError result.",
+   "old": "Upload failed.",
+   "new": "The upload failed. Try again, and check the file and its parameters if it fails again.",
+   "unchanged": false
+  },
+  {
+   "id": "M04",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "497-499",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call whose content_base64 is empty, not ASCII, not valid base64 or has a malformed data: prefix returns this as the JSON-RPC message.",
+   "old": "content_base64 is not valid base64: use the standard alphabet (A-Z a-z 0-9 + /) with = padding; line breaks and a \"data:<mime>;base64,\" prefix are accepted",
+   "new": "content_base64 is not valid base64. Send standard base64 (A-Z, a-z, 0-9, + and /) with = padding; line breaks and a data:<mime>;base64, prefix are allowed.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:610-611 (assertIn \"base64\" in the message)"
+   ]
+  },
+  {
+   "id": "M05",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "543, 626",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call of upload_artifact or create_upload_url with a missing, blank or non-string filename returns this as the JSON-RPC message.",
+   "old": "filename is required and must be a non-empty string",
+   "new": "Send filename as a non-empty string.",
+   "unchanged": false
+  },
+  {
+   "id": "M06",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "545",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call of upload_artifact with a missing or empty content_base64 returns this as the JSON-RPC message.",
+   "old": "content_base64 is required and must be a base64 string",
+   "new": "Send content_base64 as a non-empty base64 string.",
+   "unchanged": false
+  },
+  {
+   "id": "M07",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "547",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call of upload_artifact with a non-string mime_type returns this as the JSON-RPC message.",
+   "old": "mime_type must be a string",
+   "new": "Send mime_type as a string.",
+   "unchanged": false
+  },
+  {
+   "id": "M08",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "551, 630",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call of upload_artifact or create_upload_url with ttl_days that is not an integer, is a boolean, or is zero or less returns this as the JSON-RPC message.",
+   "old": "ttl_days must be a positive integer",
+   "new": "Send ttl_days as a whole number of days, 1 or more.",
+   "unchanged": false
+  },
+  {
+   "id": "M09",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "554, 632",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call with an on_secret other than \"flag\" or \"reject\" returns this as the JSON-RPC message.",
+   "old": "on_secret must be \"flag\" or \"reject\"",
+   "new": "Send on_secret as \"flag\" or \"reject\".",
+   "unchanged": false
+  },
+  {
+   "id": "M10",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "611",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call of list_artifacts with a limit that is not an integer (or is a boolean) returns this as the JSON-RPC message.",
+   "old": "limit must be an integer",
+   "new": "Send limit as a whole number, such as 50.",
+   "unchanged": false
+  },
+  {
+   "id": "M11",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "666",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call of revoke_artifact with a missing, blank or non-string id returns this as the JSON-RPC message.",
+   "old": "id is required and must be a string",
+   "new": "Send id as the id of the file to revoke, a non-empty string.",
+   "unchanged": false
+  },
+  {
+   "id": "M12",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "700",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call whose params.name is not a string returns this as the JSON-RPC message.",
+   "old": "invalid params: name must be a string",
+   "new": "Send params.name as a string.",
+   "unchanged": false
+  },
+  {
+   "id": "M13",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "702",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call whose params.arguments is present but not an object returns this as the JSON-RPC message.",
+   "old": "invalid params: arguments must be an object",
+   "new": "Send params.arguments as an object.",
+   "unchanged": false
+  },
+  {
+   "id": "M14",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "838",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "Any request whose params is present but not an object returns this as the JSON-RPC message.",
+   "old": "invalid params: params must be an object",
+   "new": "Send params as an object.",
+   "unchanged": false
+  },
+  {
+   "id": "M15",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "705",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tools/call that names a tool the server does not have returns this as the JSON-RPC message.",
+   "old": "unknown tool: {name}",
+   "new": "No tool named {name} exists. The tools are upload_artifact, create_upload_url, list_artifacts and revoke_artifact.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests.py:398 (assertIn \"unknown tool\")"
+   ]
+  },
+  {
+   "id": "M16",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "717",
+   "kind": "JSON-RPC error (-32602)",
+   "code": "-32602",
+   "trigger": "A tool handler raised a ValueError with no message; the JSON-RPC message falls back to this.",
+   "old": "invalid params",
+   "new": "The arguments are not valid for this tool; check them against its inputSchema.",
+   "unchanged": false
+  },
+  {
+   "id": "M17",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "863",
+   "kind": "JSON-RPC error (-32601)",
+   "code": "-32601",
+   "trigger": "A request whose method is not initialize, notifications/initialized, ping, tools/list or tools/call returns this as the JSON-RPC message.",
+   "old": "method not found: {method}",
+   "new": "The method {method} is not supported; use initialize, ping, tools/list or tools/call.",
+   "unchanged": false
+  },
+  {
+   "id": "M18",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "405-406",
+   "kind": "JSON-RPC error (-32001, HTTP 401)",
+   "code": "-32001",
+   "trigger": "A request with no Authorization header, or one that is not a valid API key or OAuth token, returns this with HTTP 401 and a WWW-Authenticate header.",
+   "old": "unauthorized: provide a valid API key or OAuth token as \"Authorization: Bearer <credential>\"",
+   "new": "The request has no valid API key or connected app access. Send a current API key as Authorization: Bearer <API key>, or reconnect the app.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests.py:145 (assertIn \"unauthorized\")"
+   ]
+  },
+  {
+   "id": "M19",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "748",
+   "kind": "JSON-RPC error (-32600, HTTP 403)",
+   "code": "-32600",
+   "trigger": "A browser request whose Origin header is not one of Veilfile's own origins returns this with HTTP 403.",
+   "old": "forbidden: requests from this Origin are not allowed",
+   "new": "This Origin is not allowed. Send requests from a Veilfile origin, or without an Origin header.",
+   "unchanged": false
+  },
+  {
+   "id": "M20",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "763-766",
+   "kind": "JSON-RPC error (-32600, HTTP 413)",
+   "code": "-32600",
+   "trigger": "An authenticated request body over 36 MiB (MAX_BODY_BYTES) returns this with HTTP 413 and data {\"code\": \"file_too_large\", \"max_body_bytes\": ...}.",
+   "old": "request too large: the body limit is {MAX_BODY_BYTES} bytes (a 25 MiB file as base64 plus the JSON envelope). To skip base64 for large files, call create_upload_url and PUT the raw bytes; files over 25 MiB are not accepted.",
+   "new": "The request is over the body limit of {MAX_BODY_BYTES} bytes, which fits a 25 MiB file as base64 plus the JSON envelope. Call create_upload_url and PUT the raw bytes to the upload URL it returns. Files over 25 MiB are not accepted.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:179 (assertIn \"create_upload_url\")"
+   ]
+  },
+  {
+   "id": "M21",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "771",
+   "kind": "JSON-RPC error (-32700, HTTP 400)",
+   "code": "-32700",
+   "trigger": "A request whose body could not be read (the connection dropped mid-body) returns this with HTTP 400.",
+   "old": "parse error: request body could not be read",
+   "new": "The request body could not be read. Send the request again.",
+   "unchanged": false
+  },
+  {
+   "id": "M22",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "775-779",
+   "kind": "JSON-RPC error (-32600, HTTP 413)",
+   "code": "-32600",
+   "trigger": "A request body over 2.5 MiB that is not shaped like a plain tools/call returns this with HTTP 413 and data {\"code\": \"request_too_complex\", \"max_plain_body_bytes\": ...}.",
+   "old": "request too complex: a body over {PLAIN_BODY_BYTES} bytes is accepted only as a plain tools/call (at most {MAX_LARGE_BODY_STRUCTURE} JSON structural characters, and no characters above U+00FF such as a non-Latin filename). Use an ASCII filename, or call create_upload_url and PUT the raw bytes.",
+   "new": "The request is too complex. A body over {PLAIN_BODY_BYTES} bytes is accepted only as a plain tools/call with at most {MAX_LARGE_BODY_STRUCTURE} JSON structural characters and no characters above U+00FF, such as a non-Latin file name. Use an ASCII file name, or call create_upload_url and PUT the raw bytes.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:672 (assertIn \"create_upload_url\")"
+   ]
+  },
+  {
+   "id": "M23",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "793",
+   "kind": "JSON-RPC error (-32700, HTTP 400)",
+   "code": "-32700",
+   "trigger": "A request body that is not valid UTF-8 JSON returns this with HTTP 400.",
+   "old": "parse error: request body is not valid JSON",
+   "new": "The request body is not valid JSON. Send UTF-8 encoded JSON.",
+   "unchanged": false
+  },
+  {
+   "id": "M24",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "795",
+   "kind": "JSON-RPC error (-32600, HTTP 400)",
+   "code": "-32600",
+   "trigger": "A request body that is a JSON array or any non-object returns this with HTTP 400.",
+   "old": "invalid request: expected a single JSON-RPC object",
+   "new": "The request body must be a single JSON-RPC object; this server does not accept batches.",
+   "unchanged": false
+  },
+  {
+   "id": "M25",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "799",
+   "kind": "JSON-RPC error (-32600, HTTP 400)",
+   "code": "-32600",
+   "trigger": "A request whose id is neither a string nor a number returns this with HTTP 400.",
+   "old": "invalid request: id must be a string or number",
+   "new": "Send id as a string or a number.",
+   "unchanged": false
+  },
+  {
+   "id": "M26",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "808",
+   "kind": "JSON-RPC error (-32600, HTTP 400)",
+   "code": "-32600",
+   "trigger": "A request without \"jsonrpc\": \"2.0\" or without a string \"method\" returns this with HTTP 400.",
+   "old": "invalid request: expected \"jsonrpc\": \"2.0\" and a string \"method\"",
+   "new": "Send \"jsonrpc\": \"2.0\" and a string \"method\".",
+   "unchanged": false
+  },
+  {
+   "id": "M27",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "817-818",
+   "kind": "JSON-RPC error (-32600, HTTP 400)",
+   "code": "-32600",
+   "trigger": "A non-initialize request whose MCP-Protocol-Version header names a version the server does not speak returns this with HTTP 400.",
+   "old": "unsupported MCP-Protocol-Version header; supported: {', '.join(SUPPORTED_PROTOCOL_VERSIONS)}",
+   "new": "This MCP-Protocol-Version is not supported; send one of {', '.join(SUPPORTED_PROTOCOL_VERSIONS)}.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:521 (assertIn \"MCP-Protocol-Version\")"
+   ]
+  },
+  {
+   "id": "M28",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "741, 832",
+   "kind": "JSON-RPC error (-32603, HTTP 500)",
+   "code": "-32603",
+   "trigger": "An unhandled exception anywhere in the endpoint returns this with HTTP 500.",
+   "old": "internal error",
+   "new": "The server could not complete the request. Try again later.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:382 (assertNotIn \"unexpected\")"
+   ]
+  },
+  {
+   "id": "M29",
+   "group": "mcp-errors",
+   "file": "backend/drop_mcp/views.py",
+   "line": "731-732",
+   "kind": "405 hint",
+   "code": "method_not_allowed",
+   "trigger": "A GET, PUT, DELETE or any non-POST request to /mcp returns HTTP 405 with this JSON body.",
+   "old": "Send a JSON-RPC 2.0 request body via POST with Content-Type: application/json.",
+   "new": "Send a POST request with a JSON-RPC 2.0 body and the header Content-Type: application/json.",
+   "unchanged": false,
+   "old_detail": "The body is {\"error\": \"method_not_allowed\", \"hint\": \"<current_text>\"}; \"error\" holds the code itself, there is no \"code\" field, and the words are in \"hint\".",
+   "new_detail": "The body stays {\"error\": \"method_not_allowed\", \"hint\": \"<new_text>\"}; only the hint's words change."
+  },
+  {
+   "id": "C01",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "93",
+   "kind": "REST error (also MCP tool error)",
+   "code": "file_too_large",
+   "trigger": "An upload over 25 MiB (HTTP 413) gets this as \"error\", over REST (POST /api/v1/artifacts, PUT /api/v1/uploads/<token>) and MCP.",
+   "old": "File exceeds the 25 MiB limit.",
+   "new": "The file is larger than the 25 MiB limit. Upload a smaller file.",
+   "unchanged": false
+  },
+  {
+   "id": "C02",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "94",
+   "kind": "REST error (also MCP tool error)",
+   "code": "file_type_not_allowed",
+   "trigger": "An upload with a disallowed or mismatched extension (HTTP 400) gets this as \"error\"; \"detail\" says why (C20, C21).",
+   "old": "File type is not allowed.",
+   "new": "The file type is not allowed. Upload a file of an allowed type.",
+   "unchanged": false,
+   "old_detail": "Beside it: extension '.{ext or '(none)'}' is not allowed; allowed: {_allowed_list()} (C20), or file contents (detected {_describe_detected(data)}) do not match extension '.{ext}'; allowed: {_allowed_list()} (C21).",
+   "new_detail": "",
+   "pinned_by": [
+    "npm/test/fix_npm.test.js:1282 (client fixture, not a server test)"
+   ]
+  },
+  {
+   "id": "C03",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "97",
+   "kind": "REST error (also MCP tool error)",
+   "code": "content_not_allowed",
+   "trigger": "An upload that the safety check refuses (HTTP 400) gets this as \"error\", with no \"detail\".",
+   "old": "File type is not allowed.",
+   "new": "This file's content is not allowed. Upload a different file.",
+   "unchanged": false,
+   "pinned_by": [
+    "npm/test/fix_npm.test.js:1282 (client fixture, not a server test)"
+   ]
+  },
+  {
+   "id": "C04",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "98",
+   "kind": "REST error (also MCP tool error)",
+   "code": "secret_detected",
+   "trigger": "An upload with on_secret=reject whose file trips the secret scan (HTTP 400) gets this as \"error\", with \"detail\" C22.",
+   "old": "Secret-shaped content detected; upload rejected (on_secret=reject).",
+   "new": "The scan found secret-shaped content and on_secret is reject, so nothing was stored. Remove the secret or set on_secret to flag.",
+   "unchanged": false,
+   "old_detail": "secret-shaped content detected ({', '.join(secret_flags)}); upload rejected (on_secret=reject), nothing stored (C22)",
+   "new_detail": ""
+  },
+  {
+   "id": "C05",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "99",
+   "kind": "REST error (also MCP tool error)",
+   "code": "monthly_cap_reached",
+   "trigger": "An upload when the workspace has used its plan's monthly uploads (HTTP 429) gets this as \"error\".",
+   "old": "Monthly upload cap for your plan has been reached.",
+   "new": "Your workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade your plan.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_mcp/tests_fix_mcp.py:414 (assertIn \"Monthly upload cap\" in error)",
+    "cli/tests/test_fix_pycli.py:859,895,898 and npm/test/fix_npm.test.js:1295 (client fixtures)"
+   ]
+  },
+  {
+   "id": "C06",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "101-102",
+   "kind": "REST error (also MCP tool error)",
+   "code": "storage_cap_reached",
+   "trigger": "An upload that would pass the plan's storage cap (HTTP 402) gets this as \"error\".",
+   "old": "Storage cap for your plan has been reached. Delete old artifacts or upgrade your plan.",
+   "new": "Your workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade your plan.",
+   "unchanged": false
+  },
+  {
+   "id": "C07",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "104",
+   "kind": "REST error (also MCP tool error)",
+   "code": "invalid_request",
+   "trigger": "An upload with a bad parameter gets this as \"error\" unless a detail replaces it (see the note).",
+   "old": "Invalid upload parameter.",
+   "new": "The upload has an invalid parameter. Check on_secret and ttl_days.",
+   "unchanged": false,
+   "old_detail": "Beside it, or in its place over REST: on_secret must be \"flag\" or \"reject\" (C18) or ttl_days must be a whole number of days, e.g. 7 (C19).",
+   "new_detail": ""
+  },
+  {
+   "id": "C08",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "124",
+   "kind": "REST error (fallback)",
+   "code": "the code of the ValueError (HTTP 400 unless listed in ERROR_STATUS)",
+   "trigger": "An upload that fails with a code ERROR_MESSAGES does not list gets this as \"error\".",
+   "old": "Upload failed.",
+   "new": "The upload failed. Try again, and check the file and its parameters if it fails again.",
+   "unchanged": false
+  },
+  {
+   "id": "C09",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "120",
+   "kind": "REST error",
+   "code": "storage_unavailable",
+   "trigger": "An upload that fails because the storage backend is down (HTTP 502) gets this as \"error\".",
+   "old": "Storage is temporarily unavailable.",
+   "new": "Storage is temporarily unavailable, so the file was not stored. Try again in a minute.",
+   "unchanged": false
+  },
+  {
+   "id": "C10",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "352-353",
+   "kind": "REST error",
+   "code": "email_verification_required",
+   "trigger": "A session-authenticated (not key) POST /api/v1/artifacts from an account with an unverified email (HTTP 403) gets this as \"error\".",
+   "old": "Verify your email address before uploading. Check your inbox for the verification link.",
+   "new": "Verify your email address before uploading. Check your inbox for the verification link.",
+   "unchanged": true
+  },
+  {
+   "id": "C11",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "362",
+   "kind": "REST error",
+   "code": "file_missing",
+   "trigger": "A POST /api/v1/artifacts with no \"file\" form part (HTTP 400) gets this as \"error\".",
+   "old": "No file provided.",
+   "new": "The request has no file. Send the file in a multipart form field named file.",
+   "unchanged": false
+  },
+  {
+   "id": "C12",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "428",
+   "kind": "REST error",
+   "code": "not_found",
+   "trigger": "A PUT to /api/v1/uploads/<token> with an unknown, used, expired or revoked-credential token (HTTP 404) gets this as \"error\".",
+   "old": "Upload URL not found or expired.",
+   "new": "The upload URL is unknown, expired or already used, or the API key that created it was revoked or the connected app that created it was disconnected. Create a new one with create_upload_url.",
+   "unchanged": false
+  },
+  {
+   "id": "C13",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "460",
+   "kind": "REST error",
+   "code": "invalid_request",
+   "trigger": "A PUT to /api/v1/uploads/<token> whose body could not be read (HTTP 400) gets this as \"error\".",
+   "old": "Could not read the upload body.",
+   "new": "The upload body could not be read. The upload URL is still valid, so send the PUT again.",
+   "unchanged": false
+  },
+  {
+   "id": "C14",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "523",
+   "kind": "REST error",
+   "code": "session_required",
+   "trigger": "GET /api/v1/keys or DELETE /api/v1/keys/<id> called with an OAuth token (HTTP 403) gets this as \"error\".",
+   "old": "OAuth tokens cannot manage API keys. Use the dashboard.",
+   "new": "A connected app cannot manage API keys. Manage keys from the dashboard.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_json_answers.py:277 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "C15",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "548-549",
+   "kind": "REST error",
+   "code": "session_required",
+   "trigger": "POST /api/v1/keys with an API key or OAuth token (HTTP 403) gets this as \"error\".",
+   "old": "API keys and OAuth tokens cannot create keys. Create keys from the dashboard.",
+   "new": "API keys and connected apps cannot create API keys. Create keys from the dashboard.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_json_answers.py:223 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "C16",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "608",
+   "kind": "REST error",
+   "code": "session_required",
+   "trigger": "POST /api/v1/oauth/revoke-grants with an OAuth token that has no app attached (HTTP 403) gets this as \"error\".",
+   "old": "Disconnect apps from the dashboard.",
+   "new": "This connection is not tied to one connected app, so it cannot disconnect any. Disconnect apps under Connected apps on the dashboard.",
+   "unchanged": false
+  },
+  {
+   "id": "C17",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "615-616",
+   "kind": "REST error",
+   "code": "session_required",
+   "trigger": "POST /api/v1/oauth/revoke-grants with an API key (HTTP 403) gets this as \"error\".",
+   "old": "API keys cannot disconnect OAuth apps. Use Connected apps on the dashboard.",
+   "new": "API keys cannot disconnect connected apps. Disconnect them under Connected apps on the dashboard.",
+   "unchanged": false
+  },
+  {
+   "id": "C18",
+   "group": "rest-core",
+   "file": "backend/drop_core/services.py",
+   "line": "170",
+   "kind": "REST/MCP \"detail\" text (and the \"error\" text for invalid_request over REST)",
+   "code": "invalid_request",
+   "trigger": "An upload (or PUT ?on_secret=) whose on_secret is not \"flag\" or \"reject\", case-insensitively, gets this as \"detail\", and over REST also as \"error\" (HTTP 400).",
+   "old": "on_secret must be \"flag\" or \"reject\"",
+   "new": "The on_secret value is not valid. Send \"flag\" or \"reject\".",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_fix_upload.py:267,920,928 (assertIn \"on_secret\" in detail and in error)"
+   ]
+  },
+  {
+   "id": "C19",
+   "group": "rest-core",
+   "file": "backend/drop_core/services.py",
+   "line": "220",
+   "kind": "REST \"detail\" text (and the \"error\" text over REST)",
+   "code": "invalid_request",
+   "trigger": "A POST /api/v1/artifacts with a ttl_days that is not a whole number (HTTP 400) gets this as \"detail\" and as \"error\".",
+   "old": "ttl_days must be a whole number of days, e.g. 7",
+   "new": "ttl_days is not a whole number. Send a whole number of days, for example 7.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_fix_upload.py:288,917 (assertIn \"ttl_days\" in detail and in error)"
+   ]
+  },
+  {
+   "id": "C20",
+   "group": "rest-core",
+   "file": "backend/drop_core/services.py",
+   "line": "244-245",
+   "kind": "REST/MCP \"detail\" text",
+   "code": "file_type_not_allowed",
+   "trigger": "An upload (or a create_upload_url call) whose extension is blocked or not on the allowlist gets this as \"detail\" beside C02.",
+   "old": "extension '.{ext or '(none)'}' is not allowed; allowed: {_allowed_list()}",
+   "new": "The extension '.{ext or '(none)'}' is not allowed. The allowed extensions are {_allowed_list()}.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests.py:131-133 (assertIn \"'.exe'\", \"png\", \"pdf\" in detail)",
+    "backend/drop_mcp/tests.py:343,368-369 and backend/drop_mcp/tests_fix_mcp.py:429-435 (assertIn \".exe\", \"png\" in detail)",
+    "npm/test/fix_npm.test.js:1284,1288 (client fixture)"
+   ]
+  },
+  {
+   "id": "C21",
+   "group": "rest-core",
+   "file": "backend/drop_core/services.py",
+   "line": "358-359",
+   "kind": "REST/MCP \"detail\" text",
+   "code": "file_type_not_allowed",
+   "trigger": "An upload whose bytes do not match its extension gets this as \"detail\" beside C02.",
+   "old": "file contents (detected {_describe_detected(data)}) do not match extension '.{ext}'; allowed: {_allowed_list()}",
+   "new": "The file contents (detected {_describe_detected(data)}) do not match the extension '.{ext}'. The allowed extensions are {_allowed_list()}.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests.py:140-141 (assertIn \"detected text\", \"'.png'\" in detail)"
+   ]
+  },
+  {
+   "id": "C22",
+   "group": "rest-core",
+   "file": "backend/drop_core/services.py",
+   "line": "380-381",
+   "kind": "REST/MCP \"detail\" text",
+   "code": "secret_detected",
+   "trigger": "An upload with on_secret=reject that trips the scan gets this as \"detail\" beside C04.",
+   "old": "secret-shaped content detected ({', '.join(secret_flags)}); upload rejected (on_secret=reject), nothing stored",
+   "new": "The scan found secret-shaped content ({', '.join(secret_flags)}), and on_secret is reject, so nothing was stored.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests.py:397 (assertIn \"github_pat\" in detail)",
+    "backend/drop_mcp/tests.py:322-323 (assertIn \"github_pat\", \"nothing stored\" in detail)",
+    "backend/drop_mcp/tests_fix_mcp.py:443 (assertIn \"github_pat\")"
+   ]
+  },
+  {
+   "id": "C23",
+   "group": "rest-core",
+   "file": "backend/drop_core/secrets.py",
+   "line": "261-262",
+   "kind": "success-result field \"warning\"",
+   "code": "none (field \"warning\" in a successful upload)",
+   "trigger": "A successful upload (201 over REST, a normal result over MCP) whose secret_flags is non-empty carries this as \"warning\".",
+   "old": "secret_flags is non-empty: this file may contain a secret. Ask the user whether to keep or revoke this upload before sharing the link.",
+   "new": "The scan flagged this file as possibly containing a secret; see secret_flags. Ask the user whether to keep or revoke the file before sharing its link.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests.py:265 (assertIn \"secret_flags\" in warning)",
+    "backend/drop_mcp/tests.py:284 (assertIn \"secret_flags\" in warning)"
+   ]
+  },
+  {
+   "id": "C24",
+   "group": "rest-core",
+   "file": "backend/drop_core/auth.py",
+   "line": "34",
+   "kind": "DRF AuthenticationFailed (reworded by the envelope)",
+   "code": "unauthorized",
+   "trigger": "A request whose Authorization header is not exactly \"Bearer <credential>\" (HTTP 401, WWW-Authenticate: Bearer) gets this as \"error\".",
+   "old": "Invalid Authorization header.",
+   "new": "The Authorization header is not valid. Send it as Authorization: Bearer <API key>.",
+   "unchanged": false
+  },
+  {
+   "id": "C25",
+   "group": "rest-core",
+   "file": "backend/drop_core/auth.py",
+   "line": "45",
+   "kind": "DRF AuthenticationFailed (reworded by the envelope)",
+   "code": "unauthorized",
+   "trigger": "A request with a Bearer credential that is neither a valid API key nor a valid OAuth token (HTTP 401) gets this as \"error\".",
+   "old": "Invalid API key.",
+   "new": "The API key is not valid, or the connected app's access has ended. Send a current key, or reconnect the app.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests.py:760 (whole body equality)",
+    "npm/test/cli.test.js:250,310 and npm/test/fix_npm.test.js:815,1340 (client fixtures)"
+   ]
+  },
+  {
+   "id": "C26",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "178",
+   "kind": "library default text (DRF NotAuthenticated)",
+   "code": "unauthorized (HTTP 401) or forbidden (HTTP 403)",
+   "trigger": "A request with no credential to an API-key or session endpoint gets this as \"error\", wrapped by drop_core/errors.py:47-51.",
+   "old": "Authentication credentials were not provided.",
+   "new": "The request has no API key or sign-in. Send an API key as Authorization: Bearer <API key>. Endpoints that need a sign-in are used from the dashboard.",
+   "unchanged": false
+  },
+  {
+   "id": "C27",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "184",
+   "kind": "library default text (DRF PermissionDenied)",
+   "code": "forbidden",
+   "trigger": "A credentialed request that a permission class refuses (HTTP 403) gets this as \"error\".",
+   "old": "You do not have permission to perform this action.",
+   "new": "This request is not allowed for the API key, connected app or sign-in that made it. The API documentation says which ones can make it.",
+   "unchanged": false
+  },
+  {
+   "id": "C28",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/authentication.py",
+   "line": "148",
+   "kind": "library default text (DRF SessionAuthentication CSRF check)",
+   "code": "forbidden",
+   "trigger": "A session-authenticated unsafe request without a valid CSRF token (HTTP 403) gets this as \"error\", wrapped by errors.py.",
+   "old": "CSRF Failed: %s",
+   "new": "The CSRF check failed: %s Reload the page, then try again.",
+   "unchanged": false
+  },
+  {
+   "id": "C29",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "228",
+   "kind": "library default text (DRF Throttled)",
+   "code": "rate_limited",
+   "trigger": "A POST /api/v1/artifacts beyond 100 uploads an hour per credential (HTTP 429, Retry-After header) gets this as \"error\".",
+   "old": "Request was throttled.",
+   "new": "Too many uploads in the past hour. Wait {wait} seconds, then try again.",
+   "unchanged": false,
+   "variants": {
+    "one_second": "Too many uploads in the past hour. Wait {wait} second, then try again.",
+    "no_wait": "Too many uploads in the past hour. Try again later."
+   },
+   "pinned_by": [
+    "backend/drop_core/tests.py:777-785 (Throttled(wait=60): checks code, Retry-After, no \"detail\"; not the words)",
+    "npm/test/fix_npm.test.js:1290,1293 (client fixture)"
+   ]
+  },
+  {
+   "id": "C30",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "166",
+   "kind": "library default text (DRF ParseError)",
+   "code": "invalid_request",
+   "trigger": "A request whose body cannot be parsed and whose parser gave no message (HTTP 400) gets this as \"error\".",
+   "old": "Malformed request.",
+   "new": "The request could not be parsed. Check that the body is well formed.",
+   "unchanged": false
+  },
+  {
+   "id": "C31",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/parsers.py",
+   "line": "68",
+   "kind": "library default text (DRF JSONParser)",
+   "code": "invalid_request",
+   "trigger": "A request with invalid JSON (for example POST /api/v1/keys) gets this as \"error\" (HTTP 400).",
+   "old": "JSON parse error - %s",
+   "new": "The request body is not valid JSON (%s). Fix the JSON and send the request again.",
+   "unchanged": false
+  },
+  {
+   "id": "C32",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/parsers.py",
+   "line": "113",
+   "kind": "library default text (DRF MultiPartParser)",
+   "code": "invalid_request",
+   "trigger": "A malformed multipart body (for example POST /api/v1/artifacts) gets this as \"error\" (HTTP 400).",
+   "old": "Multipart form parse error - %s",
+   "new": "The multipart form body could not be read (%s). Send a well-formed multipart form.",
+   "unchanged": false
+  },
+  {
+   "id": "C33",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "190",
+   "kind": "library default text (DRF NotFound)",
+   "code": "not_found",
+   "trigger": "A request that raises Http404 or NotFound without a message (HTTP 404) gets this as \"error\".",
+   "old": "Not found.",
+   "new": "Nothing exists at this URL. Check the path.",
+   "unchanged": false
+  },
+  {
+   "id": "C34",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "196",
+   "kind": "library default text (DRF MethodNotAllowed)",
+   "code": "method_not_allowed",
+   "trigger": "A request with a method an API view does not allow (HTTP 405) gets this as \"error\".",
+   "old": "Method \"{method}\" not allowed.",
+   "new": "The method {method} is not allowed for this URL. The Allow response header lists the methods it accepts.",
+   "unchanged": false
+  },
+  {
+   "id": "C35",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "217",
+   "kind": "library default text (DRF UnsupportedMediaType)",
+   "code": "request_failed (HTTP 415 is not in _CODE_BY_STATUS)",
+   "trigger": "A request whose Content-Type no parser accepts gets this as \"error\" (HTTP 415).",
+   "old": "Unsupported media type \"{media_type}\" in request.",
+   "new": "The content type \"{media_type}\" is not accepted here. Set the Content-Type header to one the endpoint accepts, such as application/json.",
+   "unchanged": false
+  },
+  {
+   "id": "C36",
+   "group": "rest-core",
+   "file": "venv/lib/python3.12/site-packages/rest_framework/exceptions.py",
+   "line": "207",
+   "kind": "library default text (DRF NotAcceptable)",
+   "code": "request_failed (HTTP 406 is not in _CODE_BY_STATUS)",
+   "trigger": "A request whose Accept header no renderer can satisfy gets this as \"error\" (HTTP 406).",
+   "old": "Could not satisfy the request Accept header.",
+   "new": "The API cannot send a response in the format the Accept header asks for. Ask for application/json, or leave the header out.",
+   "unchanged": false
+  },
+  {
+   "id": "C37",
+   "group": "rest-core",
+   "file": "backend/drop_core/views.py",
+   "line": "723",
+   "kind": "plain-text download error (not the envelope)",
+   "code": "none (HTTP 503, Retry-After: 30, Cache-Control: no-store)",
+   "trigger": "A GET /a/<token> while storage is down returns this as a text/plain body.",
+   "old": "This file is temporarily unavailable. Try again in about 30 seconds.",
+   "new": "This file is temporarily unavailable. Try again in about 30 seconds.",
+   "unchanged": true
+  },
+  {
+   "id": "A01",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "119",
+   "kind": "REST error",
+   "code": "invalid_request",
+   "trigger": "A POST /api/v1/keys whose \"name\" is present and not a string (HTTP 400) gets this as \"error\".",
+   "old": "name must be a string.",
+   "new": "The name must be a string. Send name as text, or leave it out.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:289-292",
+    "backend/drop_core/tests_json_answers.py:187 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A02",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "122",
+   "kind": "REST error",
+   "code": "invalid_request",
+   "trigger": "A POST /api/v1/keys with a name longer than the field allows (HTTP 400) gets this as \"error\".",
+   "old": "name must be at most {max_length} characters.",
+   "new": "The name is longer than {max_length} characters. Use a shorter name.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:284",
+    "backend/drop_core/tests_json_answers.py:188 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A03",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "127",
+   "kind": "REST error",
+   "code": "invalid_request",
+   "trigger": "A POST /api/v1/keys whose name has control characters (HTTP 400) gets this as \"error\".",
+   "old": "name must not contain control characters.",
+   "new": "The name contains control characters. Remove them and try again.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:293-294",
+    "backend/drop_core/tests_json_answers.py:189 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A04",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "169",
+   "kind": "REST error",
+   "code": "invalid_request",
+   "trigger": "A POST /api/v1/keys whose JSON body is not an object (HTTP 400) gets this as \"error\".",
+   "old": "Request body must be a JSON object.",
+   "new": "The request body must be a JSON object. Send the body as an object, such as one with a name field.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:302",
+    "backend/drop_core/tests_json_answers.py:190 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A05",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "183",
+   "kind": "REST error",
+   "code": "key_limit_reached",
+   "trigger": "A POST /api/v1/keys when the workspace has its plan's number of active keys (HTTP 402) gets this as \"error\".",
+   "old": "API key limit for your plan has been reached.",
+   "new": "Your workspace has reached its plan's API key limit. Revoke a key or upgrade your plan.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:332",
+    "backend/drop_core/tests_json_answers.py:201 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A06",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "211",
+   "kind": "REST error",
+   "code": "not_found",
+   "trigger": "A DELETE /api/v1/keys/<id> for a key that is not in the caller's workspace, or does not exist (HTTP 404), gets this as \"error\".",
+   "old": "No APIKey matches the given query.",
+   "new": "No API key with that id exists in this workspace. Check the id.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:378",
+    "backend/drop_core/tests_json_answers.py:249 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A07",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "221-222",
+   "kind": "REST error",
+   "code": "session_required",
+   "trigger": "A DELETE /api/v1/keys/<id> by an API key naming a different key (HTTP 403) gets this as \"error\".",
+   "old": "An API key can only revoke itself. Revoke other keys from the dashboard.",
+   "new": "An API key can only revoke itself. Revoke other keys from the dashboard.",
+   "unchanged": true,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:390",
+    "backend/drop_core/tests_json_answers.py:239 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A08",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "291",
+   "kind": "REST error",
+   "code": "invalid_request",
+   "trigger": "A GET /api/v1/artifacts with a bad limit or cursor (HTTP 400) gets this as \"error\".",
+   "old": "limit must be an integer and cursor a value from X-Next-Cursor.",
+   "new": "The limit must be a whole number, and the cursor must be a value from the X-Next-Cursor header. Correct the one that is wrong, or leave both out.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:485",
+    "backend/drop_core/tests_json_answers.py:332 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A09",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "323",
+   "kind": "REST error",
+   "code": "not_found",
+   "trigger": "A DELETE /api/v1/artifacts/<id> for a file that is not in the caller's workspace, or does not exist (HTTP 404), gets this as \"error\".",
+   "old": "Artifact not found.",
+   "new": "No file with that id exists in this workspace. Check the id.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests.py:797 (whole body equality)",
+    "backend/drop_core/tests_account.py:529",
+    "backend/drop_core/tests_json_answers.py:354 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A10",
+   "group": "rest-account",
+   "file": "backend/drop_core/account.py",
+   "line": "352",
+   "kind": "REST error",
+   "code": "not_found",
+   "trigger": "A DELETE /api/v1/oauth/grants/<app_id> for an app that is not connected, or not the caller's (HTTP 404), gets this as \"error\".",
+   "old": "Connected app not found.",
+   "new": "No connected app with that id exists for you. Check the id under Connected apps on the dashboard.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_account.py:587",
+    "backend/drop_core/tests_json_answers.py:415 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A11",
+   "group": "rest-account",
+   "file": "backend/drop_billing/account.py",
+   "line": "572",
+   "kind": "REST error",
+   "code": "invalid_plan",
+   "trigger": "A POST /api/v1/billing/switch with a plan other than team or scale (HTTP 400) gets this as \"error\".",
+   "old": "Choose the team or scale plan.",
+   "new": "Choose the team or scale plan.",
+   "unchanged": true,
+   "pinned_by": [
+    "backend/drop_billing/tests_account.py:301",
+    "backend/drop_billing/tests_json_answers.py:242 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A12",
+   "group": "rest-account",
+   "file": "backend/drop_billing/account.py",
+   "line": "109-110",
+   "kind": "REST error",
+   "code": "no_subscription",
+   "trigger": "A POST /api/v1/billing/switch for a workspace with no Stripe customer, no live subscription, or no plan item (HTTP 409) gets this as \"error\".",
+   "old": "This workspace has no active subscription to change. Use checkout to subscribe.",
+   "new": "This workspace has no active subscription to change. Subscribe first with POST /api/v1/billing/checkout.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_billing/tests_account.py:46",
+    "backend/drop_billing/tests_json_answers.py:253 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A13",
+   "group": "rest-account",
+   "file": "backend/drop_billing/account.py",
+   "line": "625-627",
+   "kind": "REST error",
+   "code": "multiple_subscriptions",
+   "trigger": "A POST /api/v1/billing/switch for a workspace with several entitled subscriptions (HTTP 409) gets this as \"error\".",
+   "old": "This workspace has more than one subscription. Use Manage billing to cancel the extra one, or contact support.",
+   "new": "This workspace has more than one subscription. Use Manage billing to cancel the extra one, or contact support.",
+   "unchanged": true,
+   "pinned_by": [
+    "backend/drop_billing/tests_json_answers.py:322 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A14",
+   "group": "rest-account",
+   "file": "backend/drop_billing/account.py",
+   "line": "636-637",
+   "kind": "REST error",
+   "code": "subscription_past_due",
+   "trigger": "A POST /api/v1/billing/switch while the subscription is past due (HTTP 409) gets this as \"error\".",
+   "old": "Your last payment failed. Update your payment method under Manage billing before changing plans.",
+   "new": "Your last payment failed. Update your payment method under Manage billing before changing plans.",
+   "unchanged": true,
+   "pinned_by": [
+    "backend/drop_billing/tests_json_answers.py:314 (byte-for-byte)"
+   ]
+  },
+  {
+   "id": "A15",
+   "group": "rest-account",
+   "file": "backend/drop_billing/account.py",
+   "line": "676-680",
+   "kind": "REST error",
+   "code": "payment_required",
+   "trigger": "A POST /api/v1/billing/switch whose plan-change payment did not go through, when Stripe gave an invoice page (HTTP 402), gets this as \"error\"; the body also has \"plan\" and \"invoice_url\".",
+   "old": "The payment for the plan change did not go through, so your plan is unchanged. Complete the payment on the invoice page (your bank may ask you to confirm it), or update your payment method under Manage billing and switch again.",
+   "new": "The payment for the plan change did not go through, so your plan is unchanged. Complete the payment on the invoice page (your bank may ask you to confirm it), or update your payment method under Manage billing and switch again.",
+   "unchanged": true,
+   "pinned_by": [
+    "backend/drop_billing/tests_fix_billing.py:1081 (assertIn \"invoice page\")"
+   ]
+  },
+  {
+   "id": "A16",
+   "group": "rest-account",
+   "file": "backend/drop_billing/account.py",
+   "line": "684-686",
+   "kind": "REST error",
+   "code": "payment_required",
+   "trigger": "The same refusal when Stripe gave no invoice page (HTTP 402) gets this as \"error\"; \"invoice_url\" is null.",
+   "old": "The payment for the plan change did not go through, so your plan is unchanged. Update your payment method under Manage billing, then switch again.",
+   "new": "The payment for the plan change did not go through, so your plan is unchanged. Update your payment method under Manage billing, then switch again.",
+   "unchanged": true,
+   "pinned_by": [
+    "backend/drop_billing/tests_fix_billing.py:1096 (assertIn \"Manage billing\")"
+   ]
+  },
+  {
+   "id": "D01",
+   "group": "device-oauth",
+   "file": "backend/drop_core/device.py",
+   "line": "356",
+   "kind": "REST error",
+   "code": "rate_limited",
+   "trigger": "A POST /api/v1/device/code over the per-IP hourly limit (HTTP 429, Retry-After header) gets this as \"error\".",
+   "old": "Too many device code requests. Try again later.",
+   "new": "Too many sign-ins were started from this network in the past hour. Wait the number of seconds in the Retry-After header, then run veilfile login again.",
+   "unchanged": false
+  },
+  {
+   "id": "D02",
+   "group": "device-oauth",
+   "file": "backend/drop_core/device.py",
+   "line": "367",
+   "kind": "REST error",
+   "code": "rate_limited",
+   "trigger": "A POST /api/v1/device/code while too many device sign-ins are pending site-wide (HTTP 429, Retry-After: 60) gets this as \"error\".",
+   "old": "Too many sign-ins in progress. Try again in a minute.",
+   "new": "Too many sign-ins are in progress. Run veilfile login again in a minute.",
+   "unchanged": false
+  },
+  {
+   "id": "D03",
+   "group": "device-oauth",
+   "file": "backend/drop_core/device.py",
+   "line": "435",
+   "kind": "OAuth/RFC 8628 error_description",
+   "code": "access_denied",
+   "trigger": "A poll of POST /api/v1/device/token after the approving account was deactivated (HTTP 400) gets this as \"error_description\", with \"error\": \"access_denied\".",
+   "old": "The account that approved this login is no longer active.",
+   "new": "The account that approved this login is no longer active. Run veilfile login again and approve it from an active account.",
+   "unchanged": false
+  },
+  {
+   "id": "D04",
+   "group": "device-oauth",
+   "file": "backend/drop_core/device.py",
+   "line": "448-450",
+   "kind": "OAuth/RFC 8628 error_description",
+   "code": "access_denied",
+   "trigger": "A poll of POST /api/v1/device/token when the plan's key limit was reached after approval (HTTP 400) gets this as \"error_description\", with \"error\": \"access_denied\".",
+   "old": "Your plan's API key limit has been reached. Run veilfile login again and choose a key to replace, or revoke one in the dashboard.",
+   "new": "Your workspace has reached its plan's API key limit. Run veilfile login again and choose a key to replace, or revoke a key in the dashboard.",
+   "unchanged": false,
+   "pinned_by": [
+    "backend/drop_core/tests_fix_device.py:289 (assertIn \"limit\" in error_description)",
+    "cli/tests/test_fix_pycli.py:343 and npm/test/fix_npm.test.js:757 (client fixtures)"
+   ]
+  },
+  {
+   "id": "D05",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "111",
+   "kind": "OAuth error_description",
+   "code": "rate_limited (not an RFC 6749 code)",
+   "trigger": "A request to /o/register/, /o/token/ or /o/revoke_token/ over the per-IP hourly limit (HTTP 429, Retry-After header) gets this as \"error_description\", with \"error\": \"rate_limited\".",
+   "old": "Too many requests. Try again later.",
+   "new": "Too many requests came from this network in the past hour. Wait the number of seconds in the Retry-After header, then try again.",
+   "unchanged": false
+  },
+  {
+   "id": "D06",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "534",
+   "kind": "RFC 7591 error_description",
+   "code": "invalid_client_metadata",
+   "trigger": "A dynamic client registration (POST or PUT /o/register/) whose body is over 16 KiB (HTTP 400) gets this as \"error_description\".",
+   "old": "Client metadata must be 16 KiB or smaller.",
+   "new": "The request body is larger than 16 KiB. Send client metadata of 16 KiB or less.",
+   "unchanged": false
+  },
+  {
+   "id": "D07",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "546",
+   "kind": "RFC 7591 error_description",
+   "code": "invalid_client_metadata",
+   "trigger": "A dynamic client registration whose JSON is nested too deeply to parse (HTTP 400) gets this as \"error_description\".",
+   "old": "Request body must be valid JSON",
+   "new": "The request body is nested too deeply to read as JSON. Send JSON with fewer levels of nesting.",
+   "unchanged": false
+  },
+  {
+   "id": "D08",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "561-562",
+   "kind": "RFC 7591 error_description",
+   "code": "invalid_client_metadata",
+   "trigger": "A dynamic client registration with a NUL character or an unpaired surrogate anywhere in the body (HTTP 400) gets this as \"error_description\".",
+   "old": "Client metadata must not contain NUL characters or unpaired surrogates.",
+   "new": "The client metadata contains a NUL character or an unpaired surrogate. Remove it and register again.",
+   "unchanged": false
+  },
+  {
+   "id": "D09",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "575-576",
+   "kind": "RFC 7591 error_description",
+   "code": "invalid_client_metadata",
+   "trigger": "A dynamic client registration whose grant_types names anything other than authorization_code or refresh_token (HTTP 400) gets this as \"error_description\".",
+   "old": "Unsupported grant_type {grant_type[:80]!r}: Veilfile clients use authorization_code (with refresh_token).",
+   "new": "The grant_type {grant_type[:80]!r} is not supported. Use authorization_code, refresh_token or both.",
+   "unchanged": false
+  },
+  {
+   "id": "D10",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "595",
+   "kind": "RFC 7591 error_description",
+   "code": "invalid_redirect_uri",
+   "trigger": "A dynamic client registration with a redirect_uri that fails any of D11 to D25 (HTTP 400) gets this as \"error_description\".",
+   "old": "Rejected redirect_uri {shown!r}: {reason}",
+   "new": "The redirect_uri {shown!r} was rejected. {reason}",
+   "unchanged": false
+  },
+  {
+   "id": "D11",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "401",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description, after \"Rejected redirect_uri ...:\". Cause: the redirect_uri is missing, empty or not a string.",
+   "old": "redirect_uri must be a non-empty string",
+   "new": "The redirect_uri must be a non-empty string.",
+   "unchanged": false
+  },
+  {
+   "id": "D12",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "403",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the redirect_uri is longer than 2048 characters (_MAX_REDIRECT_URI_LENGTH, oauth.py:377).",
+   "old": "redirect_uri is too long",
+   "new": "The redirect_uri must be 2048 characters or fewer.",
+   "unchanged": false
+  },
+  {
+   "id": "D13",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "407",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the redirect_uri contains a non-ASCII character.",
+   "old": "redirect_uri must be ASCII",
+   "new": "The redirect_uri must use ASCII characters only.",
+   "unchanged": false
+  },
+  {
+   "id": "D14",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "409",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the redirect_uri contains a character below 32 or 127.",
+   "old": "redirect_uri must not contain control characters",
+   "new": "The redirect_uri must not contain control characters.",
+   "unchanged": false
+  },
+  {
+   "id": "D15",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "413",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the redirect_uri contains a space or other whitespace.",
+   "old": "redirect_uri must not contain whitespace",
+   "new": "The redirect_uri must not contain spaces or other whitespace.",
+   "unchanged": false
+  },
+  {
+   "id": "D16",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "417",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: urlsplit raised ValueError.",
+   "old": "redirect_uri is malformed",
+   "new": "The redirect_uri could not be parsed as a URI. Send a well-formed URI.",
+   "unchanged": false
+  },
+  {
+   "id": "D17",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "419",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the redirect_uri has any scheme other than http or https (a native app's custom scheme, for example).",
+   "old": "redirect_uri must use the http or https scheme",
+   "new": "The redirect_uri must use the http or https scheme.",
+   "unchanged": false
+  },
+  {
+   "id": "D18",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "421",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the redirect_uri contains user:password@ in the host part.",
+   "old": "redirect_uri must not include userinfo",
+   "new": "The redirect_uri must not include a username or password.",
+   "unchanged": false
+  },
+  {
+   "id": "D19",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "424",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: there is no host after the scheme.",
+   "old": "redirect_uri must include a host",
+   "new": "The redirect_uri must include a host.",
+   "unchanged": false
+  },
+  {
+   "id": "D20",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "426",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the redirect_uri contains a fragment (#).",
+   "old": "redirect_uri must not include a fragment",
+   "new": "The redirect_uri must not include a fragment, the part after #.",
+   "unchanged": false
+  },
+  {
+   "id": "D21",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "443-444",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the host is a private, reserved, link-local, multicast or unspecified IP address (oauth.py:435-445).",
+   "old": "redirect_uri must not target a private, reserved, or link-local address",
+   "new": "The redirect_uri host must not be a private, reserved, link-local, multicast or unspecified IP address.",
+   "unchanged": false
+  },
+  {
+   "id": "D22",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "458-460",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the host is localhost, .localhost, .local or a name with no dot (oauth.py:451-461).",
+   "old": "redirect_uri must use a public DNS name (localhost and local names are not allowed; native apps use a literal loopback IP)",
+   "new": "The redirect_uri host must be a public DNS name, not localhost, a .localhost name, a .local name or a name without a dot. A native app uses a literal loopback IP address instead.",
+   "unchanged": false
+  },
+  {
+   "id": "D23",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "468-469",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the host's last label looks like a number, such as 127.1 (oauth.py:462-470).",
+   "old": "redirect_uri host must be a DNS name or a dotted-quad or bracketed IPv6 literal",
+   "new": "The redirect_uri host must be a DNS name or a full IP address, with IPv4 written as four numbers separated by dots and IPv6 in brackets.",
+   "unchanged": false
+  },
+  {
+   "id": "D24",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "474",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: the host is over 253 characters or has an invalid label (oauth.py:471-474).",
+   "old": "redirect_uri host is malformed",
+   "new": "The redirect_uri host is not a valid DNS name. Use at most 253 characters in total, with labels separated by single dots, each label 1 to 63 characters of letters, digits and hyphens, and no label starting or ending with a hyphen.",
+   "unchanged": false
+  },
+  {
+   "id": "D25",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "477-478",
+   "kind": "RFC 7591 redirect_uri reason (inside D10)",
+   "code": "invalid_redirect_uri",
+   "trigger": "Part of D10's error_description. Cause: http to a host that is not a literal loopback IP address (oauth.py:475-479).",
+   "old": "redirect_uri must use https (http is only allowed for literal loopback IP redirect URIs, RFC 8252)",
+   "new": "The redirect_uri must use https, except for a literal loopback IP address such as 127.0.0.1 or [::1].",
+   "unchanged": false
+  },
+  {
+   "id": "D26",
+   "group": "device-oauth",
+   "file": "backend/drop_core/oauth.py",
+   "line": "673-674",
+   "kind": "RFC 6749 error_description",
+   "code": "unsupported_grant_type",
+   "trigger": "A POST /o/token/ with a grant_type other than authorization_code or refresh_token (HTTP 400) gets this as \"error_description\".",
+   "old": "Only the authorization_code and refresh_token grants are supported.",
+   "new": "The grant_type is not supported. Use authorization_code or refresh_token.",
+   "unchanged": false
+  },
+  {
+   "id": "X01",
+   "group": "agents",
+   "file": "AGENTS.md",
+   "line": "498",
+   "kind": "new paragraph after step 4 of \"Releasing the CLIs\"",
+   "code": "",
+   "trigger": "",
+   "old": "",
+   "new": "npm and PyPI each trust one publisher, release.yml in this repository. npm 0.4.1 was the first release from here, and PyPI's next release will be its first. Only the maintainers team can create npm-v* and pypi-v* tags (the release-tags ruleset), so Muse's account pushes them after the owner's go-ahead.",
+   "unchanged": false
+  },
+  {
+   "id": "X02",
+   "group": "agents",
+   "file": "AGENTS.md",
+   "line": "535",
+   "kind": "invariant 4",
+   "code": "",
+   "trigger": "",
+   "old": "Every published CLI (npm `veilfile` 0.2.0 and 0.4.0, PyPI `veilfile` 0.3.0 and 0.4.0)",
+   "new": "Every published CLI (npm `veilfile` 0.2.0, 0.4.0 and 0.4.1, PyPI `veilfile` 0.3.0 and 0.4.0)",
+   "unchanged": false
+  }
+ ]
+}

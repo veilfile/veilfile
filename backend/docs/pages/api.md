@@ -53,7 +53,7 @@ A `201` comes back:
 }
 ```
 
-`ttl_adjusted: true` appears when your `ttl_days` was clamped to the plan max. A `warning` string appears when `secret_flags` is non-empty: ask the user whether to keep or revoke the upload before sharing the link.
+`ttl_adjusted: true` appears when your `ttl_days` was clamped to the plan max. A `warning` string appears when `secret_flags` is non-empty. It reads: "The scan flagged this file as possibly containing a secret; see secret_flags. Ask the user whether to keep or revoke the file before sharing its link."
 
 ## List
 
@@ -65,7 +65,7 @@ The endpoint returns your workspace's artifacts, newest first, as a bare JSON ar
 
 `DELETE /api/v1/artifacts/<id>`
 
-The endpoint deletes the artifact at once. Its URL returns `404` immediately. Success is a `204` with an empty body. Unknown ids return `404` with `{"error": "Artifact not found.", "code": "not_found"}`.
+The endpoint deletes the artifact at once. Its URL returns `404` immediately. Success is a `204` with an empty body. Unknown ids return `404` with `{"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"}`.
 
 ## Download
 
@@ -79,15 +79,15 @@ Errors are JSON: `{"error": "<message>", "code": "<code>"}`. Branch on `code`.
 
 | HTTP | Code | Meaning |
 |---|---|---|
-| 400 | `file_type_not_allowed` | Type not in the allowlist |
-| 400 | `secret_detected` | `on_secret=reject` and the file looks like it holds a secret |
-| 400 | `invalid_request` | Bad parameter (for example a non-integer `ttl_days`) |
-| 401 | `unauthorized` | Missing or invalid API key |
-| 402 | `storage_cap_reached` | Plan storage cap hit |
-| 404 | `not_found` | Unknown, revoked, or expired |
-| 413 | `file_too_large` | Over 25 MiB |
-| 429 | `monthly_cap_reached` | Monthly upload quota hit |
-| 429 | `rate_limited` | You sent too many requests. Wait the number of seconds in `Retry-After`. |
+| 400 | `file_type_not_allowed` | The file type is not in the allowed list. |
+| 400 | `secret_detected` | The scan found secret-shaped content and `on_secret` is `reject`, so nothing was stored. |
+| 400 | `invalid_request` | A parameter is not valid, for example a `ttl_days` that is not a whole number. |
+| 401 | `unauthorized` | The API key is missing or not valid. |
+| 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
+| 404 | `not_found` | The id or token is unknown, or the file is revoked or expired. |
+| 413 | `file_too_large` | The file is larger than 25 MiB. |
+| 429 | `monthly_cap_reached` | The workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade. |
+| 429 | `rate_limited` | There were too many requests. Wait the number of seconds in `Retry-After`, then try again. |
 
 The rate limit is 100 uploads per hour for each API key or connected app, and REST and MCP uploads share it.
 

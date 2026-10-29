@@ -106,8 +106,8 @@ def _stripe_error(exc):
 def _no_subscription():
     return _error(
         "no_subscription",
-        "This workspace has no active subscription to change. Use checkout "
-        "to subscribe.",
+        "This workspace has no active subscription to change. Subscribe first "
+        "with POST /api/v1/billing/checkout.",
         409,
     )
 

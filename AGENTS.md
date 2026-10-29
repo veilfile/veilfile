@@ -513,6 +513,8 @@ released (invariant 9).
 4. Confirm the release: `npm view veilfile version` and
    `https://pypi.org/pypi/veilfile/json`.
 
+npm and PyPI each trust one publisher, release.yml in this repository. npm 0.4.1 was the first release from here, and PyPI's next release will be its first. Only the maintainers team can create npm-v* and pypi-v* tags (the release-tags ruleset), so Muse's account pushes them after the owner's go-ahead.
+
 ## Invariants: do not break these
 
 1. **Raw API keys are never stored.** Only the SHA-256 hash is (`APIKey`);
@@ -533,7 +535,7 @@ released (invariant 9).
    `paused` and `canceled` drop to Free. A workspace with a live subscription
    gets `409 already_subscribed` instead of a second Checkout.
 4. **Published clients keep working.** Every published CLI (npm `veilfile`
-   0.2.0 and 0.4.0, PyPI `veilfile` 0.3.0 and 0.4.0) and MCP clients in the
+   0.2.0, 0.4.0 and 0.4.1, PyPI `veilfile` 0.3.0 and 0.4.0) and MCP clients in the
    wild call the current endpoints and tools; old versions stay installed for
    a long time.
    Changes to responses, status codes, error codes or tool schemas must be

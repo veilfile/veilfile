@@ -123,6 +123,25 @@ class McpEndpointTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(data['error']['code'], -32601)
 
+    def test_approved_texts_for_method_and_json_errors(self):
+        response, data = self.post(_rpc('nope/nothing'))
+        self.assertEqual(
+            data['error']['message'],
+            'The method nope/nothing is not supported; use initialize, ping, '
+            'tools/list or tools/call.',
+        )
+        request = self.factory.post(
+            '/mcp', data=b'{not json', content_type='application/json',
+            HTTP_AUTHORIZATION=f'Bearer {self.raw_key}',
+        )
+        data = json.loads(mcp_endpoint(request).content.decode('utf-8'))
+        self.assertEqual(
+            data['error']['message'],
+            'The request body is not valid JSON. Send UTF-8 encoded JSON.',
+        )
+        response, data = self.call_tool('upload_artifact', {})
+        self.assertEqual(data['error']['message'], 'Send filename as a non-empty string.')
+
     def test_invalid_json_body(self):
         request = self.factory.post(
             '/mcp', data=b'{not json', content_type='application/json',
@@ -142,7 +161,7 @@ class McpEndpointTests(TestCase):
         response, data = self.post(_rpc('tools/list'), raw_key='vlf_this-key-does-not-exist')
         self.assertEqual(response.status_code, 401)
         self.assertEqual(data['error']['code'], -32001)
-        self.assertIn('unauthorized', data['error']['message'])
+        self.assertIn('no valid API key or connected app access', data['error']['message'])
 
     def test_wrong_scheme_returns_401(self):
         request = self.factory.post(
@@ -291,12 +310,13 @@ class McpEndpointTests(TestCase):
         self.assertEqual(uploaded['secret_flags'], [])
         self.assertNotIn('warning', uploaded)
 
-    def test_upload_tool_description_has_secret_instruction(self):
+    def test_upload_tool_description_names_the_secret_fields(self):
         response, data = self.post(_rpc('tools/list'))
         tools = {t['name']: t for t in data['result']['tools']}
         desc = tools['upload_artifact']['description']
         self.assertIn('secret_flags', desc)
-        self.assertIn('ask the user', desc.lower())
+        self.assertIn('secret_flag_locations', desc)
+        self.assertNotIn('ask the user', desc.lower())
 
     def test_upload_invalid_base64(self):
         response, data = self.call_tool('upload_artifact', {
@@ -320,7 +340,7 @@ class McpEndpointTests(TestCase):
         body = self.tool_error(data)
         self.assertEqual(body['code'], 'secret_detected')
         self.assertIn('github_pat', body['detail'])
-        self.assertIn('nothing stored', body['detail'])
+        self.assertIn('nothing was stored', body['detail'])
 
     def test_create_upload_url_roundtrip(self):
         result = self.call_result('create_upload_url', {'filename': 'shot.png'})
@@ -395,7 +415,11 @@ class McpEndpointTests(TestCase):
     def test_unknown_tool(self):
         response, data = self.call_tool('delete_everything', {})
         self.assertEqual(data['error']['code'], -32602)
-        self.assertIn('unknown tool', data['error']['message'])
+        self.assertEqual(
+            data['error']['message'],
+            'No tool named delete_everything exists. The tools are upload_artifact, '
+            'create_upload_url, list_artifacts and revoke_artifact.',
+        )
 
     def test_revoke_unknown_id_returns_false(self):
         result = self.call_result('revoke_artifact', {'id': str(uuid.uuid4())})

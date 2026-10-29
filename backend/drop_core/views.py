@@ -90,18 +90,30 @@ ERROR_STATUS = {
 }
 
 ERROR_MESSAGES = {
-    "file_too_large": "File exceeds the 25 MiB limit.",
-    "file_type_not_allowed": "File type is not allowed.",
-    # Deliberately identical to file_type_not_allowed: a refused upload
-    # reveals nothing about which safety signal fired.
-    "content_not_allowed": "File type is not allowed.",
-    "secret_detected": "Secret-shaped content detected; upload rejected (on_secret=reject).",
-    "monthly_cap_reached": "Monthly upload cap for your plan has been reached.",
-    "storage_cap_reached": (
-        "Storage cap for your plan has been reached. "
-        "Delete old artifacts or upgrade your plan."
+    "file_too_large": "The file is larger than the 25 MiB limit. Upload a smaller file.",
+    "file_type_not_allowed": (
+        "The file type is not allowed. Upload a file of an allowed type."
     ),
-    "invalid_request": "Invalid upload parameter.",
+    # This answer carries no "detail", so a refused upload reveals nothing
+    # about which safety signal fired.
+    "content_not_allowed": (
+        "This file's content is not allowed. Upload a different file."
+    ),
+    "secret_detected": (
+        "The scan found secret-shaped content and on_secret is reject, so "
+        "nothing was stored. Remove the secret or set on_secret to flag."
+    ),
+    "monthly_cap_reached": (
+        "Your workspace has reached its plan's monthly upload cap. Uploads "
+        "work again next month, or you can upgrade your plan."
+    ),
+    "storage_cap_reached": (
+        "Your workspace has reached its plan's storage cap. Revoke files "
+        "you no longer need, or upgrade your plan."
+    ),
+    "invalid_request": (
+        "The upload has an invalid parameter. Check on_secret and ttl_days."
+    ),
 }
 
 
@@ -117,11 +129,18 @@ def _upload_failure_response(exc):
     """Map an upload_artifact failure to an error response."""
     if isinstance(exc, StorageError):
         return Response(
-            {"error": "Storage is temporarily unavailable.", "code": exc.code},
+            {"error": (
+                "Storage is temporarily unavailable, so the file was not "
+                "stored. Try again in a minute."
+            ), "code": exc.code},
             status=status.HTTP_502_BAD_GATEWAY,
         )
     code = str(exc)
-    body = {"error": ERROR_MESSAGES.get(code, "Upload failed."), "code": code}
+    body = {"error": ERROR_MESSAGES.get(
+            code,
+            "The upload failed. Try again, and check the file and its "
+            "parameters if it fails again.",
+        ), "code": code}
     # Rejections that know why (e.g. file_type_not_allowed) say so;
     # safety-seam blocks stay deliberately bare.
     detail = getattr(exc, "detail", "")
@@ -359,7 +378,10 @@ class ArtifactListCreateView(APIView):
         upload = request.FILES.get("file")
         if upload is None:
             return Response(
-                {"error": "No file provided.", "code": "file_missing"},
+                {"error": (
+                    "The request has no file. Send the file in a multipart "
+                    "form field named file."
+                ), "code": "file_missing"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if upload.size > MAX_FILE_SIZE:
@@ -425,7 +447,12 @@ class PendingUploadView(APIView):
 
     def put(self, request, token):
         not_found = Response(
-            {"error": "Upload URL not found or expired.", "code": "not_found"},
+            {"error": (
+                "The upload URL is unknown, expired or already used, or the "
+                "API key that created it was revoked or the connected app "
+                "that created it was disconnected. Create a new one with "
+                "create_upload_url."
+            ), "code": "not_found"},
             status=status.HTTP_404_NOT_FOUND,
         )
         pending = (
@@ -457,7 +484,10 @@ class PendingUploadView(APIView):
             data = _read_body_bounded(request, MAX_FILE_SIZE)
         except UnreadablePostError:
             return Response(
-                {"error": "Could not read the upload body.", "code": "invalid_request"},
+                {"error": (
+                    "The upload body could not be read. The upload URL is "
+                    "still valid, so send the PUT again."
+                ), "code": "invalid_request"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if data is None:
@@ -520,7 +550,9 @@ def _session_required_response(message):
     )
 
 
-_OAUTH_KEYS_FORBIDDEN = "OAuth tokens cannot manage API keys. Use the dashboard."
+_OAUTH_KEYS_FORBIDDEN = (
+    "A connected app cannot manage API keys. Manage keys from the dashboard."
+)
 
 
 class KeyListCreateView(APIView):
@@ -545,7 +577,7 @@ class KeyListCreateView(APIView):
         # (request.user is anonymous under key auth).
         if request.auth is not None:
             return _session_required_response(
-                "API keys and OAuth tokens cannot create keys. "
+                "API keys and connected apps cannot create API keys. "
                 "Create keys from the dashboard."
             )
         # The gates are drop_core.account.create_key's, which the dashboard
@@ -605,15 +637,17 @@ class OAuthGrantRevokeView(APIView):
             if application is None:
                 # Never widen an app-less token's logout to every app.
                 return _session_required_response(
-                    "Disconnect apps from the dashboard."
+                    "This connection is not tied to one connected app, so it "
+                    "cannot disconnect any. Disconnect apps under Connected "
+                    "apps on the dashboard."
                 )
             revoked = revoke_user_oauth_grants(
                 request.auth.workspace.owner, application=application
             )
         elif request.auth is not None:
             return _session_required_response(
-                "API keys cannot disconnect OAuth apps. "
-                "Use Connected apps on the dashboard."
+                "API keys cannot disconnect connected apps. "
+                "Disconnect them under Connected apps on the dashboard."
             )
         else:
             revoked = revoke_user_oauth_grants(request.user)

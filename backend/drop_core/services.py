@@ -167,7 +167,8 @@ def normalize_on_secret(value):
         if text in ON_SECRET_CHOICES:
             return text
     raise RejectedUpload(
-        "invalid_request", 'on_secret must be "flag" or "reject"'
+        "invalid_request",
+        'The on_secret value is not valid. Send "flag" or "reject".',
     )
 
 
@@ -217,7 +218,8 @@ def _parse_ttl_days(ttl_days):
         if _INTEGER_RE.fullmatch(text):
             return int(text)
     raise RejectedUpload(
-        "invalid_request", "ttl_days must be a whole number of days, e.g. 7"
+        "invalid_request", "ttl_days is not a whole number. Send a whole number of days, "
+        "for example 7."
     )
 
 
@@ -241,8 +243,8 @@ def _check_extension(filename):
     if ext in BLOCKED_EXTENSIONS or ext not in ALLOWED_EXTENSIONS:
         raise RejectedUpload(
             "file_type_not_allowed",
-            f"extension '.{ext or '(none)'}' is not allowed; "
-            f"allowed: {_allowed_list()}",
+            f"The extension '.{ext or '(none)'}' is not allowed. "
+            f"The allowed extensions are {_allowed_list()}.",
         )
     return ext
 
@@ -355,8 +357,9 @@ def upload_artifact(
     if not verify_magic_bytes(data, ext):
         raise RejectedUpload(
             "file_type_not_allowed",
-            f"file contents (detected {_describe_detected(data)}) do not match "
-            f"extension '.{ext}'; allowed: {_allowed_list()}",
+            f"The file contents (detected {_describe_detected(data)}) do not "
+            f"match the extension '.{ext}'. "
+            f"The allowed extensions are {_allowed_list()}.",
         )
     mime_type = mime_type_for(filename)
 
@@ -377,8 +380,8 @@ def upload_artifact(
         # quota consumed, no URL minted.
         raise RejectedUpload(
             "secret_detected",
-            f"secret-shaped content detected ({', '.join(secret_flags)}); "
-            "upload rejected (on_secret=reject), nothing stored",
+            f"The scan found secret-shaped content ({', '.join(secret_flags)}), "
+            "and on_secret is reject, so nothing was stored.",
         )
 
     # Safety seam (Phase 0). Runs after the secret scan, before anything

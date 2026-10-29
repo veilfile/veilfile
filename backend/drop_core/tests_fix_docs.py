@@ -384,3 +384,19 @@ class LicenseTests(SimpleTestCase):
         for path in ("cli/LICENSE", "npm/LICENSE"):
             self.assertTrue((REPO / path).read_text().startswith("MIT License"), f"{path}: the CLIs stay MIT")
         self.assertIn("All rights are reserved", (REPO / "README.md").read_text(), "README.md: say the code is all rights reserved")
+
+
+class ApprovedWordsInDocsTests(SimpleTestCase):
+    """docs/API.md quotes each tool's title and description as tools/list sends them."""
+
+    def test_api_doc_quotes_every_tool_title_and_description(self):
+        text = _read(REPO / "docs/API.md")
+        for tool in TOOLS:
+            self.assertIn(tool["description"], text, f"docs/API.md does not quote the {tool['name']} description")
+            self.assertIn(tool["title"], text, f"docs/API.md does not name the title of {tool['name']}")
+            for prop, spec in tool["inputSchema"]["properties"].items():
+                escaped = spec["description"].replace('"', '\\"')
+                self.assertTrue(
+                    spec["description"] in text or escaped in text,
+                    f"docs/API.md does not quote {tool['name']}.{prop}",
+                )

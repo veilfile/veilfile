@@ -31,7 +31,10 @@ class APIKeyAuthentication(BaseAuthentication):
             return None  # no attempt -> permission layer turns this into 401
         parts = header.split()
         if len(parts) != 2 or parts[0].lower() != "bearer":
-            raise AuthenticationFailed("Invalid Authorization header.")
+            raise AuthenticationFailed((
+                "The Authorization header is not valid. Send it as "
+                "Authorization: Bearer <API key>."
+            ))
         credential = parts[1]
         # vlf_ fast-path (unchanged behavior).
         api_key = APIKey.verify(credential)
@@ -42,7 +45,10 @@ class APIKeyAuthentication(BaseAuthentication):
         # Parallel OAuth credential (mcp:use scope).
         adapter = oauth_layer.resolve_oauth_credential(credential)
         if adapter is None:
-            raise AuthenticationFailed("Invalid API key.")
+            raise AuthenticationFailed((
+                "The API key is not valid, or the connected app's access has "
+                "ended. Send a current key, or reconnect the app."
+            ))
         return (None, adapter)
 
     def authenticate_header(self, request):

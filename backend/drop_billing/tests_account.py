@@ -43,7 +43,7 @@ NOT_CONFIGURED = Answer(503, {"error": "billing_not_configured"})
 NO_SUBSCRIPTION = Answer(
     409,
     {
-        "error": "This workspace has no active subscription to change. Use checkout to subscribe.",
+        "error": "This workspace has no active subscription to change. Subscribe first with POST /api/v1/billing/checkout.",
         "code": "no_subscription",
     },
 )
