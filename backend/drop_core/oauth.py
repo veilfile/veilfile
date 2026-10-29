@@ -108,7 +108,11 @@ def _rate_limited_response(retry_after, oauth_error="rate_limited"):
     response = JsonResponse(
         {
             "error": oauth_error,
-            "error_description": "Too many requests. Try again later.",
+            "error_description": (
+                "Too many requests came from this network in the past hour. "
+                "Wait the number of seconds in the Retry-After header, "
+                "then try again."
+            ),
         },
         status=429,
     )
@@ -398,32 +402,35 @@ def _validate_dcr_redirect_uri(uri):
         return reason
 
     if not isinstance(uri, str) or not uri:
-        return reject("redirect_uri must be a non-empty string")
+        return reject("The redirect_uri must be a non-empty string.")
     if len(uri) > _MAX_REDIRECT_URI_LENGTH:
-        return reject("redirect_uri is too long")
+        return reject("The redirect_uri must be 2048 characters or fewer.")
     try:
         uri.encode("ascii")
     except UnicodeEncodeError:
-        return reject("redirect_uri must be ASCII")
+        return reject("The redirect_uri must use ASCII characters only.")
     if any(ord(ch) < 32 or ord(ch) == 127 for ch in uri):
-        return reject("redirect_uri must not contain control characters")
+        return reject("The redirect_uri must not contain control characters.")
     if any(ch.isspace() for ch in uri):
         # DOT stores redirect_uris space-separated: an embedded space would
         # smuggle extra, unvalidated URIs into the stored list.
-        return reject("redirect_uri must not contain whitespace")
+        return reject("The redirect_uri must not contain spaces or other whitespace.")
     try:
         parts = urlsplit(uri)
     except ValueError:
-        return reject("redirect_uri is malformed")
+        return reject(
+            "The redirect_uri could not be parsed as a URI. Send a "
+            "well-formed URI."
+        )
     if parts.scheme not in ("http", "https"):
-        return reject("redirect_uri must use the http or https scheme")
+        return reject("The redirect_uri must use the http or https scheme.")
     if "@" in parts.netloc:
-        return reject("redirect_uri must not include userinfo")
+        return reject("The redirect_uri must not include a username or password.")
     host = (parts.hostname or "").rstrip(".")
     if not host:
-        return reject("redirect_uri must include a host")
+        return reject("The redirect_uri must include a host.")
     if parts.fragment:
-        return reject("redirect_uri must not include a fragment")
+        return reject("The redirect_uri must not include a fragment, the part after #.")
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
@@ -440,8 +447,8 @@ def _validate_dcr_redirect_uri(uri):
             or ip.is_unspecified
         ):
             return reject(
-                "redirect_uri must not target a private, reserved, or "
-                "link-local address"
+                "The redirect_uri host must not be a private, reserved, "
+                "link-local, multicast or unspecified IP address."
             )
         else:
             loopback = False
@@ -455,9 +462,10 @@ def _validate_dcr_redirect_uri(uri):
             or "." not in lowered
         ):
             return reject(
-                "redirect_uri must use a public DNS name (localhost and "
-                "local names are not allowed; native apps use a literal "
-                "loopback IP)"
+                "The redirect_uri host must be a public DNS name, not "
+                "localhost, a .localhost name, a .local name or a name "
+                "without a dot. A native app uses a literal loopback IP "
+                "address instead."
             )
         if _NUMERIC_LABEL_RE.match(lowered.rsplit(".", 1)[-1]):
             # Browsers read a host whose last label is a number as an IPv4
@@ -465,17 +473,23 @@ def _validate_dcr_redirect_uri(uri):
             # ipaddress does not, so these would pass as DNS names and slip
             # past the loopback, private and link-local rules above.
             return reject(
-                "redirect_uri host must be a DNS name or a dotted-quad or "
-                "bracketed IPv6 literal"
+                "The redirect_uri host must be a DNS name or a full IP "
+                "address, with IPv4 written as four numbers separated by "
+                "dots and IPv6 in brackets."
             )
         if len(lowered) > 253 or not all(
             _DNS_LABEL_RE.match(label) for label in lowered.split(".")
         ):
-            return reject("redirect_uri host is malformed")
+            return reject(
+                "The redirect_uri host is not a valid DNS name. Use at most "
+                "253 characters in total, with labels separated by single "
+                "dots, each label 1 to 63 characters of letters, digits and "
+                "hyphens, and no label starting or ending with a hyphen."
+            )
     if parts.scheme == "http" and not loopback:
         return reject(
-            "redirect_uri must use https (http is only allowed for literal "
-            "loopback IP redirect URIs, RFC 8252)"
+            "The redirect_uri must use https, except for a literal "
+            "loopback IP address such as 127.0.0.1 or [::1]."
         )
     return None
 
@@ -531,7 +545,10 @@ def _dcr_metadata_error_response(request):
         return JsonResponse(
             {
                 "error": "invalid_client_metadata",
-                "error_description": "Client metadata must be 16 KiB or smaller.",
+                "error_description": (
+                    "The request body is larger than 16 KiB. Send client "
+                    "metadata of 16 KiB or less."
+                ),
             },
             status=400,
         )
@@ -543,7 +560,10 @@ def _dcr_metadata_error_response(request):
         return JsonResponse(
             {
                 "error": "invalid_client_metadata",
-                "error_description": "Request body must be valid JSON",
+                "error_description": (
+                    "The request body is nested too deeply to read as JSON. "
+                    "Send JSON with fewer levels of nesting."
+                ),
             },
             status=400,
         )
@@ -558,8 +578,8 @@ def _dcr_metadata_error_response(request):
             {
                 "error": "invalid_client_metadata",
                 "error_description": (
-                    "Client metadata must not contain NUL characters or "
-                    "unpaired surrogates."
+                    "The client metadata contains a NUL character or an "
+                    "unpaired surrogate. Remove it and register again."
                 ),
             },
             status=400,
@@ -572,8 +592,9 @@ def _dcr_metadata_error_response(request):
                     {
                         "error": "invalid_client_metadata",
                         "error_description": (
-                            f"Unsupported grant_type {grant_type[:80]!r}: Veilfile "
-                            "clients use authorization_code (with refresh_token)."
+                            f"The grant_type {grant_type[:80]!r} is not "
+                            "supported. Use authorization_code, refresh_token "
+                            "or both."
                         ),
                     },
                     status=400,
@@ -592,7 +613,7 @@ def _dcr_metadata_error_response(request):
             return JsonResponse(
                 {
                     "error": "invalid_redirect_uri",
-                    "error_description": f"Rejected redirect_uri {shown!r}: {reason}",
+                    "error_description": f"The redirect_uri {shown!r} was rejected. {reason}",
                 },
                 status=400,
             )
@@ -670,8 +691,8 @@ class ThrottledTokenView(TokenView):
                 {
                     "error": "unsupported_grant_type",
                     "error_description": (
-                        "Only the authorization_code and refresh_token grants "
-                        "are supported."
+                        "The grant_type is not supported. Use "
+                        "authorization_code or refresh_token."
                     ),
                 },
                 status=400,

@@ -353,7 +353,11 @@ class DeviceCodeView(APIView):
         if not allowed:
             response = Response(
                 {
-                    "error": "Too many device code requests. Try again later.",
+                    "error": (
+                        "Too many sign-ins were started from this network in the "
+                        "past hour. Wait the number of seconds in the "
+                        "Retry-After header, then run veilfile login again."
+                    ),
                     "code": "rate_limited",
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -364,7 +368,10 @@ class DeviceCodeView(APIView):
         if _too_many_pending():
             response = Response(
                 {
-                    "error": "Too many sign-ins in progress. Try again in a minute.",
+                    "error": (
+                        "Too many sign-ins are in progress. Run veilfile login "
+                        "again in a minute."
+                    ),
                     "code": "rate_limited",
                 },
                 status=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -432,7 +439,11 @@ def _redeem(device_code):
             APIKey.objects.filter(pk=legacy_key_id).update(is_active=False)
         approver = device_code.approved_by
         if approver is None or not approver.is_active:
-            refused = "The account that approved this login is no longer active."
+            refused = (
+                "The account that approved this login is no longer active. "
+                "Run veilfile login again and approve it from an active "
+                "account."
+            )
         else:
             try:
                 key, raw_key = create_key_within_cap(
@@ -445,9 +456,9 @@ def _redeem(device_code):
                 # The plan's cap changed (or another key was created) after
                 # approval. Nothing is minted; the user approves again.
                 refused = (
-                    "Your plan's API key limit has been reached. Run veilfile "
-                    "login again and choose a key to replace, or revoke one "
-                    "in the dashboard."
+                    "Your workspace has reached its plan's API key limit. Run "
+                    "veilfile login again and choose a key to replace, or "
+                    "revoke a key in the dashboard."
                 )
         if refused:
             DeviceCode.objects.filter(pk=device_code.pk).update(
