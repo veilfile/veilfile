@@ -82,7 +82,7 @@ def entries():
                                   description="AI agents need somewhere private to put files. The options are public by default. "
                                               "Veilfile is the private alternative we built."),
                   SimpleNamespace(url="/docs/quickstart/", title="Quickstart", date=None,
-                                  description="Sign up, verify your email, create an API key, and upload your first artifact in about five minutes."),
+                                  description="Sign up, verify your email, install the CLI, log in, and upload your first artifact in about five minutes."),
                   SimpleNamespace(url="/docs/agent/", title="Agent setup", date=None,
                                   description="Connect Claude and other MCP clients to Veilfile, with setup for each client and what to do when a secret is flagged."),
               )},
