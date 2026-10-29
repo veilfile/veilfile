@@ -116,15 +116,15 @@ def key_name_error(name):
     if name is None:
         return ""
     if not isinstance(name, str):
-        return "name must be a string."
+        return "The name must be a string. Send name as text, or leave it out."
     max_length = APIKey._meta.get_field("name").max_length
     if len(name.strip()) > max_length:
-        return f"name must be at most {max_length} characters."
+        return f"The name is longer than {max_length} characters. Use a shorter name."
     # Postgres text cannot hold NUL (the insert would 500); other control
     # characters have no place in a one-line label either. Surrounding
     # whitespace is stripped before saving, so only the kept part counts.
     if any(unicodedata.category(ch) == "Cc" for ch in name.strip()):
-        return "name must not contain control characters."
+        return "The name contains control characters. Remove them and try again."
     return ""
 
 
@@ -166,7 +166,7 @@ def create_key(user, name, *, request=None, body_is_object=True):
     name_error = (
         key_name_error(name)
         if body_is_object
-        else "Request body must be a JSON object."
+        else "The request body must be a JSON object. Send the body as an object, such as one with a name field."
     )
     if name_error:
         return Answer(400, {"error": name_error, "code": "invalid_request"})
@@ -180,7 +180,7 @@ def create_key(user, name, *, request=None, body_is_object=True):
         return Answer(
             402,
             {
-                "error": "API key limit for your plan has been reached.",
+                "error": "Your workspace has reached its plan's API key limit. Revoke a key or upgrade your plan.",
                 "code": "key_limit_reached",
             },
         )
@@ -208,7 +208,7 @@ def revoke_key(user, key_id, *, workspace=None, only_key_id=None):
     if key is None:
         # The words Django's get_object_or_404 gave this answer before, which published clients may have read.
         return Answer(
-            404, {"error": "No APIKey matches the given query.", "code": "not_found"}
+            404, {"error": "No API key with that id exists in this workspace. Check the id.", "code": "not_found"}
         )
     if only_key_id is not None and key.pk != only_key_id:
         # An API key may revoke itself (``veilfile logout``, and the CLIs
@@ -288,7 +288,7 @@ def list_artifacts(user, *, cursor=None, limit=None, workspace=None):
         return Answer(
             400,
             {
-                "error": "limit must be an integer and cursor a value from X-Next-Cursor.",
+                "error": "The limit must be a whole number, and the cursor must be a value from the X-Next-Cursor header. Correct the one that is wrong, or leave both out.",
                 "code": "invalid_request",
             },
         )
@@ -320,7 +320,7 @@ def revoke_artifact(user, artifact_id, *, workspace=None):
     workspace = _workspace_of(user, workspace)
     result = revoke_stored_artifact(workspace, artifact_id)
     if not result:
-        return Answer(404, {"error": "Artifact not found.", "code": "not_found"})
+        return Answer(404, {"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"})
     return Answer(204, {"storage_deleted": result != REVOKE_PENDING_DELETE})
 
 
@@ -349,5 +349,5 @@ def disconnect_grant(user, app_id):
         revoked = revoke_user_oauth_grants(user, application=application)
         revoked += int(pending)
     if not revoked:
-        return Answer(404, {"error": "Connected app not found.", "code": "not_found"})
+        return Answer(404, {"error": "No connected app with that id exists for you. Check the id under Connected apps on the dashboard.", "code": "not_found"})
     return Answer(204, {})

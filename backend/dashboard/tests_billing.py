@@ -305,7 +305,7 @@ class BillingPageModuleTests(SimpleTestCase):
             (Answer(402, {"error": "The payment for the plan change did not go through, so your plan is unchanged. Complete the payment on the invoice page.", "code": "payment_required", "invoice_url": INVOICE}),
              PAYMENT_FAILED, "a 402 payment_required"),
             (Answer(409, {"error": "Your last payment failed.", "code": "subscription_past_due"}), PAST_DUE, "a 409 subscription_past_due"),
-            (Answer(409, {"error": "This workspace has no active subscription to change. Use checkout to subscribe.", "code": "no_subscription"}),
+            (Answer(409, {"error": "This workspace has no active subscription to change. Subscribe first with POST /api/v1/billing/checkout.", "code": "no_subscription"}),
              NOT_SUBSCRIBED, "a 409 no_subscription says to upgrade, not to use checkout"),
             (Answer(409, {"error": "more than one", "code": "multiple_subscriptions"}), MULTIPLE_SUBSCRIPTIONS, "a 409 multiple_subscriptions"),
             (Answer(400, {"error": "invalid_plan"}), "In words.", "a 400 is a bare code, so the caller says it in words"),

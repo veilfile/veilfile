@@ -184,10 +184,10 @@ class KeyAnswerTests(JsonAnswerCase):
     def test_create_refusals_are_these_bytes(self):
         too_long = "n" * 256
         cases = [
-            ({"name": 123}, 400, '{"error":"name must be a string.","code":"invalid_request"}'),
-            ({"name": too_long}, 400, '{"error":"name must be at most 255 characters.","code":"invalid_request"}'),
-            ({"name": "a\x00b"}, 400, '{"error":"name must not contain control characters.","code":"invalid_request"}'),
-            (["a"], 400, '{"error":"Request body must be a JSON object.","code":"invalid_request"}'),
+            ({"name": 123}, 400, '{"error":"The name must be a string. Send name as text, or leave it out.","code":"invalid_request"}'),
+            ({"name": too_long}, 400, '{"error":"The name is longer than 255 characters. Use a shorter name.","code":"invalid_request"}'),
+            ({"name": "a\x00b"}, 400, '{"error":"The name contains control characters. Remove them and try again.","code":"invalid_request"}'),
+            (["a"], 400, '{"error":"The request body must be a JSON object. Send the body as an object, such as one with a name field.","code":"invalid_request"}'),
         ]
         self.team()
         for payload, status, text in cases:
@@ -198,7 +198,7 @@ class KeyAnswerTests(JsonAnswerCase):
     def test_the_cap_is_a_402_and_makes_no_key(self):
         response = self.session.post("/api/v1/keys/", {"name": "second"}, format="json")
         self.exact(
-            response, 402, '{"error":"API key limit for your plan has been reached.","code":"key_limit_reached"}'
+            response, 402, '{"error":"Your workspace has reached its plan\'s API key limit. Revoke a key or upgrade your plan.","code":"key_limit_reached"}'
         )
         self.assertEqual(APIKey.objects.filter(workspace=self.workspace).count(), 1, FIX)
 
@@ -246,7 +246,7 @@ class KeyAnswerTests(JsonAnswerCase):
                 self.exact(
                     self.session.delete(f"/api/v1/keys/{key_id}/"),
                     404,
-                    '{"error":"No APIKey matches the given query.","code":"not_found"}',
+                    '{"error":"No API key with that id exists in this workspace. Check the id.","code":"not_found"}',
                 )
         # A session revokes any key of its workspace, and a second revoke is the same 204.
         for _ in range(2):
@@ -329,7 +329,7 @@ class ArtifactAnswerTests(JsonAnswerCase):
         self.assertEqual(self.session.get("/api/v1/artifacts/?limit=").status_code, 400, FIX)
 
     def test_bad_paging_is_this_400(self):
-        text = '{"error":"limit must be an integer and cursor a value from X-Next-Cursor.","code":"invalid_request"}'
+        text = '{"error":"The limit must be a whole number, and the cursor must be a value from the X-Next-Cursor header. Correct the one that is wrong, or leave both out.","code":"invalid_request"}'
         for query in ("limit=abc", "cursor=garbage", "cursor=123-nothex", "limit=2&cursor=-1"):
             with self.subTest(query=query):
                 self.exact(self.session.get(f"/api/v1/artifacts/?{query}"), 400, text)
@@ -351,7 +351,7 @@ class ArtifactAnswerTests(JsonAnswerCase):
         response = self.session.delete(f"/api/v1/artifacts/{artifact.id}/")
         self.assertEqual((response.status_code, response.content), (204, b""), FIX)
         self.assertFalse(Artifact.objects.filter(pk=artifact.pk).exists(), FIX)
-        missing = '{"error":"Artifact not found.","code":"not_found"}'
+        missing = '{"error":"No file with that id exists in this workspace. Check the id.","code":"not_found"}'
         self.exact(self.session.delete(f"/api/v1/artifacts/{artifact.id}/"), 404, missing)
         theirs = Artifact.objects.create(
             workspace=get_or_create_workspace(make_user("stranger")), filename="t.txt", size_bytes=1,
@@ -412,7 +412,7 @@ class GrantAnswerTests(JsonAnswerCase):
             user=stranger, application=theirs, token=secrets.token_urlsafe(32),
             expires=timezone.now() + timedelta(hours=1), scope=OAUTH_SCOPE_MCP_USE,
         )
-        missing = '{"error":"Connected app not found.","code":"not_found"}'
+        missing = '{"error":"No connected app with that id exists for you. Check the id under Connected apps on the dashboard.","code":"not_found"}'
         self.exact(self.session.delete(f"/api/v1/oauth/grants/{theirs.pk}/"), 404, missing)
         self.exact(self.session.delete("/api/v1/oauth/grants/999999/"), 404, missing)
         response = self.session.delete(f"/api/v1/oauth/grants/{self.app.pk}/")

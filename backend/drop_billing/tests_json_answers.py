@@ -250,7 +250,7 @@ class SwitchAnswerTests(BillingJsonCase):
 
     def test_no_customer_and_no_live_subscription_are_the_same_409(self):
         text = (
-            '{"error":"This workspace has no active subscription to change. Use checkout to subscribe.",'
+            '{"error":"This workspace has no active subscription to change. Subscribe first with POST /api/v1/billing/checkout.",'
             '"code":"no_subscription"}'
         )
         self.exact(self.post("switch", {"plan": "scale"}), 409, text)

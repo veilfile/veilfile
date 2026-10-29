@@ -798,7 +798,7 @@ class VeilfileCoreTests(TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
             response.json(),
-            {"error": "Artifact not found.", "code": "not_found"},
+            {"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"},
         )
 
     def test_usage_endpoint(self):
