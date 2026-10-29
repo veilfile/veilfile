@@ -358,7 +358,7 @@ class McpErrorHandlingTests(McpFixTestBase):
             )
         body = self.tool_error(response)
         self.assertEqual(body['code'], 'storage_unavailable')
-        self.assertIn('retry', body['error'].lower())
+        self.assertIn('try again', body['error'].lower())
         self.assertFalse(Artifact.objects.exists())
 
     def test_unhashable_tool_name_is_invalid_params(self):

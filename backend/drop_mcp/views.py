@@ -420,8 +420,8 @@ def _unauthenticated(request_id):
     response = _rpc_error(
         request_id,
         ERR_UNAUTHORIZED,
-        'unauthorized: provide a valid API key or OAuth token as '
-        '"Authorization: Bearer <credential>"',
+        'The request has no valid API key or connected app access. Send a current '
+        'API key as Authorization: Bearer <API key>, or reconnect the app.',
         http_status=401,
     )
     metadata_url = (
@@ -480,12 +480,12 @@ def _service_failure(exc):
     if isinstance(exc, StorageError):
         return ToolError(
             exc.code,
-            'Storage is temporarily unavailable; nothing was stored. Retry in a minute.',
+            'Storage is temporarily unavailable, so the file was not stored. Try again in a minute.',
         )
     code = getattr(exc, 'code', '') or str(exc)
     return ToolError(
         code,
-        ERROR_MESSAGES.get(code, 'Upload failed.'),
+        ERROR_MESSAGES.get(code, 'The upload failed. Try again, and check the file and its parameters if it fails again.'),
         detail=getattr(exc, 'detail', ''),
     )
 
@@ -504,17 +504,17 @@ def _check_upload_throttle(request, key):
     retry_after = max(1, math.ceil(wait if wait is not None else throttle.duration))
     raise ToolError(
         'rate_limited',
-        f'Upload rate limit reached ({throttle.rate} per credential, shared with '
-        f'the REST API). Retry after {retry_after} seconds.',
+        f'Too many uploads in the past hour. The limit is {throttle.rate} for each '
+        f'API key or connected app, and the REST API shares it. Wait {retry_after} '
+        'seconds, then try again.',
         retry_after=retry_after,
     )
 
 
 _B64_WHITESPACE = b' \t\n\r\f\v'
 _INVALID_BASE64 = (
-    'content_base64 is not valid base64: use the standard alphabet '
-    '(A-Z a-z 0-9 + /) with = padding; line breaks and a '
-    '"data:<mime>;base64," prefix are accepted'
+    'content_base64 is not valid base64. Send standard base64 (A-Z, a-z, 0-9, + and /) '
+    'with = padding; line breaks and a data:<mime>;base64, prefix are allowed.'
 )
 
 
@@ -558,18 +558,18 @@ def _tool_upload_artifact(key, args, request):
     ttl_days = args.get('ttl_days')
 
     if not isinstance(filename, str) or not filename.strip():
-        raise ValueError('filename is required and must be a non-empty string')
+        raise ValueError('Send filename as a non-empty string.')
     if not isinstance(content_b64, str) or not content_b64:
-        raise ValueError('content_base64 is required and must be a base64 string')
+        raise ValueError('Send content_base64 as a non-empty base64 string.')
     if mime_type is not None and not isinstance(mime_type, str):
-        raise ValueError('mime_type must be a string')
+        raise ValueError('Send mime_type as a string.')
     if ttl_days is not None and (
         isinstance(ttl_days, bool) or not isinstance(ttl_days, int) or ttl_days <= 0
     ):
-        raise ValueError('ttl_days must be a positive integer')
+        raise ValueError('Send ttl_days as a whole number of days, 1 or more.')
     on_secret = args.get('on_secret', 'flag')
     if on_secret not in ('flag', 'reject'):
-        raise ValueError('on_secret must be "flag" or "reject"')
+        raise ValueError('Send on_secret as "flag" or "reject".')
 
     data = _decode_content(content_b64)
 
@@ -626,7 +626,7 @@ def _tool_upload_artifact(key, args, request):
 def _tool_list_artifacts(key, args, request):
     limit = args.get('limit', 50)
     if isinstance(limit, bool) or not isinstance(limit, int):
-        raise ValueError('limit must be an integer')
+        raise ValueError('Send limit as a whole number, such as 50.')
     limit = max(1, min(200, limit))
     artifacts = (
         Artifact.objects.filter(workspace=key.workspace)
@@ -641,13 +641,13 @@ def _tool_create_upload_url(key, args, request):
     on_secret = args.get('on_secret', 'flag')
 
     if not isinstance(filename, str) or not filename.strip():
-        raise ValueError('filename is required and must be a non-empty string')
+        raise ValueError('Send filename as a non-empty string.')
     if ttl_days is not None and (
         isinstance(ttl_days, bool) or not isinstance(ttl_days, int) or ttl_days <= 0
     ):
-        raise ValueError('ttl_days must be a positive integer')
+        raise ValueError('Send ttl_days as a whole number of days, 1 or more.')
     if on_secret not in ('flag', 'reject'):
-        raise ValueError('on_secret must be "flag" or "reject"')
+        raise ValueError('Send on_secret as "flag" or "reject".')
 
     # OAuth-minted URLs remember the client application, so the PUT stops
     # working once the user's grants for it are revoked (API-key URLs
@@ -681,7 +681,7 @@ def _tool_create_upload_url(key, args, request):
 def _tool_revoke_artifact(key, args, request):
     artifact_id = args.get('id')
     if not isinstance(artifact_id, str) or not artifact_id.strip():
-        raise ValueError('id is required and must be a string')
+        raise ValueError('Send id as the id of the file to revoke, a non-empty string.')
     artifact_id = artifact_id.strip()
     try:
         uuid_module.UUID(artifact_id)
@@ -715,12 +715,12 @@ def _handle_tools_call(request, request_id, key, params):
     name = params.get('name')
     arguments = params.get('arguments') or {}
     if not isinstance(name, str):
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'invalid params: name must be a string')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'Send params.name as a string.')
     if not isinstance(arguments, dict):
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'invalid params: arguments must be an object')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'Send params.arguments as an object.')
     handler = _TOOL_HANDLERS.get(name)
     if handler is None:
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, f'unknown tool: {name}')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, f'No tool named {name} exists. The tools are upload_artifact, create_upload_url, list_artifacts and revoke_artifact.')
     try:
         if name in _UPLOAD_TOOLS:
             _check_upload_throttle(request, key)
@@ -732,7 +732,7 @@ def _handle_tools_call(request, request_id, key, params):
         })
     except ValueError as exc:
         # Malformed arguments: a protocol error, per the MCP spec.
-        message = getattr(exc, "detail", "") or str(exc) or "invalid params"
+        message = getattr(exc, "detail", "") or str(exc) or "The arguments are not valid for this tool; check them against its inputSchema."
         return _rpc_error(request_id, ERR_INVALID_PARAMS, message)
     return _rpc_result(request_id, {'content': [{'type': 'text', 'text': json.dumps(result)}]})
 
@@ -747,7 +747,7 @@ def mcp_endpoint(request):
         return JsonResponse(
             {
                 'error': 'method_not_allowed',
-                'hint': 'Send a JSON-RPC 2.0 request body via POST with Content-Type: application/json.',
+                'hint': 'Send a POST request with a JSON-RPC 2.0 body and the header Content-Type: application/json.',
             },
             status=405,
         )
@@ -756,14 +756,14 @@ def mcp_endpoint(request):
     except Exception:
         # Last resort: never Django's HTML error page on the MCP endpoint.
         logger.exception('mcp: unhandled error')
-        return _rpc_error(None, ERR_INTERNAL, 'internal error', http_status=500)
+        return _rpc_error(None, ERR_INTERNAL, 'The server could not complete the request. Try again later.', http_status=500)
 
 
 def _handle_post(request):
     if not _origin_allowed(request):
         return _rpc_error(
             None, ERR_INVALID_REQUEST,
-            'forbidden: requests from this Origin are not allowed', http_status=403,
+            'This Origin is not allowed. Send requests from a Veilfile origin, or without an Origin header.', http_status=403,
         )
 
     # Authenticate from the header before reading the body, so anonymous
@@ -778,22 +778,22 @@ def _handle_post(request):
         _discard_body(request, MAX_DRAIN_BYTES)
         return _rpc_error(
             None, ERR_INVALID_REQUEST,
-            f'request too large: the body limit is {MAX_BODY_BYTES} bytes (a 25 MiB '
-            'file as base64 plus the JSON envelope). To skip base64 for large files, '
-            'call create_upload_url and PUT the raw bytes; files over 25 MiB are '
-            'not accepted.',
+            f'The request is over the body limit of {MAX_BODY_BYTES} bytes, which fits '
+            'a 25 MiB file as base64 plus the JSON envelope. Call create_upload_url '
+            'and PUT the raw bytes to the upload URL it returns. Files over 25 MiB '
+            'are not accepted.',
             http_status=413,
             data={'code': 'file_too_large', 'max_body_bytes': MAX_BODY_BYTES},
         )
     except UnreadablePostError:
-        return _rpc_error(None, ERR_PARSE, 'parse error: request body could not be read', http_status=400)
+        return _rpc_error(None, ERR_PARSE, 'The request body could not be read. Send the request again.', http_status=400)
     if len(body) > PLAIN_BODY_BYTES and not _large_body_is_plain(body):
         return _rpc_error(
             None, ERR_INVALID_REQUEST,
-            f'request too complex: a body over {PLAIN_BODY_BYTES} bytes is accepted '
-            f'only as a plain tools/call (at most {MAX_LARGE_BODY_STRUCTURE} JSON '
-            'structural characters, and no characters above U+00FF such as a '
-            'non-Latin filename). Use an ASCII filename, or call create_upload_url '
+            f'The request is too complex. A body over {PLAIN_BODY_BYTES} bytes is accepted '
+            f'only as a plain tools/call with at most {MAX_LARGE_BODY_STRUCTURE} JSON '
+            'structural characters and no characters above U+00FF, such as a '
+            'non-Latin file name. Use an ASCII file name, or call create_upload_url '
             'and PUT the raw bytes.',
             http_status=413,
             data={'code': 'request_too_complex', 'max_plain_body_bytes': PLAIN_BODY_BYTES},
@@ -808,13 +808,13 @@ def _handle_post(request):
     payload = _PARSE_FAILED if text is None else _parse_json(text)
     del text
     if payload is _PARSE_FAILED:
-        return _rpc_error(None, ERR_PARSE, 'parse error: request body is not valid JSON', http_status=400)
+        return _rpc_error(None, ERR_PARSE, 'The request body is not valid JSON. Send UTF-8 encoded JSON.', http_status=400)
     if isinstance(payload, list) or not isinstance(payload, dict):
-        return _rpc_error(None, ERR_INVALID_REQUEST, 'invalid request: expected a single JSON-RPC object', http_status=400)
+        return _rpc_error(None, ERR_INVALID_REQUEST, 'The request body must be a single JSON-RPC object; this server does not accept batches.', http_status=400)
 
     request_id = payload.get('id')
     if not _valid_id(request_id):
-        return _rpc_error(None, ERR_INVALID_REQUEST, 'invalid request: id must be a string or number', http_status=400)
+        return _rpc_error(None, ERR_INVALID_REQUEST, 'Send id as a string or a number.', http_status=400)
     method = payload.get('method')
     if method is None and ('result' in payload or 'error' in payload):
         # A client's response to a server request. This server sends none;
@@ -823,7 +823,7 @@ def _handle_post(request):
     if payload.get('jsonrpc') != '2.0' or not isinstance(method, str):
         return _rpc_error(
             request_id, ERR_INVALID_REQUEST,
-            'invalid request: expected "jsonrpc": "2.0" and a string "method"',
+            'Send "jsonrpc": "2.0" and a string "method".',
             http_status=400,
         )
     if method != 'initialize':
@@ -832,8 +832,8 @@ def _handle_post(request):
         if version and version.strip() not in SUPPORTED_PROTOCOL_VERSIONS:
             return _rpc_error(
                 request_id, ERR_INVALID_REQUEST,
-                f'unsupported MCP-Protocol-Version header; supported: '
-                f'{", ".join(SUPPORTED_PROTOCOL_VERSIONS)}',
+                f'This MCP-Protocol-Version is not supported; send one of '
+                f'{", ".join(SUPPORTED_PROTOCOL_VERSIONS)}.',
                 http_status=400,
             )
     if 'id' not in payload:
@@ -847,13 +847,13 @@ def _handle_post(request):
         return _dispatch(request, request_id, key, method, payload.get('params'))
     except Exception:
         logger.exception('mcp: unhandled error in %r', method)
-        return _rpc_error(request_id, ERR_INTERNAL, 'internal error', http_status=500)
+        return _rpc_error(request_id, ERR_INTERNAL, 'The server could not complete the request. Try again later.', http_status=500)
 
 
 def _dispatch(request, request_id, key, method, params):
     params = params or {}
     if not isinstance(params, dict):
-        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'invalid params: params must be an object')
+        return _rpc_error(request_id, ERR_INVALID_PARAMS, 'Send params as an object.')
 
     if method == 'initialize':
         # Negotiate honestly: answer with the client's requested version when
@@ -878,4 +878,4 @@ def _dispatch(request, request_id, key, method, params):
         return _rpc_result(request_id, {'tools': TOOLS})
     if method == 'tools/call':
         return _handle_tools_call(request, request_id, key, params)
-    return _rpc_error(request_id, ERR_METHOD_NOT_FOUND, f'method not found: {method}')
+    return _rpc_error(request_id, ERR_METHOD_NOT_FOUND, f'The method {method} is not supported; use initialize, ping, tools/list or tools/call.')
