@@ -28,8 +28,10 @@ from drop_core import funnel
 from drop_core.email_verification import client_ip
 from drop_core.models import APIKey, Artifact
 from drop_core.oauth import resolve_oauth_credential
+from drop_core.plans import PLANS
 from drop_core.secrets import SECRET_FLAGS_WARNING
 from drop_core.services import (
+    ALLOWED_EXTENSIONS,
     REVOKE_PENDING_DELETE,
     StorageError,
     mint_upload_url,
@@ -84,54 +86,58 @@ ERR_INVALID_PARAMS = -32602
 ERR_INTERNAL = -32603
 ERR_UNAUTHORIZED = -32001  # server-defined: bad/missing API key
 
+# The order the approved words list the extensions in. Which extensions are
+# listed comes from ALLOWED_EXTENSIONS, so the words follow the code.
+_EXTENSION_ORDER = ('png', 'jpg', 'jpeg', 'webp', 'gif', 'txt', 'md', 'log', 'json', 'har', 'pdf')
+
+
+def _allowed_extensions_text():
+    """The allowed extensions as words, e.g. "png, jpg and pdf", from drop_core.services."""
+    names = [e for e in _EXTENSION_ORDER if e in ALLOWED_EXTENSIONS]
+    names += sorted(ALLOWED_EXTENSIONS - set(_EXTENSION_ORDER))
+    return ', '.join(names[:-1]) + ' and ' + names[-1]
+
+
+def _plan_ttl_text():
+    """The plan maximums as words: "7 days on Free, 90 on Team and 365 on Scale"."""
+    free, team, scale = (PLANS[key]['ttl_days'] for key in ('free', 'team', 'scale'))
+    return '%d days on Free, %d on Team and %d on Scale' % (free, team, scale)
+
+
 TOOLS = [
     {
         'name': 'upload_artifact',
-        'description': (
-            'Upload a file you generated (screenshot, log, HAR, report) to '
-            'Veilfile and get back a private, expiring URL to share with the '
-            'user. Never upload credentials, keys or other secrets: every file '
-            'is secret-scanned, and on_secret="reject" (recommended) refuses a '
-            'file that trips the scanner without storing it. If the upload '
-            'response contains non-empty secret_flags, do NOT share the link: '
-            'ask the user whether to keep or revoke the upload first. For files '
-            'larger than a few MB, use create_upload_url instead of base64.'
-        ),
+        'title': 'Upload a file',
+        'description': 'Upload a file from base64 content and return its id, its private share link as url, expires_at, size_bytes and secret_flags. The link stops working when the file expires. The decoded file can be up to 25 MiB; for larger files, create_upload_url takes the bytes by PUT instead. The secret scan reads the first 1 MiB of the file, and secret_flags names each kind of secret-shaped content it finds. With on_secret "flag", the default, a flagged file is stored and the result adds a warning and secret_flag_locations. With on_secret "reject", a flagged file is not stored and the call returns the secret_detected error.',
+        'annotations': {
+            'title': 'Upload a file',
+            'readOnlyHint': False,
+            'destructiveHint': False,
+            'idempotentHint': False,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'filename': {
                     'type': 'string',
-                    'description': 'File name including extension, e.g. "screenshot.png".',
+                    'description': ('This is the file name, including its extension, such as screenshot.png. The allowed extensions are ' + _allowed_extensions_text() + ", and the file's contents must match its extension."),
                 },
                 'content_base64': {
                     'type': 'string',
-                    'description': (
-                        'Standard base64 of the file bytes (A-Z a-z 0-9 + / with = '
-                        'padding). Line breaks and a "data:<mime>;base64," prefix are '
-                        'accepted. Decoded size must be <= 25 MiB.'
-                    ),
+                    'description': "This is the file's content as standard base64. Line breaks and a data:<mime>;base64, prefix are accepted. The decoded file can be up to 25 MiB.",
                 },
                 'mime_type': {
                     'type': 'string',
-                    'description': 'Ignored: the server derives the type from the file extension. Accepted for compatibility.',
+                    'description': "The server does not use this value; it takes the file's type from the extension in filename. If you send it, it must be a string.",
                 },
                 'ttl_days': {
                     'type': 'integer',
-                    'description': (
-                        'Optional days until the link expires. Omitting it gives the plan '
-                        'maximum. Values above the plan maximum are clamped down (never '
-                        'rejected); the result includes "ttl_adjusted": true when clamping '
-                        'changed your value, so always read expires_at.'
-                    ),
+                    'description': ("This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is " + _plan_ttl_text() + ". A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The result's expires_at is the applied expiry."),
                 },
                 'on_secret': {
                     'type': 'string',
-                    'description': (
-                        'Optional. "reject" (recommended) rejects the upload with an '
-                        'error when any secret flag fires (nothing is stored); default '
-                        '"flag" stores the file and reports the flags with a warning.'
-                    ),
+                    'description': 'The value is either "flag" or "reject", and the default is "flag". With "flag", a file with secret-shaped content is stored, and the result lists secret_flags and adds a warning and secret_flag_locations. With "reject", that file is not stored and the call returns the secret_detected error.',
                 },
             },
             'required': ['filename', 'content_base64'],
@@ -139,33 +145,29 @@ TOOLS = [
     },
     {
         'name': 'create_upload_url',
-        'description': (
-            'Mint a one-time upload URL for a file too large to pass through the model '
-            'as base64 (screenshots, HAR files, log bundles). PUT the raw file bytes to '
-            'the returned upload_url from your shell within 15 minutes '
-            '(e.g. curl --upload-file). The server runs the full upload pipeline on the '
-            'bytes — type verification, secret scan, storage — and answers 201 with the '
-            'artifact. The URL is single-use and needs no API key: the token is the auth.'
-        ),
+        'title': 'Create an upload URL',
+        'description': "Create a one-time upload URL for a file too large to send as base64 through upload_artifact. The result has upload_url, expires_at, max_size_bytes (25 MiB), ttl_days and filename. The URL is valid for 15 minutes and needs no API key. A PUT of the file's raw bytes to it, for example with curl --upload-file, runs the same type check and secret scan as upload_artifact and answers 201 with the same fields that upload_artifact returns. The first successful PUT uses up the URL. A PUT that fails can be retried until the URL expires, except one blocked as content_not_allowed. The URL also stops working if the API key that created it is revoked or the connected app that created it is disconnected.",
+        'annotations': {
+            'title': 'Create an upload URL',
+            'readOnlyHint': False,
+            'destructiveHint': False,
+            'idempotentHint': False,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'filename': {
                     'type': 'string',
-                    'description': 'File name including extension, e.g. "screenshot.png".',
+                    'description': ('This is the file name, including its extension, such as screenshot.png. The extension is checked when the URL is created, and the allowed extensions are ' + _allowed_extensions_text() + '.'),
                 },
                 'ttl_days': {
                     'type': 'integer',
-                    'description': (
-                        'Optional days until the link expires. Omitting it gives the plan '
-                        'maximum; above-max values are clamped down. The result reports '
-                        'the applied ttl_days and "ttl_adjusted": true when clamping '
-                        'changed your value.'
-                    ),
+                    'description': ("This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is " + _plan_ttl_text() + ". A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The days count from the PUT, and the result's ttl_days is the applied value."),
                 },
                 'on_secret': {
                     'type': 'string',
-                    'description': 'Optional "reject" to reject the PUT when any secret flag fires.',
+                    'description': 'The value is either "flag" or "reject", and the default is "flag". With "reject", a PUT of a flagged file fails with the secret_detected error, the file is not stored and the URL stays usable until it expires. With "flag", a flagged file is stored and the result lists its secret_flags and adds a warning and secret_flag_locations.',
                 },
             },
             'required': ['filename'],
@@ -173,13 +175,21 @@ TOOLS = [
     },
     {
         'name': 'list_artifacts',
-        'description': 'List this workspace\'s artifacts, newest first.',
+        'title': 'List files',
+        'description': 'List the files in this workspace, newest first. Each entry has id, filename, mime_type, size_bytes, url, expires_at, secret_flags and created_at. Expired files that are not yet deleted are included. The tool changes nothing.',
+        'annotations': {
+            'title': 'List files',
+            'readOnlyHint': True,
+            'destructiveHint': False,
+            'idempotentHint': True,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'limit': {
                     'type': 'integer',
-                    'description': 'Maximum artifacts to return.',
+                    'description': 'This is the maximum number of files to return. The range is 1 to 200, the default is 50, and a value outside the range is moved to the nearest end of it. Files beyond the limit are not returned, and there is no paging.',
                     'default': 50,
                     'minimum': 1,
                     'maximum': 200,
@@ -189,13 +199,21 @@ TOOLS = [
     },
     {
         'name': 'revoke_artifact',
-        'description': 'Revoke (delete) an artifact immediately by its id. The URL stops working at once.',
+        'title': 'Revoke a file',
+        'description': 'Revoke a file by its id. Its link stops working at once and the file is deleted. The result is revoked: true, or revoked: false when this workspace has no file with that id. If storage could not be reached, the result adds storage_deleted: false and a later sweep finishes the deletion. Repeating the call is harmless.',
+        'annotations': {
+            'title': 'Revoke a file',
+            'readOnlyHint': False,
+            'destructiveHint': True,
+            'idempotentHint': True,
+            'openWorldHint': False,
+        },
         'inputSchema': {
             'type': 'object',
             'properties': {
                 'id': {
                     'type': 'string',
-                    'description': 'Artifact id (uuid) as returned by upload_artifact.',
+                    'description': 'This is the id of the file to revoke, a UUID. Both upload_artifact and list_artifacts return it.',
                 },
             },
             'required': ['id'],

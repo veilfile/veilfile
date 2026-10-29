@@ -291,12 +291,13 @@ class McpEndpointTests(TestCase):
         self.assertEqual(uploaded['secret_flags'], [])
         self.assertNotIn('warning', uploaded)
 
-    def test_upload_tool_description_has_secret_instruction(self):
+    def test_upload_tool_description_names_the_secret_fields(self):
         response, data = self.post(_rpc('tools/list'))
         tools = {t['name']: t for t in data['result']['tools']}
         desc = tools['upload_artifact']['description']
         self.assertIn('secret_flags', desc)
-        self.assertIn('ask the user', desc.lower())
+        self.assertIn('secret_flag_locations', desc)
+        self.assertNotIn('ask the user', desc.lower())
 
     def test_upload_invalid_base64(self):
         response, data = self.call_tool('upload_artifact', {

@@ -451,9 +451,9 @@ class McpErrorHandlingTests(McpFixTestBase):
 
 
 class McpToolDescriptionTests(McpFixTestBase):
-    """mcp-9: the upload tool must not invite agents to upload secrets."""
+    """mcp-9: the upload tool says what the secret scan does and what each on_secret value returns."""
 
-    def test_upload_description_discourages_secrets_and_recommends_reject(self):
+    def test_upload_description_states_what_the_secret_scan_does(self):
         data = self.assertJsonRpc(self.post(self.rpc_payload('tools/list')))
         tools = {t['name']: t for t in data['result']['tools']}
         desc = tools['upload_artifact']['description']
@@ -461,9 +461,47 @@ class McpToolDescriptionTests(McpFixTestBase):
         self.assertIn('on_secret', desc)
         self.assertIn('reject', desc)
         self.assertIn('secret_flags', desc)
-        self.assertIn('ask the user', desc.lower())
+        self.assertNotIn('ask the user', desc.lower())
         on_secret = tools['upload_artifact']['inputSchema']['properties']['on_secret']
-        self.assertIn('recommended', on_secret['description'].lower())
+        self.assertIn('secret_detected', on_secret['description'])
+        self.assertNotIn('recommended', on_secret['description'].lower())
+
+    def test_every_tool_has_the_same_title_twice_and_the_approved_hints(self):
+        expected = {
+            'upload_artifact': ('Upload a file', False, False, False, False),
+            'create_upload_url': ('Create an upload URL', False, False, False, False),
+            'list_artifacts': ('List files', True, False, True, False),
+            'revoke_artifact': ('Revoke a file', False, True, True, False),
+        }
+        data = self.assertJsonRpc(self.post(self.rpc_payload('tools/list')))
+        tools = {t['name']: t for t in data['result']['tools']}
+        self.assertEqual(set(tools), set(expected))
+        for name, (title, read_only, destructive, idempotent, open_world) in expected.items():
+            self.assertEqual(tools[name]['title'], title)
+            self.assertEqual(tools[name]['annotations'], {
+                'title': title,
+                'readOnlyHint': read_only,
+                'destructiveHint': destructive,
+                'idempotentHint': idempotent,
+                'openWorldHint': open_world,
+            })
+
+    def test_ttl_days_descriptions_name_the_plan_maximums_from_plans(self):
+        from drop_core.plans import PLANS
+        data = self.assertJsonRpc(self.post(self.rpc_payload('tools/list')))
+        tools = {t['name']: t for t in data['result']['tools']}
+        maximums = 'which is %d days on Free, %d on Team and %d on Scale.' % (
+            PLANS['free']['ttl_days'], PLANS['team']['ttl_days'], PLANS['scale']['ttl_days'])
+        for name in ('upload_artifact', 'create_upload_url'):
+            desc = tools[name]['inputSchema']['properties']['ttl_days']['description']
+            self.assertIn(maximums, desc)
+
+    def test_filename_descriptions_list_the_allowed_extensions(self):
+        data = self.assertJsonRpc(self.post(self.rpc_payload('tools/list')))
+        tools = {t['name']: t for t in data['result']['tools']}
+        for name in ('upload_artifact', 'create_upload_url'):
+            desc = tools[name]['inputSchema']['properties']['filename']['description']
+            self.assertIn('png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf', desc)
 
 
 class McpProtocolTests(McpFixTestBase):
