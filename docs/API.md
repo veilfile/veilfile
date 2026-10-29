@@ -322,15 +322,15 @@ Poll errors are HTTP `400` with `{"error": ...}`, sometimes with an
 
 | Error | Meaning |
 |---|---|
-| `authorization_pending` | Not approved yet; keep polling |
-| `slow_down` | Polling faster than `interval`; add 5 seconds to the interval |
-| `access_denied` | The user denied the request, or the plan's key cap no longer allows the key (for example the plan changed after approval) |
-| `expired_token` | The code expired (10 minutes) |
-| `invalid_grant` | Unknown code, or the grant was already consumed |
-| `invalid_request` | The body is not an object, or a field is missing or not a string |
-| `unsupported_grant_type` | `grant_type` is not the device-code grant |
+| `authorization_pending` | The user has not approved the request yet, so keep polling. |
+| `slow_down` | The client polled faster than `interval`, so add 5 seconds to the interval. |
+| `access_denied` | The user denied the request, or the plan's key cap no longer allows the key (for example, the plan changed after approval). |
+| `expired_token` | The code expired, 10 minutes after it was issued. |
+| `invalid_grant` | The code is unknown, or its key was already delivered. |
+| `invalid_request` | The body is not an object, or a field is missing or not a string. |
+| `unsupported_grant_type` | The `grant_type` is not the device-code grant. |
 
-Success (`200`): `{"api_key": "vlf_..."}`. The key is delivered exactly once —
+Success (`200`): `{"api_key": "vlf_..."}`. The key is delivered exactly once, so
 polling again returns `invalid_grant`.
 
 ### Browser pages
@@ -645,11 +645,11 @@ curl -s -X POST https://YOUR-DEPLOY/mcp \
   }"
 ```
 
-Non-POST requests get `405` with a JSON `hint`: *"Send a POST request with a JSON-RPC 2.0 body and the header Content-Type: application/json."* Invalid JSON → `-32700`;
-invalid JSON-RPC (missing `jsonrpc`/`method`, object/array/boolean `id`) →
-`-32600` with HTTP `400`. Unknown method → `-32601`. Malformed arguments or
-an unknown tool → `-32602`. Missing/invalid credentials → `-32001` with HTTP
-`401`. Unexpected server errors → HTTP `500` with `-32603`.
+Non-POST requests get `405` with a JSON `hint`: *"Send a POST request with a JSON-RPC 2.0 body and the header Content-Type: application/json."* Invalid JSON gets `-32700`.
+A request that is not valid JSON-RPC (a missing `jsonrpc` or `method`, or an object, array or boolean `id`) gets
+`-32600` with HTTP `400`. An unknown method gets `-32601`. Malformed arguments or
+an unknown tool get `-32602`. Missing or invalid credentials get `-32001` with HTTP
+`401`. An unexpected server error gets HTTP `500` with `-32603`.
 
 Request limits:
 

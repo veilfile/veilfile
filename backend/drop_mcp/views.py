@@ -92,14 +92,14 @@ _EXTENSION_ORDER = ('png', 'jpg', 'jpeg', 'webp', 'gif', 'txt', 'md', 'log', 'js
 
 
 def _allowed_extensions_text():
-    """The allowed extensions as words, e.g. "png, jpg and pdf", from drop_core.services."""
+    """Return the allowed extensions from drop_core.services as words, for example "png, jpg and pdf"."""
     names = [e for e in _EXTENSION_ORDER if e in ALLOWED_EXTENSIONS]
     names += sorted(ALLOWED_EXTENSIONS - set(_EXTENSION_ORDER))
     return ', '.join(names[:-1]) + ' and ' + names[-1]
 
 
 def _plan_ttl_text():
-    """The plan maximums as words: "7 days on Free, 90 on Team and 365 on Scale"."""
+    """Return the plan maximums as words, for example "7 days on Free, 90 on Team and 365 on Scale"."""
     free, team, scale = (PLANS[key]['ttl_days'] for key in ('free', 'team', 'scale'))
     return '%d days on Free, %d on Team and %d on Scale' % (free, team, scale)
 

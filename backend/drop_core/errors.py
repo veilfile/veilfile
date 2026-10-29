@@ -61,7 +61,7 @@ def _throttled_message(exc):
 
 
 def _veilfile_text(exc):
-    """The approved words for a text the library wrote, or None.
+    """Return the approved words for a text the library wrote, or None.
 
     Only the library's own default texts are replaced, chosen by exception
     class; a message a view passed on purpose goes through as it is. Status

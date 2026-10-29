@@ -94,8 +94,8 @@ ERROR_MESSAGES = {
     "file_type_not_allowed": (
         "The file type is not allowed. Upload a file of an allowed type."
     ),
-    # No "detail" beside this one: a refused upload reveals nothing about
-    # which safety signal fired.
+    # This answer carries no "detail", so a refused upload reveals nothing
+    # about which safety signal fired.
     "content_not_allowed": (
         "This file's content is not allowed. Upload a different file."
     ),
