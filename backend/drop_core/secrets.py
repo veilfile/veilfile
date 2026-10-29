@@ -258,6 +258,7 @@ def flag_locations(data: bytes) -> dict:
 # non-empty. The scan never blocks: it flags, and the agent is told to
 # involve the human before sharing the link.
 SECRET_FLAGS_WARNING = (
-    "secret_flags is non-empty: this file may contain a secret. "
-    "Ask the user whether to keep or revoke this upload before sharing the link."
+    "The scan flagged this file as possibly containing a secret; see "
+    "secret_flags. Ask the user whether to keep or revoke the file before "
+    "sharing its link."
 )

@@ -757,7 +757,11 @@ class VeilfileCoreTests(TestCase):
         )
         self.assertEqual(response.status_code, 401)
         body = response.json()
-        self.assertEqual(body, {"error": "Invalid API key.", "code": "unauthorized"})
+        self.assertEqual(body, {
+                "error": "The API key is not valid, or the connected app's access has ended. "
+                "Send a current key, or reconnect the app.",
+                "code": "unauthorized",
+            })
 
     def test_forbidden_uses_error_envelope(self):
         # A forbidden (not merely unauthenticated) response still uses the

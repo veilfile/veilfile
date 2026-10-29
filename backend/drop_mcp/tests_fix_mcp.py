@@ -411,7 +411,7 @@ class McpErrorHandlingTests(McpFixTestBase):
             'upload_artifact', {'filename': 'a.txt', 'content_base64': _b64(b'hi')}
         ))
         self.assertEqual(body['code'], 'monthly_cap_reached')
-        self.assertIn('Monthly upload cap', body['error'])
+        self.assertIn('monthly upload cap', body['error'])
 
     def test_storage_cap_is_tool_error(self):
         with mock.patch('drop_core.services.workspace_storage_bytes',

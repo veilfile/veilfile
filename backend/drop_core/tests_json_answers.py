@@ -220,7 +220,7 @@ class KeyAnswerTests(JsonAnswerCase):
         self.exact(
             self.keyed.post("/api/v1/keys/", {"name": "x"}, format="json"),
             403,
-            '{"error":"API keys and OAuth tokens cannot create keys. Create keys from the dashboard.",'
+            '{"error":"API keys and connected apps cannot create API keys. Create keys from the dashboard.",'
             '"code":"session_required"}',
         )
 
@@ -274,7 +274,7 @@ class KeyAnswerTests(JsonAnswerCase):
         )
         client = APIClient()
         client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw}")
-        text = '{"error":"OAuth tokens cannot manage API keys. Use the dashboard.","code":"session_required"}'
+        text = '{"error":"A connected app cannot manage API keys. Manage keys from the dashboard.","code":"session_required"}'
         self.exact(client.get("/api/v1/keys/"), 403, text)
         self.exact(client.delete(f"/api/v1/keys/{self.key.pk}/"), 403, text)
 

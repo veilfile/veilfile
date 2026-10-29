@@ -13,6 +13,10 @@ unaffected.
 Response the JSON endpoint has always sent.
 """
 
+import math
+import re
+
+from rest_framework import exceptions
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
@@ -39,6 +43,107 @@ def _message(detail):
     return str(detail)
 
 
+_METHOD_RE = re.compile(r'Method "(.*)" not allowed\.', re.DOTALL)
+_MEDIA_TYPE_RE = re.compile(r'Unsupported media type "(.*)" in request\.', re.DOTALL)
+_JSON_PARSE_PREFIX = "JSON parse error - "
+_MULTIPART_PARSE_PREFIX = "Multipart form parse error - "
+_CSRF_PREFIX = "CSRF Failed: "
+
+
+def _throttled_message(exc):
+    wait = getattr(exc, "wait", None)
+    if wait is None:
+        return "Too many uploads in the past hour. Try again later."
+    seconds = math.ceil(wait)
+    if seconds == 1:
+        return "Too many uploads in the past hour. Wait 1 second, then try again."
+    return f"Too many uploads in the past hour. Wait {seconds} seconds, then try again."
+
+
+def _veilfile_text(exc):
+    """The approved words for a text the library wrote, or None.
+
+    Only the library's own default texts are replaced, chosen by exception
+    class; a message a view passed on purpose goes through as it is. Status
+    codes and error codes are not touched.
+    """
+    if not isinstance(exc, exceptions.APIException):
+        return None
+    detail = exc.detail
+    if not isinstance(detail, str):
+        return None
+    text = str(detail)
+    if isinstance(exc, exceptions.Throttled):
+        if text.startswith(str(exc.default_detail)):
+            return _throttled_message(exc)
+        return None
+    if isinstance(exc, exceptions.NotAuthenticated):
+        if text == str(exc.default_detail):
+            return (
+                "The request has no API key or sign-in. Send an API key as "
+                "Authorization: Bearer <API key>. Endpoints that need a "
+                "sign-in are used from the dashboard."
+            )
+        return None
+    if isinstance(exc, exceptions.PermissionDenied):
+        if text == str(exc.default_detail):
+            return (
+                "This request is not allowed for the API key, connected app "
+                "or sign-in that made it. The API documentation says which "
+                "ones can make it."
+            )
+        if text.startswith(_CSRF_PREFIX):
+            reason = text[len(_CSRF_PREFIX):]
+            return f"The CSRF check failed: {reason} Reload the page, then try again."
+        return None
+    if isinstance(exc, exceptions.ParseError):
+        if text == str(exc.default_detail):
+            return "The request could not be parsed. Check that the body is well formed."
+        if text.startswith(_JSON_PARSE_PREFIX):
+            reason = text[len(_JSON_PARSE_PREFIX):]
+            return (
+                f"The request body is not valid JSON ({reason}). "
+                "Fix the JSON and send the request again."
+            )
+        if text.startswith(_MULTIPART_PARSE_PREFIX):
+            reason = text[len(_MULTIPART_PARSE_PREFIX):]
+            return (
+                f"The multipart form body could not be read ({reason}). "
+                "Send a well-formed multipart form."
+            )
+        return None
+    if isinstance(exc, exceptions.NotFound):
+        if text == str(exc.default_detail):
+            return "Nothing exists at this URL. Check the path."
+        return None
+    if isinstance(exc, exceptions.MethodNotAllowed):
+        match = _METHOD_RE.fullmatch(text)
+        if match:
+            return (
+                f"The method {match.group(1)} is not allowed for this URL. "
+                "The Allow response header lists the methods it accepts."
+            )
+        return None
+    if isinstance(exc, exceptions.UnsupportedMediaType):
+        match = _MEDIA_TYPE_RE.fullmatch(text)
+        if match:
+            return (
+                f'The content type "{match.group(1)}" is not accepted here. '
+                "Set the Content-Type header to one the endpoint accepts, "
+                "such as application/json."
+            )
+        return None
+    if isinstance(exc, exceptions.NotAcceptable):
+        if text == str(exc.default_detail):
+            return (
+                "The API cannot send a response in the format the Accept "
+                "header asks for. Ask for application/json, or leave the "
+                "header out."
+            )
+        return None
+    return None
+
+
 def veilfile_exception_handler(exc, context):
     response = exception_handler(exc, context)
     if response is None:
@@ -46,7 +151,7 @@ def veilfile_exception_handler(exc, context):
     data = response.data
     if isinstance(data, dict) and "error" not in data and "detail" in data:
         response.data = {
-            "error": _message(data["detail"]),
+            "error": _veilfile_text(exc) or _message(data["detail"]),
             "code": _CODE_BY_STATUS.get(response.status_code, "request_failed"),
         }
     return response

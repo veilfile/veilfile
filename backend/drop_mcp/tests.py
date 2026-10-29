@@ -340,7 +340,7 @@ class McpEndpointTests(TestCase):
         body = self.tool_error(data)
         self.assertEqual(body['code'], 'secret_detected')
         self.assertIn('github_pat', body['detail'])
-        self.assertIn('nothing stored', body['detail'])
+        self.assertIn('nothing was stored', body['detail'])
 
     def test_create_upload_url_roundtrip(self):
         result = self.call_result('create_upload_url', {'filename': 'shot.png'})
