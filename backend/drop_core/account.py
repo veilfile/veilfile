@@ -206,7 +206,6 @@ def revoke_key(user, key_id, *, workspace=None, only_key_id=None):
     workspace = _workspace_of(user, workspace)
     key = APIKey.objects.filter(id=key_id, workspace=workspace).first()
     if key is None:
-        # The words Django's get_object_or_404 gave this answer before, which published clients may have read.
         return Answer(
             404, {"error": "No API key with that id exists in this workspace. Check the id.", "code": "not_found"}
         )
