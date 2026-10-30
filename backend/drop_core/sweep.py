@@ -12,6 +12,10 @@ idempotent. Three layers run it:
   holds an upload up for more than about one batch.
 - The container entrypoint (``entrypoint.sh``) runs it at startup and then
   every 24h in a background loop, so expiry is honored even with no uploads.
+  Each finished pass of the command records ``drop_last_loop_pass_ts``;
+  ``maybe_sweep()`` logs an ERROR when that heartbeat is older than 36h (a
+  WARNING when it is missing), at most once every 6h. With no uploads the
+  watcher does not run, so a silent day raises nothing.
 
 A storage-delete failure keeps the DB row so the next run retries; the row
 is only deleted after the file is gone, so files are never orphaned.
@@ -30,6 +34,18 @@ logger = logging.getLogger(__name__)
 
 SWEEP_INTERVAL_SECONDS = 24 * 60 * 60
 _CACHE_KEY = "drop_last_sweep_ts"
+
+# Background-loop heartbeat, written by the sweep_expired command after each
+# pass (distinct from the lazy sweep's _CACHE_KEY). It never expires: a
+# 96h timeout let a long outage downgrade from ERROR to WARNING once the
+# key expired, so the longest outage read as the least serious. A stale
+# value stays readable and keeps logging ERROR until a pass succeeds; a
+# missing key still means only that no pass was ever recorded (fresh
+# deploy or a cleared cache) and stays a WARNING.
+LOOP_PASS_CACHE_KEY = "drop_last_loop_pass_ts"
+LOOP_PASS_STALE_SECONDS = 36 * 60 * 60
+_LOOP_PASS_ALARM_KEY = "drop_loop_pass_alarm_ts"
+LOOP_PASS_ALARM_INTERVAL_SECONDS = 6 * 60 * 60
 
 # Request-path sweep bounds. Each delete is one storage round-trip, so a
 # day's backlog must not land on one upload (gunicorn kills a sync worker
@@ -112,10 +128,47 @@ def sweep_expired(limit=None, time_budget=None, stop_on_failure=False):
     return SweepResult(swept, freed, failed, complete)
 
 
+def record_loop_pass():
+    """Record that a sweep_expired pass finished (the loop heartbeat)."""
+    cache.set(LOOP_PASS_CACHE_KEY, time.time(), timeout=None)
+
+
+def _check_loop_pass(now):
+    """Log when the background loop's heartbeat is stale or missing.
+
+    Stale (older than 36h) is an ERROR: the loop has missed a pass. Missing
+    is only a WARNING: a cleared cache table loses the key without any loop
+    failure. Either alarm is logged at most once every 6h.
+    """
+    last_pass = cache.get(LOOP_PASS_CACHE_KEY)
+    if last_pass and now - last_pass <= LOOP_PASS_STALE_SECONDS:
+        return
+    last_alarm = cache.get(_LOOP_PASS_ALARM_KEY)
+    if last_alarm and now - last_alarm < LOOP_PASS_ALARM_INTERVAL_SECONDS:
+        return
+    cache.set(
+        _LOOP_PASS_ALARM_KEY, now, timeout=LOOP_PASS_ALARM_INTERVAL_SECONDS * 2
+    )
+    if last_pass:
+        logger.error(
+            "sweep: background loop missed a pass; last pass %.1fh ago",
+            (now - last_pass) / 3600,
+        )
+    else:
+        logger.warning(
+            "sweep: no background loop pass on record (cache cleared or "
+            "loop not run yet)"
+        )
+
+
 def maybe_sweep():
-    """Run a bounded sweep if one hasn't run in the last 24h. Never raises."""
+    """Run a bounded sweep if one hasn't run in the last 24h. Never raises.
+
+    First checks the background loop's heartbeat (``_check_loop_pass``).
+    """
     try:
         now = time.time()
+        _check_loop_pass(now)
         last = cache.get(_CACHE_KEY)
         if last and now - last < SWEEP_INTERVAL_SECONDS:
             return
