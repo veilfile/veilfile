@@ -77,12 +77,11 @@ def sweep_expired(limit=None, time_budget=None, stop_on_failure=False):
             # at it.
             failed += 1
             logger.warning(
-                "sweep: storage delete failed for id=%s workspace=%s (%s: %s); "
+                "sweep: storage delete failed for id=%s workspace=%s (%s); "
                 "will retry",
                 artifact.id,
                 artifact.workspace_id,
                 type(exc).__name__,
-                exc,
             )
             if stop_on_failure:
                 complete = False
