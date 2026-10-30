@@ -1,16 +1,16 @@
-"""The three plans as the plan component takes them (spec 4.3). Every figure comes from
+"""The four plans as the plan component takes them (spec 4.3). Every figure comes from
 drop_core/plans.py; to change a price or a limit, follow AGENTS.md "Pricing changes"."""
 from django.urls import reverse
 
-from drop_core.plans import PLANS
+from drop_core.plans import PLANS, plan_name
 
-PLAN_ORDER = ("free", "team", "scale")
+PLAN_ORDER = ("free", "team", "team_plus", "scale")
 
 
 def plan_cards():
     cards = []
     for slug in PLAN_ORDER:
-        caps, name = PLANS[slug], slug.title()
+        caps, name = PLANS[slug], plan_name(slug)
         if caps["keys"] is None:
             keys = "Unlimited keys"
         else:

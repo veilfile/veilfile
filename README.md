@@ -32,6 +32,7 @@ See [SPEC.md](SPEC.md) for the product spec.
 |------|-------|------------|---------|---------|----------|
 | Free | $0 | 100 | 7 days | 1 GB | 1 |
 | Team | $4/mo | 2,000 | 90 days | 25 GB | 5 |
+| Team Plus | $6/mo | 4,000 | 90 days | 40 GB | 10 |
 | Scale | $12/mo | 10,000 | 365 days | 100 GB | unlimited |
 
 The source of truth is `backend/drop_core/plans.py` (Stripe prices live in
@@ -84,6 +85,7 @@ Stripe sandbox/test key only on a local or staging copy.
 | `STRIPE_SECRET_KEY` | billing | — | Live secret key (`sk_live_…`) in production |
 | `STRIPE_WEBHOOK_SECRET` | billing | — | Signing secret (`whsec_…`) from the same Stripe account and mode as the secret key |
 | `STRIPE_PRICE_TEAM` | billing | — | Price ID for the $4/mo Team plan (tax-inclusive) |
+| `STRIPE_PRICE_TEAMPLUS` | billing | — | Price ID for the $6/mo Team Plus plan (tax-inclusive). The name has no underscore between TEAM and PLUS |
 | `STRIPE_PRICE_SCALE` | billing | — | Price ID for the $12/mo Scale plan (tax-inclusive) |
 | `EMAIL_BACKEND` | prod | console | Set `django.core.mail.backends.smtp.EmailBackend`; without SMTP no new user can verify their email, mint keys or approve CLI logins (`veilfile.W001`) |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | prod | — | SMTP settings (the live service uses Gmail SMTP) |
@@ -198,7 +200,7 @@ repository's Security tab.
 ## Launch checklist
 
 1. Create Cloudflare R2 bucket + API token (S3-compatible).
-2. Create Stripe products/prices (Team $4, Scale $12, tax-inclusive) with product tax codes;
+2. Create Stripe products/prices (Team $4, Team Plus $6, Scale $12, tax-inclusive) with product tax codes;
    note the price IDs.
 3. Deploy on Render (see `render.yaml`); set env vars incl. `DROP_BASE_URL`,
    `DATABASE_URL` and the `EMAIL_*` SMTP settings; set the Health Check Path

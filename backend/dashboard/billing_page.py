@@ -11,7 +11,8 @@ import secrets
 import time
 
 from drop_billing import account as billing_account
-from drop_core.plans import PLANS
+# plan_name is how the page names a plan, the way the Plans chapter does: "team_plus" is "Team Plus".
+from drop_core.plans import PLANS, plan_name
 
 # The logger the other billing code writes to (drop_billing/views.py logs under drop_billing.views, which this parent receives).
 logger = logging.getLogger("drop_billing")
@@ -48,11 +49,6 @@ FIXED = {
 def paid_plans():
     """The plans a visitor can buy, in the order plans.py lists them: every plan that has a price."""
     return [slug for slug, caps in PLANS.items() if caps["price_usd"]]
-
-
-def plan_name(slug):
-    """A plan as the page names it, the way the Plans chapter does: its slug, capitalised."""
-    return str(slug).title()
 
 
 def https_only(url):

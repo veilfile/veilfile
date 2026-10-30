@@ -47,8 +47,8 @@ If the base URL above still reads YOUR-DEPLOY, replace it with the address of yo
 All API keys start with `vlf_`. Pass a key as `Authorization: Bearer vlf_...`.
 Uploads are secret-scanned on arrival, and flags are returned without blocking by default. Pass `on_secret=reject` per upload to reject flagged files with `400` (`secret_detected`) instead of storing them. The `on_secret` values `flag` and `reject` are case-insensitive, and anything else is `400` `invalid_request`. Never upload credentials on purpose; `reject` is the recommended setting. Flagged responses include `secret_flag_locations` as `{flag: [{line, offset}]}`, with the first 20 locations per flag. When a flag has more than 20 locations, the response also sets `secret_flag_locations_truncated: true`. AWS secret access keys are detected independently of key IDs.
 Upload rate limit: 100 uploads/hour per credential (shared by REST and MCP uploads)
-Monthly upload caps: Free 100/mo, Team $4 2,000/mo, Scale $12 10,000/mo
-Hard storage caps: Free 1 GB, Team 25 GB, Scale 100 GB
+Monthly upload caps: Free 100/mo, Team $4 2,000/mo, Team Plus $6 4,000/mo, Scale $12 10,000/mo
+Hard storage caps: Free 1 GB, Team 25 GB, Team Plus 40 GB, Scale 100 GB
 Only successful uploads count toward the monthly cap, and rejected 4xx uploads never consume quota. Paid prices are tax-inclusive in every country. Over-cap uploads fail with 402.
 
 Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every failure including auth and throttling (`unauthorized`, `forbidden`, `not_found`, `rate_limited`, `file_type_not_allowed`, `file_too_large`, `storage_cap_reached`, `monthly_cap_reached`, …); branch on `code`. HTTP statuses are standard and `429`s carry `Retry-After`. Over MCP, tool failures are results with `isError: true` and the same JSON in the text content.
@@ -56,7 +56,7 @@ Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every fail
 ## TTL behavior
 
 - Omitting `ttl_days` gives the plan maximum, not something shorter.
-- Plan TTL maxima: Free 7 days, Team 90 days, Scale 365 days
+- Plan TTL maxima: Free 7 days, Team 90 days, Team Plus 90 days, Scale 365 days
 - A whole-number `ttl_days` above the plan maximum is clamped down, never rejected (and 0 or negative is raised to 1). The 201 response then includes `"ttl_adjusted": true`. A non-integer value (`0.5`, `abc`) is rejected with `400` `invalid_request`. Always read `expires_at` in the response; never trust the value you sent.
 
 ## secret_flags are advisory, not blocking
@@ -99,7 +99,7 @@ unsupported version in the `MCP-Protocol-Version` header is rejected with
 Keys are issued from the dashboard (`POST /api/v1/keys` with a signed-in
 session) or by `veilfile login`, which uses the device flow. An API key that
 calls `POST /api/v1/keys` gets `403 session_required`. Every active key counts toward the plan key cap (Free 1 key, Team 5
-keys, Scale unlimited keys). At the cap, the `veilfile login` consent page asks
+keys, Team Plus 10 keys, Scale unlimited keys). At the cap, the `veilfile login` consent page asks
 which key to replace. Rotate by
 issuing a new key and deleting the old one: `DELETE /api/v1/keys/<id>`
 deactivates a key instantly (204), and the old key stops working at once.

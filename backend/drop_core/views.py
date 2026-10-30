@@ -61,7 +61,7 @@ from .models import (
     PendingUpload,
     get_or_create_workspace,
 )
-from .plans import PLANS
+from .plans import PLANS, plan_name
 from .services import (
     MAX_FILE_SIZE,
     RejectedUpload,
@@ -836,13 +836,13 @@ class SignInView(auth_views.LoginView):
 
 @funnel.sets_funnel_cookie
 def signup(request):
-    # Plans selectable from the landing page: ?plan=free|team|scale.
+    # Plans selectable from the landing page: ?plan=free|team|team_plus|scale.
     # Paid plans skip the dashboard and go straight to Stripe checkout
     # after the account is created. Invalid values fall back to free.
     plan = request.GET.get("plan", "free")
     if plan not in PLANS:
         plan = "free"
-    paid = plan in ("team", "scale")
+    paid = plan in ("team", "team_plus", "scale")
 
     # Already signed in with a paid plan picked: skip the signup form. A GET
     # only shows a confirm step (links and prefetchers follow GETs); the
@@ -857,7 +857,7 @@ def signup(request):
             "registration/checkout_confirm.html",
             {
                 "plan": plan,
-                "plan_name": plan.title(),
+                "plan_name": plan_name(plan),
                 "price_usd": PLANS[plan]["price_usd"],
             },
         )
@@ -1102,6 +1102,8 @@ def _paid_signup_checkout(user, plan):
 def _plan_blurb(plan):
     if plan == "team":
         return "You're signing up for the Team plan ($4/mo, tax included). You'll go straight to Stripe checkout after creating your account."
+    if plan == "team_plus":
+        return "You're signing up for the Team Plus plan ($6/mo, tax included). You'll go straight to Stripe checkout after creating your account."
     if plan == "scale":
         return "You're signing up for the Scale plan ($12/mo, tax included). You'll go straight to Stripe checkout after creating your account."
     return None

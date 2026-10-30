@@ -37,6 +37,7 @@ ENV = {
     "STRIPE_SECRET_KEY": "sk_test_fixbilling",
     "STRIPE_WEBHOOK_SECRET": "whsec_fixbilling",
     "STRIPE_PRICE_TEAM": "price_team",
+    "STRIPE_PRICE_TEAMPLUS": "price_teamplus",
     "STRIPE_PRICE_SCALE": "price_scale",
     "DROP_BASE_URL": "https://veilfile.test",
 }

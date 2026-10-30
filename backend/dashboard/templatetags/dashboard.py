@@ -1,10 +1,14 @@
-"""Template filters for the dashboard's pages: a time in UTC for the visitor's zone to rewrite, and a size in words."""
+"""Template filters for the dashboard's pages: a time in UTC for the visitor's zone to rewrite, a size in words, and a plan's name."""
 from datetime import datetime, timezone
 
 from django import template
 from django.utils.html import format_html
 
+from drop_core.plans import plan_name
+
 register = template.Library()
+# A plan's id as the pages name it: team_plus is Team Plus, which |title would write Team_Plus.
+register.filter("plan_name", plan_name)
 
 # English whatever the active language, so that the text the server writes is the same on every request and in every test.
 MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")

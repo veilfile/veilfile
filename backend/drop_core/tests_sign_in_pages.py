@@ -29,7 +29,7 @@ from drop_core import throttle
 from drop_core.forms import SignupForm
 from drop_core.models import EmailVerification, get_or_create_workspace
 from drop_core.oauth import OAUTH_SCOPE_MCP_USE
-from drop_core.plans import PLANS
+from drop_core.plans import PLANS, plan_name
 from pages.tests_head import request_for
 
 User = get_user_model()
@@ -530,14 +530,15 @@ class SignUpPageTests(PageCase):
                 self.assertIn("Create your account. A workspace is provisioned automatically.", html,
                               "backend/templates/registration/signup.html: the plain sentence shows when no plan sentence does")
                 self.assertNotIn("Team plan", html, "a plan nobody picked is not named")
+                self.assertNotIn("Team Plus plan", html, "a plan nobody picked is not named")
                 self.assertNotIn("Scale plan", html, "a plan nobody picked is not named")
 
     def test_the_plan_sentence_survives_a_mistake(self):
-        for plan in ("team", "scale"):
+        for plan in ("team", "team_plus", "scale"):
             with self.subTest(plan=plan):
                 response = self.client.post(f"{SIGNUP}?plan={plan}", {"username": "x", "password1": "a", "password2": "b"})
                 self.assertEqual(response.status_code, 200)
-                self.assertIn(f"{plan.title()} plan", main_of(response.content.decode()),
+                self.assertIn(f"{plan_name(plan)} plan (${PLANS[plan]['price_usd']}/mo, tax included)", main_of(response.content.decode()),
                               "backend/templates/registration/signup.html shows plan_blurb after a mistake too")
 
     def test_what_the_page_puts_back_is_escaped(self):
@@ -605,7 +606,7 @@ class SignedInVisitTests(PageCase):
         self.assertSentTo(self.client.head(LOGIN), "/app/", "SignInView.get answers HEAD as well (django's View.head is get)")
 
     def test_a_picked_paid_plan_still_shows_the_checkout_step(self):
-        for plan in ("team", "scale"):
+        for plan in ("team", "team_plus", "scale"):
             with self.subTest(plan=plan):
                 response = self.client.get(f"{SIGNUP}?plan={plan}")
                 self.assertEqual(response.status_code, 200)
@@ -856,13 +857,13 @@ class CheckoutConfirmPageTests(PageCase):
         self.client.force_login(self.user)
 
     def test_it_names_the_plan_and_its_price_from_plans_py(self):
-        for plan in ("team", "scale"):
+        for plan in ("team", "team_plus", "scale"):
             with self.subTest(plan=plan):
                 response = self.client.get(f"{SIGNUP}?plan={plan}")
                 self.assertEqual(response.status_code, 200)
                 page = self.parse(response)
                 self.assertEqual(page.headings,
-                                 [f"Subscribe to the {plan.title()} plan (${PLANS[plan]['price_usd']}/mo, tax included)"])
+                                 [f"Subscribe to the {plan_name(plan)} plan (${PLANS[plan]['price_usd']}/mo, tax included)"])
                 self.assertIn("<title>Checkout | Veilfile</title>", page.html,
                               "backend/templates/registration/checkout_confirm.html: {% block title %} is Checkout, then | Veilfile")
 

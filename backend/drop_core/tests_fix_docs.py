@@ -57,7 +57,9 @@ API_DOC_FILES = ["docs/API.md", "docs/llms.txt", "backend/docs/pages/api.md"]
 # Error codes the docs have wrongly used in the past.
 BANNED_CODES = ("artifact_not_found", "invalid_base64")
 
-NAME_TO_PLAN = {"Free": "free", "Team": "team", "Scale": "scale"}
+NAME_TO_PLAN = {"Free": "free", "Team": "team", "Team Plus": "team_plus", "Scale": "scale"}
+# The names as a regex alternation, "Team Plus" before "Team" so that the longer name wins.
+PLAN_NAMES = "Free|Team Plus|Team|Scale"
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
 
 
@@ -81,15 +83,15 @@ def _price_facts(text):
     facts = []
     price = r"\$(\d+(?:\.\d+)?)"
     # "Team $4", "Team ($4/month)", "| Team | $4/mo |", "Team **$4/month**"
-    for m in re.finditer(r"\b(Free|Team|Scale)\b[^\n$0-9/]{0,20}" + price, text):
+    for m in re.finditer(r"\b(" + PLAN_NAMES + r")\b[^\n$0-9/]{0,20}" + price, text):
         if " to " in m.group(0):  # a range such as "Free to $12" (the landing description reads "Plans cost $0 to $12 a month.")
             continue
         facts.append((NAME_TO_PLAN[m.group(1)], float(m.group(2))))
-    # "$4 Team / $12 Scale"
-    for m in re.finditer(price + r"(?:/mo)?\s+(Team|Scale)\b", text):
+    # "$4 Team / $12 Scale", "$6/mo Team Plus"
+    for m in re.finditer(price + r"(?:/mo)?\s+(Team Plus|Team|Scale)\b", text):
         facts.append((NAME_TO_PLAN[m.group(2)], float(m.group(1))))
     # JSON-LD offers: {"name": "Team", "price": "4"}
-    for m in re.finditer(r'"name":\s*"(Free|Team|Scale)"[^}]*?"price":\s*"(\d+)"', text):
+    for m in re.finditer(r'"name":\s*"(' + PLAN_NAMES + r')"[^}]*?"price":\s*"(\d+)"', text):
         facts.append((NAME_TO_PLAN[m.group(1)], float(m.group(2))))
     return facts
 
@@ -97,7 +99,7 @@ def _price_facts(text):
 def _blocks(text):
     """Yield (plan, block) for multi-line JSON-LD offers, which name the plan in one line and
     describe it in the next."""
-    for m in re.finditer(r'"name":\s*"(Free|Team|Scale)"(.*?)\}', text, re.S):
+    for m in re.finditer(r'"name":\s*"(' + PLAN_NAMES + r')"(.*?)\}', text, re.S):
         yield NAME_TO_PLAN[m.group(1)], m.group(2)
 
 
@@ -106,7 +108,7 @@ def _segments(text):
     name or the end of the line."""
     yield from _blocks(text)
     for line in text.splitlines():
-        marks = [(m.start(), m.end(), m.group(1)) for m in re.finditer(r"\b(Free|Team|Scale)\b", line)]
+        marks = [(m.start(), m.end(), m.group(1)) for m in re.finditer(r"\b(" + PLAN_NAMES + r")\b", line)]
         for i, (_, end, name) in enumerate(marks):
             stop = marks[i + 1][0] if i + 1 < len(marks) else len(line)
             yield NAME_TO_PLAN[name], line[end:stop]
@@ -231,15 +233,22 @@ class PlanCopyMatchesPlansTests(SimpleTestCase):
             facts = _price_facts(text) + _cap_facts(text) + _table_facts(text)
             self.assertTrue(facts, f"{rel}: no plan prices or caps recognised")
 
-    def test_plan_table_in_readme_is_complete(self):
-        text = _read(REPO / "README.md")
-        for plan in ("free", "team", "scale"):
-            for what in ("uploads", "ttl_days", "storage_gb", "keys"):
-                self.assertIn(
-                    (plan, what, PLANS[plan][what]),
-                    _table_facts(text),
-                    f"README plan table is missing {plan}/{what}",
-                )
+    def test_every_plan_table_lists_every_plan(self):
+        for rel in ("README.md", "docs/API.md", "backend/docs/pages/how-it-works.md"):
+            facts = _table_facts(_read(REPO / rel))
+            for plan in PLANS:
+                for what in ("uploads", "ttl_days", "storage_gb", "keys"):
+                    self.assertIn(
+                        (plan, what, PLANS[plan][what]),
+                        facts,
+                        f"{rel}: the plan table is missing {plan}/{what}",
+                    )
+
+    def test_team_plus_is_read_as_its_own_plan(self):
+        # "Team" alone must not swallow "Team Plus", or every Team Plus figure would be read as Team's.
+        text = "| Plan | Price | Storage |\n| Team Plus | $6/mo | 40 GB |\nTeam Plus ($6/month)\n$6/mo Team Plus\nTeam $4"
+        self.assertEqual(_price_facts(text), [("team_plus", 6.0), ("team_plus", 6.0), ("team", 4.0), ("team_plus", 6.0)])
+        self.assertEqual(_table_facts(text), [("team_plus", "storage_gb", 40)])
 
 
 class McpToolDocsTests(SimpleTestCase):

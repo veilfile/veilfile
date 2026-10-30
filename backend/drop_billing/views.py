@@ -11,6 +11,7 @@ Environment:
     STRIPE_WEBHOOK_SECRET - Webhook signing secret (whsec_...). While it is
                             unset the webhook refuses every event (503).
     STRIPE_PRICE_TEAM     - Price ID for the Team ($4/mo) subscription.
+    STRIPE_PRICE_TEAMPLUS - Price ID for the Team Plus ($6/mo) subscription.
     STRIPE_PRICE_SCALE    - Price ID for the Scale ($12/mo) subscription.
     DROP_BASE_URL         - Public base URL used for Stripe redirect URLs.
 
@@ -191,7 +192,7 @@ def paid_signup_redirect(user, plan):
 
 
 class SwitchPlanView(APIView):
-    """Switch an existing subscription between Team and Scale in place.
+    """Switch an existing subscription between Team, Team Plus and Scale in place.
 
     See ``account.switch`` for what it asks of Stripe.
 

@@ -1,7 +1,7 @@
 {# Include: the lines that say a workspace is over what its plan allows, on Overview and Billing (spec 4.8): the React dashboard's OverLimits in its words, and the month's uploads. Nothing is drawn when nothing is over. #}
 {# Inputs: status, the body billing.status answers (plan, caps, active_keys, storage_used_bytes, over_plan_limits) or none; usage, the body usage answers or none, for the month's uploads, which the status has no flag for (a page without it leaves that line out). #}
 {% load dashboard %}{% if status.over_plan_limits or usage.uploads_used > usage.uploads_cap %}<div class="notice" role="status">
-<p><strong>Your workspace is over the {% if status.plan %}{{ status.plan|title }}{% else %}{{ usage.plan|title }}{% endif %} plan's limits.</strong></p>
+<p><strong>Your workspace is over the {% if status.plan %}{{ status.plan|plan_name }}{% else %}{{ usage.plan|plan_name }}{% endif %} plan's limits.</strong></p>
 <ul>
 {% if "keys" in status.over_plan_limits %}<li>You have {{ status.active_keys }} active API keys, and the plan allows {{ status.caps.keys }}. Existing keys keep working, but new keys can't be created until you revoke some or upgrade.</li>
 {% endif %}{% if "storage" in status.over_plan_limits %}<li>You have {{ status.storage_used_bytes|bytes }} stored, and the plan allows {{ status.caps.storage_gb }} GB. Existing links keep working, but new uploads are refused until you're under the cap.</li>

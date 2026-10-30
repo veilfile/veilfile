@@ -54,7 +54,7 @@ PAGES = (
          "with npm or pip, or upload over plain HTTP.",
          layout="chapter"),
     Page("plans", "Plans | Veilfile",
-         "Veilfile has three plans: Free ($0), Team ($4/month), and Scale ($12/month). Prices include tax. "
+         "Veilfile has four plans: Free ($0), Team ($4/month), Team Plus ($6/month), and Scale ($12/month). Prices include tax. "
          "The price you see is the price you pay.",
          layout="chapter"),
     Page("promises", "What we promise | Veilfile",

@@ -298,7 +298,7 @@ class SwitchTests(AccountCase):
             with self.subTest(plan=plan):
                 mocked = stripe_mock()
                 answer = self.call(account.switch, self.user, plan, mocked=mocked)
-                self.assertEqual(answer, Answer(400, {"error": "Choose the team or scale plan.", "code": "invalid_plan"}), ACCOUNT)
+                self.assertEqual(answer, Answer(400, {"error": "Choose the team, team_plus or scale plan.", "code": "invalid_plan"}), ACCOUNT)
                 self.assertEqual(mocked.mock_calls, [], ACCOUNT)
 
     def test_not_configured_is_a_503_and_a_workspace_with_no_customer_has_nothing_to_switch(self):

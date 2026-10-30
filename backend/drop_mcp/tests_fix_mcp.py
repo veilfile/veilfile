@@ -490,8 +490,8 @@ class McpToolDescriptionTests(McpFixTestBase):
         from drop_core.plans import PLANS
         data = self.assertJsonRpc(self.post(self.rpc_payload('tools/list')))
         tools = {t['name']: t for t in data['result']['tools']}
-        maximums = 'which is %d days on Free, %d on Team and %d on Scale.' % (
-            PLANS['free']['ttl_days'], PLANS['team']['ttl_days'], PLANS['scale']['ttl_days'])
+        maximums = 'which is %d days on Free, %d on Team, %d on Team Plus and %d on Scale.' % (
+            PLANS['free']['ttl_days'], PLANS['team']['ttl_days'], PLANS['team_plus']['ttl_days'], PLANS['scale']['ttl_days'])
         for name in ('upload_artifact', 'create_upload_url'):
             desc = tools[name]['inputSchema']['properties']['ttl_days']['description']
             self.assertIn(maximums, desc)

@@ -218,7 +218,7 @@ Response `201 Created`: `api_key` is the full `vlf_...` secret, shown once:
 }
 ```
 
-Plan key limits apply (Free: 1 key, Team: 5, Scale: unlimited). Every active
+Plan key limits apply (Free: 1 key, Team: 5, Team Plus: 10, Scale: unlimited). Every active
 key counts, including keys issued by `veilfile login`. Exceeding the limit
 returns `402` `key_limit_reached`. An unverified email returns `403`
 `email_verification_required`. `name` is optional; a non-string, a name over 255
@@ -471,7 +471,7 @@ Stripe), never from a client request. Billing errors use the standard
 
 ### `POST /api/v1/billing/checkout`: subscribe
 
-For workspaces with no live subscription. `plan` is `"team"` or `"scale"`
+For workspaces with no live subscription. `plan` is `"team"`, `"team_plus"` or `"scale"`
 (else `400` `invalid_plan`). Response `200 OK`:
 
 ```json
@@ -486,7 +486,7 @@ change plans with `/billing/switch` or the portal instead.
 
 ### `POST /api/v1/billing/switch`: change plan
 
-For existing subscribers. Body `{"plan": "team" | "scale"}`. The price on the
+For existing subscribers. Body `{"plan": "team" | "team_plus" | "scale"}`. The price on the
 subscription is swapped in place with proration: an upgrade is invoiced
 immediately and applies once the invoice is paid; a downgrade is credited.
 
@@ -579,7 +579,7 @@ Every tool has a `title` and `annotations`. The titles are "Upload a file", "Cre
     "filename":       {"type": "string",  "description": "This is the file name, including its extension, such as screenshot.png. The allowed extensions are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf, and the file's contents must match its extension."},
     "content_base64": {"type": "string",  "description": "This is the file's content as standard base64. Line breaks and a data:<mime>;base64, prefix are accepted. The decoded file can be up to 25 MiB."},
     "mime_type":      {"type": "string",  "description": "The server does not use this value; it takes the file's type from the extension in filename. If you send it, it must be a string."},
-    "ttl_days":       {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The result's expires_at is the applied expiry."},
+    "ttl_days":       {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team, 90 on Team Plus and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The result's expires_at is the applied expiry."},
     "on_secret":      {"type": "string",  "description": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"flag\", a file with secret-shaped content is stored, and the result lists secret_flags and adds a warning and secret_flag_locations. With \"reject\", that file is not stored and the call returns the secret_detected error."}
   }
 }
@@ -596,7 +596,7 @@ Result (in `result.content[0].text` as JSON):
   "required": ["filename"],
   "properties": {
     "filename": {"type": "string", "description": "This is the file name, including its extension, such as screenshot.png. The extension is checked when the URL is created, and the allowed extensions are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf."},
-    "ttl_days": {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The days count from the PUT, and the result's ttl_days is the applied value."},
+    "ttl_days": {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team, 90 on Team Plus and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The days count from the PUT, and the result's ttl_days is the applied value."},
     "on_secret": {"type": "string", "description": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"reject\", a PUT of a flagged file fails with the secret_detected error, the file is not stored and the URL stays usable until it expires. With \"flag\", a flagged file is stored and the result lists its secret_flags and adds a warning and secret_flag_locations."}
   }
 }
@@ -715,6 +715,7 @@ extension, and the allowed list.
 |---|---|---|---|---|---|
 | Free | $0 | 100 | 7 days | 1 GB | 1 |
 | Team | $4/mo | 2,000 | 90 days | 25 GB | 5 |
+| Team Plus | $6/mo | 4,000 | 90 days | 40 GB | 10 |
 | Scale | $12/mo | 10,000 | 365 days | 100 GB | unlimited |
 
 `ttl_days` above the plan max is clamped down, never rejected. Storage

@@ -706,6 +706,17 @@ class RefusalTests(SignedInCase):
         self.refused(response, 402)
         self.assertIn(f"Your Team plan allows {PLANS['team']['keys']} active keys.", response.content.decode(), f"{KEYS_VIEW}: plural for more than one")
 
+    def test_the_team_plus_cap_is_ten_keys_and_names_the_plan_with_a_space(self):
+        self.workspace.plan = "team_plus"
+        self.workspace.save()
+        for index in range(10):
+            self.make_key(f"k{index}")
+        self.keys_before = 10
+        response = self.create("eleventh")
+        self.refused(response, 402)
+        self.assertIn("Your Team Plus plan allows 10 active keys. Revoke one below to make room, or change plans.", response.content.decode(),
+                      f"{KEYS_VIEW}: _refusal names the plan with drop_core.plans.plan_name, never Team_plus")
+
     def test_a_workspace_over_its_cap_after_a_downgrade_is_still_refused(self):
         for index in range(3):
             self.make_key(f"k{index}")

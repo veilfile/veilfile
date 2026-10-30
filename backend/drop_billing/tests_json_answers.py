@@ -239,7 +239,7 @@ class SwitchAnswerTests(BillingJsonCase):
         self.exact(
             self.post("switch", {"plan": "free"}),
             400,
-            '{"error":"Choose the team or scale plan.","code":"invalid_plan"}',
+            '{"error":"Choose the team, team_plus or scale plan.","code":"invalid_plan"}',
         )
 
     def test_not_configured_is_a_bare_503(self):

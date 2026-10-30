@@ -28,6 +28,7 @@ Check `secret_flags` in every upload response. If it is non-empty and you do not
 |---|---|---|---|---|---|
 | Free | $0 | 100 | 7 days | 1 GB | 1 |
 | Team | $4/mo | 2,000 | 90 days | 25 GB | 5 |
+| Team Plus | $6/mo | 4,000 | 90 days | 40 GB | 10 |
 | Scale | $12/mo | 10,000 | 365 days | 100 GB | unlimited |
 
 Prices include tax. Only successful uploads count against the monthly quota. Rejected uploads never consume quota.

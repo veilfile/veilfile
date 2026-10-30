@@ -1,4 +1,5 @@
 {% extends "layouts/app.html" %}
+{% load dashboard %}
 {# Overview: the return from Stripe, the prompt to verify an email, anything over a limit, the plan, the meters and the account, in that order (spec 4.8). The figures come from dashboard/overview_page.py; the words are here. #}
 {% block app_main %}
 <h1>Overview</h1>
@@ -14,7 +15,7 @@
 {% endif %}
 {% if plan %}<section aria-labelledby="overview-plan">
 <h2 id="overview-plan">Plan</h2>
-<p>You are on the <strong>{{ plan|title }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a></p>
+<p>You are on the <strong>{{ plan|plan_name }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a></p>
 </section>
 {% endif %}
 <section aria-labelledby="overview-usage">
