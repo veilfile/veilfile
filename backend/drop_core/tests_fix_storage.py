@@ -465,6 +465,8 @@ class SweepTests(_Base):
         ticking = Ticking()
         with use_storage(ticking), mock.patch("drop_core.sweep.time") as fake_time:
             fake_time.monotonic.side_effect = lambda: clock["now"]
+            # The command records its heartbeat with time.time().
+            fake_time.time.side_effect = time.time
             call_command("sweep_expired", "--time-budget", "1.5", stdout=io.StringIO())
         self.assertEqual(len(ticking.deleted), 2)
 
@@ -554,6 +556,128 @@ class SweepTests(_Base):
         self.assertGreaterEqual(
             Artifact.objects.filter(expires_at__lte=timezone.now()).count(), 70
         )
+
+
+# ---------------------------------------------------------------------------
+# background-loop heartbeat and missing-pass watcher (R-02 Option A)
+# ---------------------------------------------------------------------------
+
+
+class LoopPassWatcherTests(_Base):
+    def _at(self, ts):
+        from drop_core import sweep
+
+        return mock.patch.object(sweep.time, "time", return_value=ts)
+
+    def test_command_records_and_refreshes_the_heartbeat(self):
+        from drop_core import sweep
+
+        # Patching time.time moves the local cache's expiry clock too, so
+        # each value is read back under the same clock it was written with.
+        first = time.time()
+        later = first + sweep.SWEEP_INTERVAL_SECONDS
+        self.assertIsNone(cache.get(sweep.LOOP_PASS_CACHE_KEY))
+        with self._at(first):
+            call_command("sweep_expired", stdout=io.StringIO())
+            self.assertEqual(cache.get(sweep.LOOP_PASS_CACHE_KEY), first)
+        with self._at(later):
+            call_command("sweep_expired", stdout=io.StringIO())
+            self.assertEqual(cache.get(sweep.LOOP_PASS_CACHE_KEY), later)
+        # Distinct from the lazy sweep's key, which the command leaves alone.
+        self.assertNotEqual(sweep.LOOP_PASS_CACHE_KEY, sweep._CACHE_KEY)
+
+    def test_heartbeat_never_expires(self):
+        from drop_core import sweep
+
+        with mock.patch("drop_core.sweep.cache") as fake_cache:
+            call_command("sweep_expired", stdout=io.StringIO())
+        fake_cache.set.assert_called_once_with(
+            sweep.LOOP_PASS_CACHE_KEY, mock.ANY, timeout=None
+        )
+
+    def test_a_pass_with_failed_deletes_still_records_the_heartbeat(self):
+        from drop_core import sweep
+
+        self._expired_rows(1)
+        with use_storage(FailingDeleteStorage()):
+            with self.assertLogs("drop_core.sweep", "ERROR"):
+                with self.assertRaises(CommandError):
+                    call_command("sweep_expired", stdout=io.StringIO())
+        self.assertIsNotNone(cache.get(sweep.LOOP_PASS_CACHE_KEY))
+
+    def test_fresh_heartbeat_logs_nothing(self):
+        from drop_core import sweep
+
+        now = time.time()
+        cache.set(sweep.LOOP_PASS_CACHE_KEY, now - 30 * 60 * 60, 3600)
+        with self.assertNoLogs("drop_core.sweep", "WARNING"):
+            sweep.maybe_sweep()
+
+    def test_stale_heartbeat_logs_an_error(self):
+        from drop_core import sweep
+
+        now = time.time()
+        cache.set(sweep.LOOP_PASS_CACHE_KEY, now - 37 * 60 * 60, 3600)
+        with self._at(now), self.assertLogs("drop_core.sweep", "WARNING") as logs:
+            sweep.maybe_sweep()
+        self.assertEqual(
+            [r.levelname for r in logs.records], ["ERROR"], logs.output
+        )
+        self.assertIn("missed a pass", logs.output[0])
+        self.assertIn("37.0h", logs.output[0])
+
+    def test_heartbeat_older_than_four_days_still_logs_an_error(self):
+        # The old 96h expiry downgraded a long outage to a WARNING once the
+        # key expired; with no expiry the stale value keeps logging ERROR.
+        from drop_core import sweep
+
+        now = time.time()
+        cache.set(sweep.LOOP_PASS_CACHE_KEY, now - 100 * 60 * 60, timeout=None)
+        with self._at(now), self.assertLogs("drop_core.sweep", "WARNING") as logs:
+            sweep.maybe_sweep()
+        self.assertEqual(
+            [r.levelname for r in logs.records], ["ERROR"], logs.output
+        )
+        self.assertIn("missed a pass", logs.output[0])
+        self.assertIn("100.0h", logs.output[0])
+
+    def test_missing_heartbeat_logs_a_warning_not_an_error(self):
+        from drop_core import sweep
+
+        self.assertIsNone(cache.get(sweep.LOOP_PASS_CACHE_KEY))
+        with self.assertLogs("drop_core.sweep", "WARNING") as logs:
+            sweep.maybe_sweep()
+        self.assertEqual(
+            [r.levelname for r in logs.records], ["WARNING"], logs.output
+        )
+        self.assertIn("no background loop pass on record", logs.output[0])
+
+    def test_alarm_is_throttled_to_one_per_six_hours(self):
+        from drop_core import sweep
+
+        now = time.time()
+        cache.set(sweep.LOOP_PASS_CACHE_KEY, now - 40 * 60 * 60, 3600 * 24)
+        with self._at(now), self.assertLogs("drop_core.sweep", "ERROR") as first:
+            sweep.maybe_sweep()
+        self.assertEqual(len(first.records), 1)
+        # Every upload in the next 6h stays quiet...
+        for offset in (1, 60 * 60, 6 * 60 * 60 - 1):
+            with self._at(now + offset), self.assertNoLogs("drop_core.sweep", "WARNING"):
+                sweep.maybe_sweep()
+        # ...and the alarm fires again once 6h have passed.
+        with self._at(now + 6 * 60 * 60), self.assertLogs(
+            "drop_core.sweep", "ERROR"
+        ) as again:
+            sweep.maybe_sweep()
+        self.assertEqual(len(again.records), 1)
+
+    def test_watcher_failure_never_reaches_the_upload(self):
+        from drop_core import sweep
+
+        with mock.patch.object(
+            sweep, "_check_loop_pass", side_effect=RuntimeError("cache down")
+        ), self.assertLogs("drop_core.sweep", "ERROR"):
+            sweep.maybe_sweep()
 
 
 # ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ python manage.py createcachetable
 # boot, so it no longer delays binding the port.
 (
     while true; do
-        python manage.py sweep_expired || true
+        timeout 900 python manage.py sweep_expired || echo "sweep pass failed rc=$?"
         python manage.py clearsessions || true
         python manage.py cleartokens || true
         python manage.py prune_funnel_events || true

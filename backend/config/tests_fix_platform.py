@@ -807,6 +807,17 @@ class DeployFilesTests(SimpleTestCase):
             script.index("createcachetable"), script.index("exec gunicorn")
         )
 
+    def test_entrypoint_bounds_the_sweep_pass_and_reports_its_failure(self):
+        # A hung sweep must not stall the loop, and a failed pass must say so
+        # (R-02 Option A) instead of being swallowed by `|| true`.
+        script = self._read("backend/entrypoint.sh")
+        self.assertIn(
+            'timeout 900 python manage.py sweep_expired || echo "sweep pass failed rc=$?"',
+            script,
+        )
+        self.assertNotIn("python manage.py sweep_expired || true", script)
+        self.assertIn("sleep 86400", script)
+
     def test_dockerfile_runs_unprivileged_and_collects_static_without_a_database(self):
         dockerfile = self._read("Dockerfile")
         user_lines = [l for l in dockerfile.splitlines() if l.startswith("USER ")]
