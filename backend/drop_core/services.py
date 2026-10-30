@@ -478,11 +478,13 @@ def upload_artifact(
         )
     except Exception as exc:
         # Log before deleting the row: delete() clears artifact.id.
-        logger.exception(
-            "storage save failed for artifact id=%s workspace=%s (backend=%s)",
+        logger.error(
+            "storage save failed for artifact id=%s workspace=%s "
+            "(backend=%s, error=%s)",
             artifact.id,
             workspace.id,
             os.environ.get("DROP_STORAGE", "local"),
+            type(exc).__name__,
         )
         if not _save_may_have_stored(storage, exc):
             # Nothing was stored, so there are no bytes for the
@@ -599,11 +601,10 @@ def revoke_artifact(workspace, artifact_id):
     except Exception as exc:
         logger.error(
             "revoke: storage delete failed for artifact id=%s workspace=%s "
-            "(%s: %s); row kept expired, sweeper will retry",
+            "(%s); row kept expired, sweeper will retry",
             artifact.id,
             workspace.id,
             type(exc).__name__,
-            exc,
         )
         return REVOKE_PENDING_DELETE
     mark_bytes_handled(artifact)
