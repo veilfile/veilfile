@@ -6,7 +6,7 @@ description: Sign up, verify your email, install the CLI, log in, and push your 
 order: 2
 ---
 
-Sign up, verify your email, install the CLI, log in, and push your first file. Your workspace is provisioned automatically when you sign up. Five minutes from signup to first URL.
+Sign up, verify your email, install the CLI, log in, and push your first file. Your workspace is provisioned automatically when you sign up. It takes about five minutes to go from signup to your first URL.
 
 Three steps take you from signup to your first unguessable link.
 
@@ -67,7 +67,7 @@ Replace `screenshot.png` with another file of an allowed type (see Limits below)
 <span class="visually-hidden" role="status" data-copy-status></span>
 </div>
 
-The command prints the share URL. Open it in a browser. It works with no login: the token in the URL is the auth.
+The command prints the share URL. Anyone who has the URL can open it in a browser with no login: the token in the URL is the auth.
 
 The link expires when your plan's TTL runs out, which is seven days on Free. Pass `--ttl-days 1` to shorten it.
 
@@ -175,4 +175,4 @@ Replace `<id>` with the id from the upload. Success is a `204` with an empty bod
 - Each API key or connected app can make 100 uploads per hour.
 - Each plan has a monthly upload quota and a hard storage cap. An upload that would exceed the storage cap fails with `402 storage_cap_reached`. See [how it works](/docs/how-it-works/) for the full table.
 
-Prices include tax. The price you see is the price you pay. Free costs $0, Team costs $4 a month, and Scale costs $12 a month. See [Plans](https://veilfile.com/plans/) for the full table.
+Prices include tax. The price you see is the price you pay. Free costs $0, Team costs $4 a month, and Scale costs $12 a month. See [Plans](/plans/) for the full table.
