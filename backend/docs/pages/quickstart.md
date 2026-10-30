@@ -2,9 +2,11 @@
 title: Quickstart
 slug: quickstart
 seo_title: Quickstart | Veilfile docs
-description: Sign up, verify your email, install the CLI, log in, and upload your first artifact in about five minutes.
+description: Sign up, verify your email, install the CLI, log in, and push your first file. Your workspace is provisioned automatically when you sign up.
 order: 2
 ---
+
+Sign up, verify your email, install the CLI, log in, and push your first file. Your workspace is provisioned automatically when you sign up. Five minutes from signup to first URL.
 
 Three steps take you from signup to your first unguessable link.
 
@@ -46,7 +48,7 @@ Check that the code on the page matches the one in your terminal, tick the confi
 
 If the browser does not open, open the printed address on any device and approve it there. The terminal keeps waiting until the code expires.
 
-A login creates one API key, and that key counts toward your plan's key limit. Free allows one key, so if you already have one, the approval page asks you to choose a key to replace, and anything still using that key stops working.
+A login creates one API key, and keys made this way count toward your plan's key limit, the same as keys you create in the dashboard. Free allows one key, Team allows five keys, and Scale allows unlimited keys. At the limit, the approval page asks you to choose a key to replace, and anything still using that key stops working.
 
 The CLI saves the key in a credentials file that only you can read. By default that file is `~/.config/veilfile/credentials` on macOS and Linux, and `%APPDATA%\veilfile\credentials` on Windows. The CLI does not print the key unless you ask it to.
 
@@ -65,15 +67,15 @@ Replace `screenshot.png` with another file of an allowed type (see Limits below)
 <span class="visually-hidden" role="status" data-copy-status></span>
 </div>
 
-The command prints the share link. Anyone who has the link can open it in a browser with no login. The token in the URL is the auth.
+The command prints the share URL. Open it in a browser. It works with no login: the token in the URL is the auth.
 
-The link lasts as long as your plan allows, which is 7 days on Free. Add `--ttl-days 1` to shorten it.
+The link expires when your plan's TTL runs out, which is seven days on Free. Pass `--ttl-days 1` to shorten it.
 
 Run `veilfile logout` when you are done with a machine. It revokes the key and deletes the credentials file, and the links you already made keep working until they expire.
 
 Next: [connect an agent via MCP](/docs/agent/), or read [how it works](/docs/how-it-works/).
 
-## Without the browser login
+## Manual fallback
 
 Use this route on a machine that runs unattended, such as a CI runner, or when an agent needs its key in `VEILFILE_API_KEY`. A key saved by `veilfile login` stays in the credentials file, and the key-based MCP setups in the agent docs read `VEILFILE_API_KEY` instead.
 
@@ -172,3 +174,5 @@ Replace `<id>` with the id from the upload. Success is a `204` with an empty bod
 - The allowed file types are png, jpg, jpeg, webp, gif, txt, md, log, json, har, and pdf.
 - Each API key or connected app can make 100 uploads per hour.
 - Each plan has a monthly upload quota and a hard storage cap. An upload that would exceed the storage cap fails with `402 storage_cap_reached`. See [how it works](/docs/how-it-works/) for the full table.
+
+Prices include tax. The price you see is the price you pay. Free costs $0, Team costs $4 a month, and Scale costs $12 a month. See [Plans](https://veilfile.com/plans/) for the full table.
