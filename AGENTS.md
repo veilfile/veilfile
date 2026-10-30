@@ -582,7 +582,9 @@ npm and PyPI each trust one publisher, release.yml in this repository. npm 0.4.1
 
 Plan prices and caps are defined in `backend/drop_core/plans.py` (`PLANS`) and
 enforced from there. Stripe prices are separate objects in Stripe, wired via
-`STRIPE_PRICE_TEAM` / `STRIPE_PRICE_SCALE`; changing a price needs new Stripe
+`STRIPE_PRICE_TEAM`, `STRIPE_PRICE_TEAMPLUS` and `STRIPE_PRICE_SCALE`, each mapped by name in
+`backend/drop_billing/account.py` (Team Plus's is `STRIPE_PRICE_TEAMPLUS`, the owner's choice, never the
+slug's `STRIPE_PRICE_TEAM_PLUS`); changing a price needs new Stripe
 prices (the owner does that) and then every place that advertises it. A test
 (`backend/drop_core/tests_fix_docs.py`) scans these and fails on any mismatch
 with `plans.py`:

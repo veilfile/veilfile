@@ -1156,6 +1156,23 @@ class SignupPlanTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Scale plan")
 
+    def test_plan_team_plus_shows_blurb(self):
+        response = self.client.get("/accounts/signup/?plan=team_plus")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "signing up for the Team Plus plan ($6/mo, tax included)")
+
+    def test_paid_signup_for_team_plus_checks_out_on_its_own_price(self):
+        from drop_billing.tests import TEST_ENV
+
+        stripe_mock = self._stripe_mock()
+        with mock.patch("drop_billing.views.stripe", stripe_mock):
+            response = self._signup(plan="team_plus")
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith("https://checkout.stripe.com/"))
+        kwargs = stripe_mock.checkout.Session.create.call_args.kwargs
+        self.assertEqual(kwargs["line_items"], [{"price": TEST_ENV["STRIPE_PRICE_TEAMPLUS"], "quantity": 1}])
+        self.assertEqual(kwargs["metadata"], {"plan": "team_plus"})
+
     def test_invalid_plan_falls_back_to_free(self):
         response = self.client.get("/accounts/signup/?plan=bogus")
         self.assertEqual(response.status_code, 200)

@@ -251,8 +251,20 @@ class OverLimitTests(OverviewTestCase):
         for i in range(6):
             APIKey.create_key(workspace, f"key {i}")
         said = self.over_text(self.open(user))
-        self.assertIn("Team plan's limits", said, f"{OVER}: the plan name goes through |title; found {said!r}")
+        self.assertIn("Team plan's limits", said, f"{OVER}: the plan name goes through |plan_name; found {said!r}")
         self.assertNotIn("team plan's limits", said, f"{OVER}: the plan name is never lowercase in the heading")
+
+    def test_team_plus_is_named_with_a_space_in_the_heading_and_the_plan_line(self):
+        user, workspace = make_user("ov-plus", "plus@example.com", verified=True, plan="team_plus")
+        for i in range(PLANS["team_plus"]["keys"] + 1):
+            APIKey.create_key(workspace, f"key {i}")
+        page = self.open(user)
+        said = self.over_text(page)
+        self.assertTrue(said.startswith("Your workspace is over the Team Plus plan's limits."),
+                        f"{OVER}: |plan_name writes team_plus as Team Plus, which |title would write Team_Plus; found {said!r}")
+        self.assertIn(KEYS_OVER.format(n=11, cap=10), said)
+        self.assertIn("You are on the Team Plus plan.", page.sections()["Plan"], f"{PAGE}: the plan line names the plan with |plan_name")
+        self.assertNotIn("Team_Plus", page.html)
 
     def test_one_upload_is_singular(self):
         for used, phrase, wrong in ((1, "1 upload this month", "1 uploads"), (2, "2 uploads this month", None)):
@@ -296,7 +308,7 @@ class BillingReturnTests(OverviewTestCase):
                 self.assertEqual(page.notices(), [], f"{VIEW}: only success, cancelled, error and already_subscribed are notices")
 
     def test_the_error_names_the_plan_only_when_it_is_a_paid_plan_of_plans_py(self):
-        for plan, name in (("team", " for the Team plan"), ("scale", " for the Scale plan")):
+        for plan, name in (("team", " for the Team plan"), ("team_plus", " for the Team Plus plan"), ("scale", " for the Scale plan")):
             with self.subTest(plan=plan):
                 self.assertEqual(self.open(self.user, f"?billing=error&plan={plan}").notices(), [("alert", ERROR.format(plan=name))])
         for plan in ("free", "", "TEAM", "team%20", "enterprise", "%3Cscript%3Ealert(1)%3C/script%3E", "..%2Fx", "team%00", "constructor"):

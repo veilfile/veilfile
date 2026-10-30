@@ -10,7 +10,7 @@ from django.template.loader import render_to_string
 from django.test import TestCase
 from django.urls import reverse
 
-from drop_core.plans import PLANS
+from drop_core.plans import PLANS, plan_name
 from pages import registry
 
 CHAPTERS = Path(settings.BASE_DIR) / "templates" / "chapters"
@@ -144,14 +144,15 @@ class PlansTests(TestCase):
     def test_structured_data_offers_match_plans_py(self):
         product = self.product()
         self.assertEqual({offer["name"]: offer["price"] for offer in product["offers"]},
-                         {slug.title(): str(caps["price_usd"]) for slug, caps in PLANS.items()})
+                         {plan_name(slug): str(caps["price_usd"]) for slug, caps in PLANS.items()})
         self.assertEqual(product["url"], registry.canonical_url("plans"))
         # Each Offer's description is its card's limits, as the visitor reads them, joined with ", ".
         limits = {name: re.findall(r"<li>([^<]*)</li>", items) for name, items in re.findall(
-            r'<h2 class="plan__name">(\w+)</h2>.*?<ul class="plan__limits">(.*?)</ul>', self.html, re.DOTALL)}
-        self.assertEqual(set(limits), {slug.title() for slug in PLANS})
+            r'<h2 class="plan__name">([^<]+)</h2>.*?<ul class="plan__limits">(.*?)</ul>', self.html, re.DOTALL)}
+        self.assertEqual(set(limits), {plan_name(slug) for slug in PLANS})
+        slugs = {plan_name(slug): slug for slug in PLANS}
         for offer in product["offers"]:
-            slug = offer["name"].lower()
+            slug = slugs[offer["name"]]
             with self.subTest(offer=offer["name"]):
                 self.assertEqual(offer["url"], f"{registry.SITE_ORIGIN}{reverse('signup')}?plan={slug}")
                 self.assertEqual(offer["description"], ", ".join(limits[offer["name"]]))

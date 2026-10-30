@@ -87,7 +87,7 @@ def chapter(request, name):
 
 
 def plans(request):
-    """Plans (spec 4.3): the three plans from drop_core/plans.py, each a link into sign-up with it chosen."""
+    """Plans (spec 4.3): the four plans from drop_core/plans.py, each a link into sign-up with it chosen."""
     cards = plan_cards()
     product = {
         "@context": "https://schema.org",

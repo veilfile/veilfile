@@ -10,7 +10,7 @@ from drop_billing import account as billing_account
 from drop_core import account as core_account
 from drop_core.email_verification import is_email_verified
 from drop_core.models import EmailVerification
-from drop_core.plans import PLANS
+from drop_core.plans import PLANS, plan_name
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def billing_notice(query):
     if kind not in BILLING_NOTICES:
         return None
     plan = query.get("plan") if kind == "error" else ""
-    return {"kind": kind, "role": BILLING_NOTICES[kind], "plan": plan.title() if plan in PLANS and PLANS[plan]["price_usd"] > 0 else ""}
+    return {"kind": kind, "role": BILLING_NOTICES[kind], "plan": plan_name(plan) if plan in PLANS and PLANS[plan]["price_usd"] > 0 else ""}
 
 
 def overview_context(request):

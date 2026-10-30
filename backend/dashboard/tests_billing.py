@@ -33,7 +33,7 @@ from drop_billing.models import Subscription
 from drop_billing.tests_fix_billing import ENV, FixBillingBase, make_sub, missing_customer_error, sub_list
 from drop_core.account import Answer
 from drop_core.models import APIKey, Artifact, Workspace
-from drop_core.plans import PLANS
+from drop_core.plans import PLANS, plan_name
 from pages import registry
 from pages.tests_chapters import BANNED, visible_text
 
@@ -46,6 +46,9 @@ VIEWS = "backend/dashboard/views.py"
 INVOICE = "https://invoice.stripe.com/i/acct_1/in_pending"
 STRIPE_URL = "https://checkout.stripe.com/c/pay/cs_test_1"
 PORTAL_URL = "https://billing.stripe.com/p/session/test_1"
+# The variable each paid plan's Stripe price is read from, by name and not from the slug: Team Plus's is STRIPE_PRICE_TEAMPLUS (the
+# founder's choice, 2026-10-16), never STRIPE_PRICE_TEAM_PLUS.
+PRICE_VARIABLES = {"team": "STRIPE_PRICE_TEAM", "team_plus": "STRIPE_PRICE_TEAMPLUS", "scale": "STRIPE_PRICE_SCALE"}
 # What Stripe holds for a switch that the bank has not let through.
 PENDING = {"expires_at": 1790000000, "subscription_items": [{"id": "si_1", "price": "price_scale"}]}
 
@@ -102,7 +105,7 @@ def price(slug):
 
 
 def name(slug):
-    return slug.title()
+    return plan_name(slug)
 
 
 def main_of(html):
@@ -254,12 +257,13 @@ class BillingPageModuleTests(SimpleTestCase):
     FILE = "backend/dashboard/billing_page.py"
 
     def test_the_plans_for_sale_are_the_plans_that_have_a_price(self):
-        self.assertEqual(billing_page.paid_plans(), ["team", "scale"], f"{self.FILE}: paid_plans() lists the plans of plans.py that have a price")
+        self.assertEqual(billing_page.paid_plans(), ["team", "team_plus", "scale"], f"{self.FILE}: paid_plans() lists the plans of plans.py that have a price")
         with mock.patch.dict(PLANS, {"pro": {**PLANS["scale"], "price_usd": 30}}):
-            self.assertEqual(billing_page.paid_plans(), ["team", "scale", "pro"], f"{self.FILE}: a plan added to plans.py is for sale at once")
+            self.assertEqual(billing_page.paid_plans(), ["team", "team_plus", "scale", "pro"], f"{self.FILE}: a plan added to plans.py is for sale at once")
 
     def test_a_plan_is_named_the_way_the_plans_chapter_names_it(self):
-        self.assertEqual([billing_page.plan_name(slug) for slug in PLANS], ["Free", "Team", "Scale"], f"{self.FILE}: plan_name() capitalises the slug")
+        self.assertEqual([billing_page.plan_name(slug) for slug in PLANS], ["Free", "Team", "Team Plus", "Scale"],
+                         f"{self.FILE}: plan_name() capitalises the slug and reads an underscore as a space")
 
     def test_only_an_https_address_is_followed(self):
         good = "https://checkout.stripe.com/c/pay/cs_1"
@@ -270,12 +274,14 @@ class BillingPageModuleTests(SimpleTestCase):
 
     def test_the_other_paid_plans_are_offered_with_their_prices_from_plans_py(self):
         self.assertEqual(billing_page.plan_options("free"),
-                         [{"slug": slug, "name": name(slug), "price": price(slug)} for slug in ("team", "scale")], f"{self.FILE}: plan_options('free')")
-        self.assertEqual([option["slug"] for option in billing_page.plan_options("team")], ["scale"], f"{self.FILE}: the current plan is not offered")
-        self.assertEqual([option["slug"] for option in billing_page.plan_options("scale")], ["team"], f"{self.FILE}: the current plan is not offered")
+                         [{"slug": slug, "name": name(slug), "price": price(slug)} for slug in ("team", "team_plus", "scale")], f"{self.FILE}: plan_options('free')")
+        self.assertEqual([option["slug"] for option in billing_page.plan_options("team")], ["team_plus", "scale"], f"{self.FILE}: the current plan is not offered")
+        self.assertEqual([option["slug"] for option in billing_page.plan_options("team_plus")], ["team", "scale"], f"{self.FILE}: the current plan is not offered")
+        self.assertEqual([option["slug"] for option in billing_page.plan_options("scale")], ["team", "team_plus"], f"{self.FILE}: the current plan is not offered")
 
     def test_a_switch_costs_more_when_the_target_has_the_higher_price(self):
-        for current, target, expected in (("team", "scale", True), ("scale", "team", False), ("free", "team", False), ("", "scale", False)):
+        for current, target, expected in (("team", "scale", True), ("scale", "team", False), ("free", "team", False), ("", "scale", False),
+                                          ("team", "team_plus", True), ("team_plus", "scale", True), ("team_plus", "team", False), ("scale", "team_plus", False)):
             with self.subTest(current=current, target=target):
                 self.assertIs(billing_page.is_upgrade(current, target), expected,
                               f"{self.FILE}: is_upgrade() compares the two prices in plans.py; a current plan that is not for sale reads as a downgrade (React's switchConfirmText)")
@@ -457,7 +463,7 @@ class BillingPageTests(BillingCase):
         html = self.client.get(self.billing).content.decode()
         text = visible_text(html)
         switches = [(attrs.get("href"), label) for attrs, label in links_in(html) if "/billing/switch/" in attrs.get("href", "")]
-        self.assertEqual(switches, [(self.switch_url("scale"), f"Switch to {name('scale')} (${price('scale')}/mo)")],
+        self.assertEqual(switches, [(self.switch_url(slug), f"Switch to {name(slug)} (${price(slug)}/mo)") for slug in billing_page.paid_plans() if slug != "team"],
                          f"{PAGE}: a subscriber gets a link to the confirmation page of each other paid plan; a switch is never one click")
         self.assertEqual([form for form in forms_in(html) if form["attrs"].get("action") == self.checkout], [],
                          f"{PAGE}: a subscriber cannot start another checkout")
@@ -641,7 +647,7 @@ class CheckoutTests(BillingCase):
                 self.assertEqual((response.status_code, response.get("Location")), (303, STRIPE_URL),
                                  f"{VIEWS}: billing_checkout answers 303 to the address Stripe returned")
                 kwargs = session.call_args.kwargs
-                self.assertEqual((kwargs["line_items"], kwargs["metadata"]), ([{"price": ENV[f"STRIPE_PRICE_{slug.upper()}"], "quantity": 1}], {"plan": slug}),
+                self.assertEqual((kwargs["line_items"], kwargs["metadata"]), ([{"price": ENV[PRICE_VARIABLES[slug]], "quantity": 1}], {"plan": slug}),
                                  f"{VIEWS}: the plan the form named is the plan checked out")
                 self.assertEqual(response["X-Robots-Tag"], "noindex, nofollow", f"{VIEWS}: every dashboard response, a redirect too")
 

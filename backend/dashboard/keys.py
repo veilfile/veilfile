@@ -16,6 +16,7 @@ from django.views.decorators.http import require_http_methods
 from drop_core import account
 from drop_core.key_caps import key_cap
 from drop_core.models import APIKey, get_or_create_workspace
+from drop_core.plans import plan_name
 from pages.errors import not_found
 
 from .forms import KeyForm, issue_key_token, spend_key_token
@@ -62,7 +63,7 @@ def _refusal(user, answer):
         cap = key_cap(workspace)
         if cap is not None:
             message = (
-                f"Your {workspace.plan.capitalize()} plan allows {cap} active {'key' if cap == 1 else 'keys'}. "
+                f"Your {plan_name(workspace.plan)} plan allows {cap} active {'key' if cap == 1 else 'keys'}. "
                 "Revoke one below to make room, or change plans."
             )
         return {"kind": "cap", "message": message}

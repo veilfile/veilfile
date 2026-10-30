@@ -9,8 +9,8 @@ signed-in ``user`` and works on that user's own workspace.
 Plan state changes only from Stripe-verified state (AGENTS.md, invariant 3): ``checkout``, ``switch`` and ``portal``
 never set a plan. They read Stripe, and write back only what Stripe reported (``_apply_subscriptions``).
 
-Environment (read when a function runs, never at import): STRIPE_SECRET_KEY, STRIPE_PRICE_TEAM, STRIPE_PRICE_SCALE
-and DROP_BASE_URL. ``views.py`` holds the webhook, which uses the helpers below.
+Environment (read when a function runs, never at import): STRIPE_SECRET_KEY, STRIPE_PRICE_TEAM, STRIPE_PRICE_TEAMPLUS,
+STRIPE_PRICE_SCALE and DROP_BASE_URL. ``views.py`` holds the webhook, which uses the helpers below.
 """
 
 import datetime
@@ -32,8 +32,8 @@ from .models import Subscription
 logger = logging.getLogger(__name__)
 
 # Paid plan ids the API accepts. 'free' is never purchased through checkout.
-PAID_PLANS = ("team", "scale")
-PLAN_RANK = {"team": 1, "scale": 2}
+PAID_PLANS = ("team", "team_plus", "scale")
+PLAN_RANK = {"team": 1, "team_plus": 2, "scale": 3}
 
 # Subscription statuses that keep the paid plan. past_due stays entitled
 # while Stripe retries the payment; unpaid, incomplete_expired, paused and
@@ -74,6 +74,9 @@ def _stripe_or_503():
 def _price_id(plan):
     if plan == "team":
         return os.environ.get("STRIPE_PRICE_TEAM")
+    if plan == "team_plus":
+        # The founder's name for it (2026-10-16): no underscore between TEAM and PLUS, whatever the slug suggests.
+        return os.environ.get("STRIPE_PRICE_TEAMPLUS")
     if plan == "scale":
         return os.environ.get("STRIPE_PRICE_SCALE")
     return None
@@ -85,6 +88,8 @@ def _plan_for_price_id(price_id):
         return None
     if price_id == os.environ.get("STRIPE_PRICE_TEAM"):
         return "team"
+    if price_id == os.environ.get("STRIPE_PRICE_TEAMPLUS"):
+        return "team_plus"
     if price_id == os.environ.get("STRIPE_PRICE_SCALE"):
         return "scale"
     return None
@@ -274,8 +279,8 @@ def _derive_billing_state(workspace, subs, customer_id):
         if plan is None:
             logger.error(
                 "billing: subscription %s (customer %s, workspace %s, status %s) "
-                "is on price %s, which maps to no plan; check STRIPE_PRICE_TEAM "
-                "and STRIPE_PRICE_SCALE. Plan left unchanged.",
+                "is on price %s, which maps to no plan; check STRIPE_PRICE_TEAM, "
+                "STRIPE_PRICE_TEAMPLUS and STRIPE_PRICE_SCALE. Plan left unchanged.",
                 sub.get("id"),
                 customer_id,
                 workspace.pk,
@@ -555,7 +560,7 @@ def checkout(user, plan):
 
 
 def switch(user, plan):
-    """POST /api/v1/billing/switch: switch an existing subscription between Team and Scale in place.
+    """POST /api/v1/billing/switch: switch an existing subscription between Team, Team Plus and Scale in place.
 
     Swaps the price on the subscription's plan item with
     ``proration_behavior=always_invoice`` (the prorated difference is
@@ -569,7 +574,7 @@ def switch(user, plan):
     The workspace row is locked, in a transaction, for the whole of it, Stripe calls included.
     """
     if plan not in PAID_PLANS:
-        return _error("invalid_plan", "Choose the team or scale plan.", 400)
+        return _error("invalid_plan", "Choose the team, team_plus or scale plan.", 400)
 
     stripe_mod, err = _stripe_or_503()
     if err is not None:

@@ -14,10 +14,12 @@ class Workspace(models.Model):
 
     PLAN_FREE = "free"
     PLAN_TEAM = "team"
+    PLAN_TEAM_PLUS = "team_plus"
     PLAN_SCALE = "scale"
     PLAN_CHOICES = [
         (PLAN_FREE, "Free"),
         (PLAN_TEAM, "Team"),
+        (PLAN_TEAM_PLUS, "Team Plus"),
         (PLAN_SCALE, "Scale"),
     ]
 

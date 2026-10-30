@@ -165,6 +165,7 @@ TEST_ENV = {
     "STRIPE_SECRET_KEY": "sk_test_111",
     "STRIPE_WEBHOOK_SECRET": "whsec_111",
     "STRIPE_PRICE_TEAM": "price_team_111",
+    "STRIPE_PRICE_TEAMPLUS": "price_teamplus_111",
     "STRIPE_PRICE_SCALE": "price_scale_111",
     "DROP_BASE_URL": "https://veilfile.test",
 }

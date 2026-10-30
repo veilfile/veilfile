@@ -99,9 +99,9 @@ def _allowed_extensions_text():
 
 
 def _plan_ttl_text():
-    """Return the plan maximums as words, for example "7 days on Free, 90 on Team and 365 on Scale"."""
-    free, team, scale = (PLANS[key]['ttl_days'] for key in ('free', 'team', 'scale'))
-    return '%d days on Free, %d on Team and %d on Scale' % (free, team, scale)
+    """Return the plan maximums as words, for example "7 days on Free, 90 on Team, 90 on Team Plus and 365 on Scale"."""
+    free, team, team_plus, scale = (PLANS[key]['ttl_days'] for key in ('free', 'team', 'team_plus', 'scale'))
+    return '%d days on Free, %d on Team, %d on Team Plus and %d on Scale' % (free, team, team_plus, scale)
 
 
 TOOLS = [
