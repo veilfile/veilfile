@@ -175,4 +175,4 @@ Replace `<id>` with the id from the upload. Success is a `204` with an empty bod
 - Each API key or connected app can make 100 uploads per hour.
 - Each plan has a monthly upload quota and a hard storage cap. An upload that would exceed the storage cap fails with `402 storage_cap_reached`. See [how it works](/docs/how-it-works/) for the full table.
 
-Prices include tax. The price you see is the price you pay. Free costs $0, Team costs $4 a month, Team Plus costs $6 a month, and Scale costs $12 a month. See [Plans](/plans/) for the full table.
+Prices include tax. The price you see is the price you pay. Free costs $0, Team costs $4 a month, Team Plus costs $6 a month, and Scale costs $12 a month. Billed yearly, Team costs $40 a year, Team Plus costs $60 a year, and Scale costs $120 a year, which is ten months' price. See [Plans](/plans/) for the full table.

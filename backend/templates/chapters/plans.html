@@ -4,6 +4,7 @@
 <h1 class="chapter__title">Plans</h1>
 <div class="plans">{% for plan in plans %}{% include "components/plan.html" with plan=plan only %}{% endfor %}</div>
 <p class="chapter__more">Prices include tax. The price you see is the price you pay.</p>
-<p class="chapter__more">If you already subscribe, switch between Team, Team Plus and Scale in the billing section of <a href="/app/">your dashboard</a>. The change is prorated.</p>
+<p class="chapter__more">Team, Team Plus and Scale can also be paid yearly at the price of ten months, so two months are free. The limits are the same either way.</p>
+<p class="chapter__more">If you already subscribe, switch between Team, Team Plus and Scale, or between monthly and yearly billing, in the billing section of <a href="/app/">your dashboard</a>. The change is prorated.</p>
 {# End of words. #}
 {% endblock %}

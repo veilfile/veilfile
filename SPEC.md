@@ -43,10 +43,12 @@ a private URL to put it at — not a public repo. Veilfile is the sanctioned pla
 - **Team $4/mo:** 2,000 uploads/mo, 90-day TTL, 25 GB storage, 5 keys.
 - **Team Plus $6/mo:** 4,000 uploads/mo, 90-day TTL, 40 GB storage, 10 keys.
 - **Scale $12/mo:** 10,000 uploads/mo, 365-day TTL, 100 GB storage, unlimited keys.
+- **Yearly billing:** Team $40/yr, Team Plus $60/yr, Scale $120/yr. That is ten
+  months' price, so two months are free, with the same caps as the monthly plan.
 - Storage caps are hard: uploads that would exceed the cap are rejected
   with HTTP 402 (`storage_cap_reached`). Worst-case storage cost per
   customer is bounded by the cap.
-- Billing via Stripe subscriptions (live, tax-inclusive $4/$6/$12, Stripe Managed Payments).
+- Billing via Stripe subscriptions (live, tax-inclusive $4/$6/$12 a month or $40/$60/$120 a year, Stripe Managed Payments).
   Simple plan gating with monthly counters — no complex metering.
 
 ## Architecture
@@ -74,10 +76,11 @@ x402 per-call USDC payments, SSO, custom domains, team seats, S3-style read API.
 ## Decisions
 1. **Name:** Veilfile (decided; "Drop" was the working title).
 2. **R2 account:** done. Cloudflare R2 bucket is the production storage.
-3. **Stripe account:** done. Live keys connected; tax-inclusive $4/$6/$12 prices
-   with product tax codes, Stripe Managed Payments.
-4. **Plan changes:** subscribers switch between Team, Team Plus and Scale in the dashboard with
-   proration; a second Checkout for a subscribed workspace is refused (409).
+3. **Stripe account:** done. Live keys connected; tax-inclusive $4/$6/$12 monthly
+   and $40/$60/$120 yearly prices with product tax codes, Stripe Managed Payments.
+4. **Plan changes:** subscribers switch between Team, Team Plus and Scale, and between
+   monthly and yearly billing, in the dashboard with proration; a second Checkout for a
+   subscribed workspace is refused (409).
 5. **Dunning:** `past_due` keeps the paid plan while Stripe retries; `unpaid`,
    `incomplete_expired`, `paused` and `canceled` drop the workspace to Free.
 6. **Device-flow keys** count toward the plan's API-key cap; at the cap the

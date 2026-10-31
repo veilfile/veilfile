@@ -10,7 +10,11 @@ Plan state changes only from Stripe-verified state (AGENTS.md, invariant 3): ``c
 never set a plan. They read Stripe, and write back only what Stripe reported (``_apply_subscriptions``).
 
 Environment (read when a function runs, never at import): STRIPE_SECRET_KEY, STRIPE_PRICE_TEAM, STRIPE_PRICE_TEAMPLUS,
-STRIPE_PRICE_SCALE and DROP_BASE_URL. ``views.py`` holds the webhook, which uses the helpers below.
+STRIPE_PRICE_SCALE, their yearly prices STRIPE_PRICE_TEAM_ANNUAL, STRIPE_PRICE_TEAMPLUS_ANNUAL and STRIPE_PRICE_SCALE_ANNUAL,
+and DROP_BASE_URL. ``views.py`` holds the webhook, which uses the helpers below.
+
+A paid plan is billed every month or every year (``INTERVALS``). The interval changes the Stripe price and nothing else:
+the workspace's plan is the same slug either way, so every cap is enforced from ``PLANS`` exactly as for a monthly plan.
 """
 
 import datetime
@@ -34,6 +38,9 @@ logger = logging.getLogger(__name__)
 # Paid plan ids the API accepts. 'free' is never purchased through checkout.
 PAID_PLANS = ("team", "team_plus", "scale")
 PLAN_RANK = {"team": 1, "team_plus": 2, "scale": 3}
+# Billing intervals the API accepts, as Stripe names a price's recurring interval. A request that names none is monthly,
+# which is what every client sent before yearly billing existed.
+INTERVALS = ("month", "year")
 
 # Subscription statuses that keep the paid plan. past_due stays entitled
 # while Stripe retries the payment; unpaid, incomplete_expired, paused and
@@ -71,28 +78,43 @@ def _stripe_or_503():
     return stripe_mod, None
 
 
-def _price_id(plan):
-    if plan == "team":
-        return os.environ.get("STRIPE_PRICE_TEAM")
-    if plan == "team_plus":
-        # The founder's name for it (2026-10-16): no underscore between TEAM and PLUS, whatever the slug suggests.
-        return os.environ.get("STRIPE_PRICE_TEAMPLUS")
-    if plan == "scale":
-        return os.environ.get("STRIPE_PRICE_SCALE")
+def _price_id(plan, interval="month"):
+    """The Stripe price id of ``plan`` billed every ``interval``, or None. Each variable is named here in full, never
+    derived from the slug."""
+    if interval == "month":
+        if plan == "team":
+            return os.environ.get("STRIPE_PRICE_TEAM")
+        if plan == "team_plus":
+            # The founder's name for it (2026-10-16): no underscore between TEAM and PLUS, whatever the slug suggests.
+            return os.environ.get("STRIPE_PRICE_TEAMPLUS")
+        if plan == "scale":
+            return os.environ.get("STRIPE_PRICE_SCALE")
+    if interval == "year":
+        # PROPOSED names (2026-10-30), not yet the founder's: rename them here, in the README and in the tests together.
+        if plan == "team":
+            return os.environ.get("STRIPE_PRICE_TEAM_ANNUAL")
+        if plan == "team_plus":
+            return os.environ.get("STRIPE_PRICE_TEAMPLUS_ANNUAL")
+        if plan == "scale":
+            return os.environ.get("STRIPE_PRICE_SCALE_ANNUAL")
+    return None
+
+
+def _plan_and_interval(price_id):
+    """Reverse-map a Stripe price id to ``(plan, interval)``, or None for a price that maps to no plan."""
+    if not price_id:
+        return None
+    for plan in PAID_PLANS:
+        for interval in INTERVALS:
+            if price_id == _price_id(plan, interval):
+                return plan, interval
     return None
 
 
 def _plan_for_price_id(price_id):
-    """Reverse-map a Stripe price id to a Veilfile plan, or None."""
-    if not price_id:
-        return None
-    if price_id == os.environ.get("STRIPE_PRICE_TEAM"):
-        return "team"
-    if price_id == os.environ.get("STRIPE_PRICE_TEAMPLUS"):
-        return "team_plus"
-    if price_id == os.environ.get("STRIPE_PRICE_SCALE"):
-        return "scale"
-    return None
+    """Reverse-map a Stripe price id to a Veilfile plan, or None. A yearly price maps to the same plan as its monthly one."""
+    found = _plan_and_interval(price_id)
+    return found[0] if found else None
 
 
 def _error(code, message, http_status):
@@ -163,6 +185,7 @@ def _forget_missing_customer(workspace, customer_id):
             stripe_subscription_id="",
             status="",
             current_period_end=None,
+            billing_interval="",
         )
     workspace.plan = locked.plan
     workspace.stripe_customer_id = ""
@@ -218,6 +241,15 @@ def _subscription_plan(sub):
         if plan:
             return plan
     return None
+
+
+def _subscription_interval(sub):
+    """"month" or "year": the billing interval of the subscription's plan price, or "" when no price maps to a plan."""
+    for price_id in _price_ids(sub):
+        found = _plan_and_interval(price_id)
+        if found:
+            return found[1]
+    return ""
 
 
 def _plan_item(sub):
@@ -280,7 +312,8 @@ def _derive_billing_state(workspace, subs, customer_id):
             logger.error(
                 "billing: subscription %s (customer %s, workspace %s, status %s) "
                 "is on price %s, which maps to no plan; check STRIPE_PRICE_TEAM, "
-                "STRIPE_PRICE_TEAMPLUS and STRIPE_PRICE_SCALE. Plan left unchanged.",
+                "STRIPE_PRICE_TEAMPLUS, STRIPE_PRICE_SCALE, STRIPE_PRICE_TEAM_ANNUAL, "
+                "STRIPE_PRICE_TEAMPLUS_ANNUAL and STRIPE_PRICE_SCALE_ANNUAL. Plan left unchanged.",
                 sub.get("id"),
                 customer_id,
                 workspace.pk,
@@ -339,6 +372,7 @@ def _apply_subscriptions(workspace, subs, customer_id):
                 "stripe_subscription_id": mirror.get("id") or "",
                 "status": mirror.get("status") or "",
                 "current_period_end": _period_end(mirror),
+                "billing_interval": _subscription_interval(mirror),
             },
         )
     return plan
@@ -502,12 +536,22 @@ def status(user):
             "has_subscription": bool(workspace.stripe_subscription_id),
             "subscription_status": getattr(subscription, "status", "") or "",
             "current_period_end": period_end.isoformat() if period_end else None,
+            # "month" or "year" while the workspace has a subscription whose price the mirror could map; "" otherwise.
+            "billing_interval": (
+                (getattr(subscription, "billing_interval", "") or "")
+                if workspace.stripe_subscription_id
+                else ""
+            ),
         },
     )
 
 
-def checkout(user, plan):
-    """POST /api/v1/billing/checkout: a Stripe Checkout session for a paid plan.
+def _invalid_interval():
+    return _error("invalid_interval", "Choose the month or year billing interval.", 400)
+
+
+def checkout(user, plan, interval="month"):
+    """POST /api/v1/billing/checkout: a Stripe Checkout session for a paid plan, billed every ``interval``.
 
     The 200 body is ``{"checkout_url": ...}``. Only for workspaces without a subscription: Stripe, not the local
     mirror, decides, and an existing subscriber gets 409 ``already_subscribed`` and changes plans through ``switch``
@@ -515,12 +559,14 @@ def checkout(user, plan):
     """
     if plan not in PAID_PLANS:
         return Answer(400, {"error": "invalid_plan"})
+    if interval not in INTERVALS:
+        return _invalid_interval()
 
     stripe_mod, err = _stripe_or_503()
     if err is not None:
         return err
 
-    price_id = _price_id(plan)
+    price_id = _price_id(plan, interval)
     if not price_id:
         return Answer(503, {"error": "billing_not_configured"})
 
@@ -559,8 +605,9 @@ def checkout(user, plan):
     return Answer(200, {"checkout_url": session["url"]})
 
 
-def switch(user, plan):
-    """POST /api/v1/billing/switch: switch an existing subscription between Team, Team Plus and Scale in place.
+def switch(user, plan, interval="month"):
+    """POST /api/v1/billing/switch: switch an existing subscription between Team, Team Plus and Scale, and between
+    monthly and yearly billing, in place.
 
     Swaps the price on the subscription's plan item with
     ``proration_behavior=always_invoice`` (the prorated difference is
@@ -568,18 +615,23 @@ def switch(user, plan):
     ``payment_behavior=pending_if_incomplete``: if that invoice cannot be
     paid, Stripe keeps the change pending and the plan stays as it is; the
     402 carries the invoice page where the customer can still pay it.
-    Repeating a request for the current plan is a no-op, except that it
-    cancels a change still pending payment.
+    A price on another interval is the same swap: Stripe starts the new
+    billing period on the day of the switch and invoices it at once, with
+    the unused part of the old period as a credit.
+    Repeating a request for the current plan and interval is a no-op,
+    except that it cancels a change still pending payment.
 
     The workspace row is locked, in a transaction, for the whole of it, Stripe calls included.
     """
     if plan not in PAID_PLANS:
         return _error("invalid_plan", "Choose the team, team_plus or scale plan.", 400)
+    if interval not in INTERVALS:
+        return _invalid_interval()
 
     stripe_mod, err = _stripe_or_503()
     if err is not None:
         return err
-    price_id = _price_id(plan)
+    price_id = _price_id(plan, interval)
     if not price_id:
         return Answer(503, {"error": "billing_not_configured"})
 
@@ -594,8 +646,9 @@ def switch(user, plan):
             return _switch(stripe_mod, workspace, plan, price_id)
     except stripe_mod.error.StripeError as exc:
         logger.error(
-            "billing: plan switch to %s failed for workspace %s: %s",
+            "billing: plan switch to %s (%sly) failed for workspace %s: %s",
             plan,
+            interval,
             workspace.pk,
             exc,
         )

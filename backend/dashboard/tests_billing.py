@@ -33,7 +33,7 @@ from drop_billing.models import Subscription
 from drop_billing.tests_fix_billing import ENV, FixBillingBase, make_sub, missing_customer_error, sub_list
 from drop_core.account import Answer
 from drop_core.models import APIKey, Artifact, Workspace
-from drop_core.plans import PLANS, plan_name
+from drop_core.plans import ANNUAL_PRICE_USD, PLANS, plan_name
 from pages import registry
 from pages.tests_chapters import BANNED, visible_text
 
@@ -278,6 +278,8 @@ class BillingPageModuleTests(SimpleTestCase):
         self.assertEqual([option["slug"] for option in billing_page.plan_options("team")], ["team_plus", "scale"], f"{self.FILE}: the current plan is not offered")
         self.assertEqual([option["slug"] for option in billing_page.plan_options("team_plus")], ["team", "scale"], f"{self.FILE}: the current plan is not offered")
         self.assertEqual([option["slug"] for option in billing_page.plan_options("scale")], ["team", "team_plus"], f"{self.FILE}: the current plan is not offered")
+        self.assertEqual([option["slug"] for option in billing_page.plan_options("team", "year")], ["team", "team_plus", "scale"],
+                         f"{self.FILE}: a plan held yearly is still offered monthly")
 
     def test_a_switch_costs_more_when_the_target_has_the_higher_price(self):
         for current, target, expected in (("team", "scale", True), ("scale", "team", False), ("free", "team", False), ("", "scale", False),
@@ -290,8 +292,8 @@ class BillingPageModuleTests(SimpleTestCase):
 
     def test_the_switch_page_is_given_both_plans_and_its_price(self):
         context = billing_page.switch_context("team", "scale")
-        self.assertEqual(context, {"target": {"slug": "scale", "name": "Scale", "price": price("scale")},
-                                   "current": {"slug": "team", "name": "Team"}, "upgrade": True}, f"{self.FILE}: switch_context()")
+        self.assertEqual(context, {"target": {"slug": "scale", "name": "Scale", "label": "Scale", "price": price("scale"), "per": "mo", "interval": "month"},
+                                   "current": {"slug": "team", "name": "Team"}, "change": "upgrade", "lower": False}, f"{self.FILE}: switch_context()")
 
     def test_a_switch_that_stripe_accepted_is_a_line_in_the_react_dashboards_words(self):
         for outcome, sentence in (("switched", "You're now on the Scale plan."), ("unchanged", "You're already on the Scale plan."),
@@ -385,7 +387,8 @@ class BillingPageModuleTests(SimpleTestCase):
     def test_an_unpaid_switch_is_remembered_and_forgotten(self):
         session = {}
         billing_page.remember_pending(session, "scale", INVOICE, now=1000)
-        self.assertEqual(session, {billing_page.PENDING_KEY: {"plan": "scale", "invoice_url": INVOICE, "at": 1000}}, f"{self.FILE}: remember_pending()")
+        self.assertEqual(session, {billing_page.PENDING_KEY: {"plan": "scale", "interval": "month", "invoice_url": INVOICE, "at": 1000}},
+                         f"{self.FILE}: remember_pending()")
         billing_page.remember_pending(session, "scale", "http://invoice.stripe.test/x", now=1000)
         self.assertIsNone(session[billing_page.PENDING_KEY]["invoice_url"], f"{self.FILE}: an invoice page that is not https is not kept")
         billing_page.forget_pending(session)
@@ -449,8 +452,11 @@ class BillingPageTests(BillingCase):
         upgrades = [form for form in forms_in(html) if form["attrs"].get("action") == self.checkout]
         self.assertEqual(
             [(form["attrs"].get("method"), value_of(form, "plan"), form["buttons"]) for form in upgrades],
-            [("post", slug, [f"Upgrade to {name(slug)} (${price(slug)}/mo)"]) for slug in billing_page.paid_plans()],
-            f"{PAGE}: one POST form to checkout for each paid plan, the plan in a hidden field and the price from plans.py")
+            [("post", slug, [f"Upgrade to {name(slug)} (${price(slug)}/mo)"]) for slug in billing_page.paid_plans()]
+            + [("post", slug, [f"Upgrade to {name(slug)} (${ANNUAL_PRICE_USD[slug]}/yr)"]) for slug in billing_page.paid_plans()],
+            f"{PAGE}: one POST form to checkout for each paid plan monthly, then yearly, the plan in a hidden field and the price from plans.py")
+        self.assertEqual([value_of(form, "interval") for form in upgrades], [None] * 3 + ["year"] * 3,
+                         f"{PAGE}: a yearly form names the interval in a hidden field; a monthly one names none, as before")
         for form in upgrades:
             self.assertTrue(value_of(form, "csrfmiddlewaretoken"), f"{PAGE}: each form writes {{% csrf_token %}} itself")
         self.assertNotIn("Switch to", text, f"{PAGE}: a workspace with no subscription is offered an upgrade, not a switch")
@@ -463,8 +469,9 @@ class BillingPageTests(BillingCase):
         html = self.client.get(self.billing).content.decode()
         text = visible_text(html)
         switches = [(attrs.get("href"), label) for attrs, label in links_in(html) if "/billing/switch/" in attrs.get("href", "")]
-        self.assertEqual(switches, [(self.switch_url(slug), f"Switch to {name(slug)} (${price(slug)}/mo)") for slug in billing_page.paid_plans() if slug != "team"],
-                         f"{PAGE}: a subscriber gets a link to the confirmation page of each other paid plan; a switch is never one click")
+        self.assertEqual(switches, [(self.switch_url(slug), f"Switch to {name(slug)} (${price(slug)}/mo)") for slug in billing_page.paid_plans() if slug != "team"]
+                         + [(f"{self.switch_url(slug)}?interval=year", f"Switch to {name(slug)} (${ANNUAL_PRICE_USD[slug]}/yr)") for slug in billing_page.paid_plans()],
+                         f"{PAGE}: a subscriber gets a link to the confirmation page of each other paid plan and price; a switch is never one click")
         self.assertEqual([form for form in forms_in(html) if form["attrs"].get("action") == self.checkout], [],
                          f"{PAGE}: a subscriber cannot start another checkout")
         portal = [form for form in forms_in(html) if form["attrs"].get("action") == self.portal]

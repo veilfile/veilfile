@@ -2,7 +2,7 @@
 drop_core/plans.py; to change a price or a limit, follow AGENTS.md "Pricing changes"."""
 from django.urls import reverse
 
-from drop_core.plans import PLANS, plan_name
+from drop_core.plans import ANNUAL_PRICE_USD, PLANS, plan_name
 
 PLAN_ORDER = ("free", "team", "team_plus", "scale")
 
@@ -27,5 +27,8 @@ def plan_cards():
             ],
             "signup_url": f"{reverse('signup')}?plan={slug}",
             "action": "Start free" if caps["price_usd"] == 0 else f"Choose {name}",
+            # A paid plan can also be billed yearly, at ten months' price: the same plan and limits, through the same sign-up.
+            "annual_price": f"${ANNUAL_PRICE_USD[slug]} a year, two months free" if slug in ANNUAL_PRICE_USD else "",
+            "annual_signup_url": f"{reverse('signup')}?plan={slug}&interval=year" if slug in ANNUAL_PRICE_USD else "",
         })
     return cards

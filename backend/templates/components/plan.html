@@ -1,8 +1,10 @@
-{# Component: plan. One plan: its name, price, limits, and a link into sign-up with it chosen (spec 4.3). #}
-{# Inputs: plan, a dict with name, price, limits (a list of short phrases), signup_url and action. #}
+{# Component: plan. One plan: its name, price, limits, and a link into sign-up with it chosen, and for a paid plan its yearly price and a link to choose that (spec 4.3). #}
+{# Inputs: plan, a dict with name, price, limits (a list of short phrases), signup_url, action, and annual_price and annual_signup_url ("" for a plan with no yearly price). #}
 <article class="plan">
 <h2 class="plan__name">{{ plan.name }}</h2>
 <p class="plan__price label">{{ plan.price }}</p>
-<ul class="plan__limits">{% for limit in plan.limits %}<li>{{ limit }}</li>{% endfor %}</ul>
+{% if plan.annual_price %}<p class="plan__price label">{{ plan.annual_price }}</p>
+{% endif %}<ul class="plan__limits">{% for limit in plan.limits %}<li>{{ limit }}</li>{% endfor %}</ul>
 <p class="plan__act"><a class="label interactive" href="{{ plan.signup_url }}">{{ plan.action }}</a></p>
-</article>
+{% if plan.annual_signup_url %}<p class="plan__act plan__act--yearly"><a class="label interactive" href="{{ plan.annual_signup_url }}">Choose yearly<span class="visually-hidden"> for {{ plan.name }}</span></a></p>
+{% endif %}</article>

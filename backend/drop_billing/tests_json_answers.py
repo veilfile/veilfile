@@ -108,7 +108,7 @@ class StatusAnswerTests(BillingJsonCase):
             '{"plan":"free","caps":{"uploads_per_month":%d,"ttl_days":%d,"keys":%d,"storage_gb":%d},'
             '"storage_used_bytes":0,"active_keys":0,"over_plan_limits":[],"price_usd":0,'
             '"has_billing_account":false,"has_subscription":false,"subscription_status":"",'
-            '"current_period_end":null}'
+            '"current_period_end":null,"billing_interval":""}'
         ) % (caps["uploads"], caps["ttl_days"], caps["keys"], caps["storage_gb"])
         self.exact(self.client.get("/api/v1/billing/status"), 200, expected)
 
@@ -131,7 +131,8 @@ class StatusAnswerTests(BillingJsonCase):
         self.assertEqual(
             order_of(response.content.decode()),
             ["plan", "caps", "storage_used_bytes", "active_keys", "over_plan_limits", "price_usd",
-             "has_billing_account", "has_subscription", "subscription_status", "current_period_end"],
+             "has_billing_account", "has_subscription", "subscription_status", "current_period_end",
+             "billing_interval"],
             FIX,
         )
 

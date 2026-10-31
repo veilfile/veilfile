@@ -27,3 +27,8 @@
 .plan__act {
   margin: var(--space-3) 0 0;
 }
+
+/* The yearly choice sits under the monthly one, the column's own gap apart. */
+.plan__act--yearly {
+  margin-top: 0;
+}

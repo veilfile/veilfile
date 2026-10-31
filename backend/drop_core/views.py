@@ -61,7 +61,7 @@ from .models import (
     PendingUpload,
     get_or_create_workspace,
 )
-from .plans import PLANS, plan_name
+from .plans import ANNUAL_PRICE_USD, PLANS, plan_name
 from .services import (
     MAX_FILE_SIZE,
     RejectedUpload,
@@ -839,17 +839,20 @@ def signup(request):
     # Plans selectable from the landing page: ?plan=free|team|team_plus|scale.
     # Paid plans skip the dashboard and go straight to Stripe checkout
     # after the account is created. Invalid values fall back to free.
+    # ?interval=year bills a paid plan yearly; anything else is monthly.
     plan = request.GET.get("plan", "free")
     if plan not in PLANS:
         plan = "free"
     paid = plan in ("team", "team_plus", "scale")
+    yearly = paid and request.GET.get("interval") == "year"
+    interval = "year" if yearly else "month"
 
     # Already signed in with a paid plan picked: skip the signup form. A GET
     # only shows a confirm step (links and prefetchers follow GETs); the
     # POST starts checkout. Subscribers switch plans from the dashboard.
     if request.user.is_authenticated and paid:
         if request.method == "POST":
-            return redirect(_paid_signup_checkout(request.user, plan))
+            return redirect(_paid_signup_checkout(request.user, plan, interval))
         if get_or_create_workspace(request.user).stripe_subscription_id:
             return redirect("/app/?billing=already_subscribed")
         return render(
@@ -858,7 +861,8 @@ def signup(request):
             {
                 "plan": plan,
                 "plan_name": plan_name(plan),
-                "price_usd": PLANS[plan]["price_usd"],
+                "price_usd": ANNUAL_PRICE_USD[plan] if yearly else PLANS[plan]["price_usd"],
+                "per": "yr" if yearly else "mo",
             },
         )
 
@@ -891,7 +895,7 @@ def signup(request):
                 once_per_workspace=True,
             )
             if paid:
-                return redirect(_paid_signup_checkout(user, plan))
+                return redirect(_paid_signup_checkout(user, plan, interval))
             return redirect(safe_next_url(request) or "/app/")
     else:
         form = SignupForm()
@@ -902,7 +906,7 @@ def signup(request):
         {
             "form": form,
             "plan": plan,
-            "plan_blurb": _plan_blurb(plan),
+            "plan_blurb": _plan_blurb(plan, interval),
             "next": safe_next_url(request),
         },
     )
@@ -1087,7 +1091,7 @@ class RevokingPasswordChangeView(auth_views.PasswordChangeView):
         return response
 
 
-def _paid_signup_checkout(user, plan):
+def _paid_signup_checkout(user, plan, interval="month"):
     """Start Stripe checkout for a paid-plan signup and return where to
     send the user: the checkout URL, or the dashboard flagged
     ``?billing=already_subscribed`` or ``?billing=error&plan=...`` (the
@@ -1096,10 +1100,17 @@ def _paid_signup_checkout(user, plan):
     # Lazy import: drop_billing imports drop_core.models at module level.
     from drop_billing.views import paid_signup_redirect
 
-    return paid_signup_redirect(user, plan)
+    return paid_signup_redirect(user, plan, interval)
 
 
-def _plan_blurb(plan):
+def _plan_blurb(plan, interval="month"):
+    if interval == "year":
+        if plan == "team":
+            return "You're signing up for the Team plan ($40/yr, tax included), billed yearly with two months free. You'll go straight to Stripe checkout after creating your account."
+        if plan == "team_plus":
+            return "You're signing up for the Team Plus plan ($60/yr, tax included), billed yearly with two months free. You'll go straight to Stripe checkout after creating your account."
+        if plan == "scale":
+            return "You're signing up for the Scale plan ($120/yr, tax included), billed yearly with two months free. You'll go straight to Stripe checkout after creating your account."
     if plan == "team":
         return "You're signing up for the Team plan ($4/mo, tax included). You'll go straight to Stripe checkout after creating your account."
     if plan == "team_plus":

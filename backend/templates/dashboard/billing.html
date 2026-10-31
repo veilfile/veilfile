@@ -3,7 +3,8 @@
 {% block app_main %}
 <h1>Billing</h1>
 <p>Current plan: <strong>{{ plan_name }}</strong>{% if status_words %} ({{ status_words }}){% endif %}</p>
-{% if subscription_status == "past_due" %}
+{% if billed_words %}<p>Your subscription is billed {{ billed_words }}.</p>
+{% endif %}{% if subscription_status == "past_due" %}
 <p class="notice" role="status">Your last payment failed. Stripe is retrying; update your payment method under Manage billing to keep your plan.</p>
 {% elif not subscribed and subscription_status == "unpaid" %}
 <p class="notice" role="status">Your subscription has an unpaid invoice, so this workspace is on the Free plan. Pay it, or cancel the subscription, under Manage billing.</p>
@@ -16,9 +17,9 @@
 <p class="notice" role="status">Your switch to {{ pending.name }} is waiting for payment. {% if pending.invoice_url %}Pay the invoice to apply it (your bank may ask you to confirm), or keep your current plan.{% else %}Keep your current plan, or update your payment method under Manage billing and switch again.{% endif %} Unpaid switches lapse within a day.</p>
 <div class="form-actions">
 {% if pending.invoice_url %}<a class="action interactive" href="{{ pending.invoice_url }}" target="_blank" rel="noopener noreferrer">Complete payment<span class="visually-hidden"> (opens in a new tab)</span></a>
-{% endif %}<form method="post" action="{% url 'app-billing-switch' plan=plan %}">
+{% endif %}<form method="post" action="{% url 'app-billing-switch' plan=plan %}{% if interval == "year" %}?interval=year{% endif %}">
 {% csrf_token %}
-<button class="action interactive" type="submit">Keep {{ plan_name }}</button>
+<button class="action interactive" type="submit">Keep {{ plan_name }}{% if interval == "year" %} yearly{% endif %}</button>
 </form>
 </div>
 {% endif %}
@@ -30,6 +31,18 @@
 {% csrf_token %}
 <input type="hidden" name="plan" value="{{ option.slug }}">
 <button class="action interactive" type="submit">Upgrade to {{ option.name }} (${{ option.price }}/mo)</button>
+</form>
+{% endif %}{% endfor %}</div>
+{% endif %}
+{% if yearly_options %}
+<p>Yearly billing costs the price of ten months, so two months are free.</p>
+<div class="form-actions">
+{% for option in yearly_options %}{% if subscribed %}<a class="action interactive" href="{% url 'app-billing-switch' plan=option.slug %}?interval=year">Switch to {{ option.name }} (${{ option.price }}/yr)</a>
+{% else %}<form method="post" action="{% url 'app-billing-checkout' %}">
+{% csrf_token %}
+<input type="hidden" name="plan" value="{{ option.slug }}">
+<input type="hidden" name="interval" value="year">
+<button class="action interactive" type="submit">Upgrade to {{ option.name }} (${{ option.price }}/yr)</button>
 </form>
 {% endif %}{% endfor %}</div>
 {% endif %}

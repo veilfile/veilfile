@@ -472,7 +472,9 @@ Stripe), never from a client request. Billing errors use the standard
 ### `POST /api/v1/billing/checkout`: subscribe
 
 For workspaces with no live subscription. `plan` is `"team"`, `"team_plus"` or `"scale"`
-(else `400` `invalid_plan`). Response `200 OK`:
+(else `400` `invalid_plan`). `interval` is `"month"` (the default when it is left
+out) or `"year"` for yearly billing at ten months' price (else `400`
+`invalid_interval`). Response `200 OK`:
 
 ```json
 {"checkout_url": "https://checkout.stripe.com/c/pay/cs_live_..."}
@@ -486,18 +488,22 @@ change plans with `/billing/switch` or the portal instead.
 
 ### `POST /api/v1/billing/switch`: change plan
 
-For existing subscribers. Body `{"plan": "team" | "team_plus" | "scale"}`. The price on the
+For existing subscribers. Body `{"plan": "team" | "team_plus" | "scale", "interval": "month" | "year"}`
+(`interval` may be left out, which is `"month"`). The price on the
 subscription is swapped in place with proration: an upgrade is invoiced
 immediately and applies once the invoice is paid; a downgrade is credited.
+A switch between monthly and yearly billing is the same swap: Stripe starts a
+new billing period on the day of the switch and invoices it at once, with the
+unused part of the old period as a credit.
 
 | Status | Body |
 |---|---|
 | `200` | `{"plan", "status": "switched", "subscription_status"}` |
-| `200` | `{"plan", "status": "unchanged"}` (already on that plan) |
+| `200` | `{"plan", "status": "unchanged"}` (already on that plan and interval) |
 | `200` | `{"plan", "status": "pending_cancelled"}` (switching back to the current plan voids a switch that was still waiting for payment) |
 | `402` | `{"error", "code": "payment_required", "plan", "invoice_url"}`: the payment failed, the plan is unchanged, and `invoice_url` can still be paid |
 | `409` | `no_subscription`, `subscription_past_due` or `multiple_subscriptions` |
-| `400` | `invalid_plan` |
+| `400` | `invalid_plan` or `invalid_interval` |
 | `502` / `503` | `stripe_error` / `billing_not_configured` |
 
 ### `POST /api/v1/billing/portal`: manage subscription
@@ -521,14 +527,18 @@ No Stripe call; reflects local state kept in sync by the webhook.
   "has_billing_account": true,
   "has_subscription": true,
   "subscription_status": "active",
-  "current_period_end": "2026-11-05T00:00:00+00:00"
+  "current_period_end": "2026-11-05T00:00:00+00:00",
+  "billing_interval": "month"
 }
 ```
 
 `caps.keys` is `null` on Scale. `over_plan_limits` lists `"keys"`,
 `"storage"` or `"ttl"` for a workspace that is above its current plan after a
 downgrade. `subscription_status` follows Stripe (`active`, `past_due`,
-`canceled`, ...) and is `""` when there is no subscription.
+`canceled`, ...) and is `""` when there is no subscription. `billing_interval` is
+`"month"` or `"year"` while the workspace has a subscription, and `""` otherwise
+(or until the webhook has recorded it). `price_usd` is the plan's monthly price
+either way.
 
 ### `POST /api/v1/billing/webhook`
 
@@ -717,6 +727,13 @@ extension, and the allowed list.
 | Team | $4/mo | 2,000 | 90 days | 25 GB | 5 |
 | Team Plus | $6/mo | 4,000 | 90 days | 40 GB | 10 |
 | Scale | $12/mo | 10,000 | 365 days | 100 GB | unlimited |
+| Team (yearly) | $40/yr | 2,000 | 90 days | 25 GB | 5 |
+| Team Plus (yearly) | $60/yr | 4,000 | 90 days | 40 GB | 10 |
+| Scale (yearly) | $120/yr | 10,000 | 365 days | 100 GB | unlimited |
+
+Yearly billing costs ten months' price, so two months are free. A yearly plan
+is the same plan with the same limits: only the price and the billing interval
+differ, and `plan` in every answer is `team`, `team_plus` or `scale` either way.
 
 `ttl_days` above the plan max is clamped down, never rejected. Storage
 caps are hard: an upload that would exceed the cap fails with HTTP 402

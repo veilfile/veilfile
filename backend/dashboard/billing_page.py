@@ -12,12 +12,13 @@ import time
 
 from drop_billing import account as billing_account
 # plan_name is how the page names a plan, the way the Plans chapter does: "team_plus" is "Team Plus".
-from drop_core.plans import PLANS, plan_name
+from drop_core.plans import ANNUAL_PRICE_USD, PLANS, plan_name
 
 # The logger the other billing code writes to (drop_billing/views.py logs under drop_billing.views, which this parent receives).
 logger = logging.getLogger("drop_billing")
 
-# The session key of a plan switch that was answered payment_required: {"plan", "invoice_url", "at"}. It is a hint for the page,
+# The session key of a plan switch that was answered payment_required: {"plan", "interval", "invoice_url", "at"} (an entry from before
+# yearly billing has no "interval" and was monthly). It is a hint for the page,
 # because nothing a later page load can read says a switch is waiting. It is not a secret (invariant 1 is about API keys): a plan,
 # Stripe's invoice page when Stripe gave one over https, and when it was made.
 PENDING_KEY = "dashboard_pending_switch"
@@ -57,9 +58,41 @@ def https_only(url):
     return url if isinstance(url, str) and url.startswith("https://") else None
 
 
-def plan_options(current):
-    """The plans the page offers: each paid plan that is not the current one, as {slug, name, price}."""
-    return [{"slug": slug, "name": plan_name(slug), "price": PLANS[slug]["price_usd"]} for slug in paid_plans() if slug != current]
+# What follows a price's figure on the page: "/mo" for a month, "/yr" for a year.
+PER = {"month": "mo", "year": "yr"}
+
+
+def interval_of(value):
+    """A billing interval the page can act on: "year" for "year", and "month" for anything else, an unknown interval (a mirror
+    written before yearly billing) included."""
+    return "year" if value == "year" else "month"
+
+
+def for_sale(slug, interval):
+    """True when `slug` is sold billed every `interval`: any paid plan monthly, and yearly a paid plan with a yearly price."""
+    return slug in paid_plans() and (interval == "month" or (interval == "year" and slug in ANNUAL_PRICE_USD))
+
+
+def price_of(slug, interval):
+    """What a paid plan costs for one `interval`, from plans.py."""
+    return ANNUAL_PRICE_USD[slug] if interval == "year" else PLANS[slug]["price_usd"]
+
+
+def billed_name(slug, interval):
+    """A plan named with how it is paid when that is yearly: "Team" monthly, "Team yearly" yearly."""
+    return f"{plan_name(slug)} yearly" if interval == "year" else plan_name(slug)
+
+
+def plan_options(current, interval="month"):
+    """The plans the page offers monthly: each paid plan that is not the plan held, if it is held monthly, as {slug, name, price}."""
+    return [{"slug": slug, "name": plan_name(slug), "price": PLANS[slug]["price_usd"]}
+            for slug in paid_plans() if (slug, "month") != (current, interval)]
+
+
+def yearly_options(current, interval="month"):
+    """The plans the page offers yearly: each paid plan that is not the plan held, if it is held yearly, as {slug, name, price}."""
+    return [{"slug": slug, "name": plan_name(slug), "price": ANNUAL_PRICE_USD[slug]}
+            for slug in paid_plans() if for_sale(slug, "year") and (slug, "year") != (current, interval)]
 
 
 def is_upgrade(current, target):
@@ -68,12 +101,29 @@ def is_upgrade(current, target):
     return current in paid_plans() and PLANS[target]["price_usd"] > PLANS[current]["price_usd"]
 
 
-def switch_context(current, target):
-    """What billing_switch.html prints: the plan to move to, the plan moved from, and which of the two sentences applies."""
+def switch_change(current, target, current_interval, interval):
+    """Which sentence billing_switch.html prints. Between two prices of one interval it is React's pair, "upgrade" or "downgrade".
+    A move to the other interval is "to_yearly" or "to_monthly": Stripe then starts a new billing period on the day of the switch and
+    invoices it at once, less a credit for the unused part of the old one, which neither of React's sentences says."""
+    if current_interval == interval:
+        return "upgrade" if is_upgrade(current, target) else "downgrade"
+    return "to_yearly" if interval == "year" else "to_monthly"
+
+
+def switch_context(current, target, current_interval="month", interval="month"):
+    """What billing_switch.html prints: the plan and interval to move to, the plan moved from, which sentence applies, and whether
+    the target's limits are lower (a plan the page lists before the current one), which the interval sentences then add."""
+    paid = paid_plans()
+    change = switch_change(current, target, current_interval, interval)
+    # The button names the interval whenever the switch is to a yearly price or back to a monthly one: "Switch to Team" alone
+    # would not say which of Team's two prices it means.
+    label = f"{plan_name(target)} monthly" if change == "to_monthly" else billed_name(target, interval)
     return {
-        "target": {"slug": target, "name": plan_name(target), "price": PLANS[target]["price_usd"]},
-        "current": {"slug": current, "name": plan_name(current)},
-        "upgrade": is_upgrade(current, target),
+        "target": {"slug": target, "name": plan_name(target), "label": label, "price": price_of(target, interval), "per": PER[interval],
+                   "interval": interval},
+        "current": {"slug": current, "name": billed_name(current, current_interval)},
+        "change": change,
+        "lower": current in paid and paid.index(target) < paid.index(current),
     }
 
 
@@ -98,28 +148,38 @@ def status_words(subscription_status):
 def page_context(status, pending):
     """What billing.html prints. `status` is the body billing.status answers; `pending` is pending_for()'s answer."""
     plan = status["plan"]
+    subscribed = bool(status["has_subscription"])
+    # The interval the subscription is billed at, as the mirror knows it ("" before a webhook has written it, which is monthly:
+    # every subscription before yearly billing was).
+    known = status.get("billing_interval") or ""
+    interval = interval_of(known) if subscribed else ""
     return {
         "status": status,
         "plan": plan,
         "plan_name": plan_name(plan),
-        "subscribed": bool(status["has_subscription"]),
+        "subscribed": subscribed,
+        "interval": interval,
+        "billed_words": {"month": "monthly", "year": "yearly"}.get(known, "") if subscribed else "",
         "subscription_status": status["subscription_status"],
         "status_words": status_words(status["subscription_status"]),
         "can_manage": bool(status["has_billing_account"]),
-        "options": plan_options(plan),
+        "options": plan_options(plan, interval or "month"),
+        "yearly_options": yearly_options(plan, interval or "month"),
         "pending": pending,
     }
 
 
-def switch_result(plan, outcome):
-    """The line after a switch that Stripe accepted. `plan` is the plan the workspace is on now and `outcome` the answer's status
-    (switched, unchanged or pending_cancelled); the sentences are the React dashboard's."""
+def switch_result(plan, outcome, interval="month"):
+    """The line after a switch that Stripe accepted. `plan` is the plan the workspace is on now, `outcome` the answer's status
+    (switched, unchanged or pending_cancelled) and `interval` the one the switch named, which a 200 means the subscription is on.
+    The sentences are the React dashboard's; a yearly plan adds "billed yearly"."""
     name = plan_name(plan)
+    billed = ", billed yearly" if interval == "year" else ""
     if outcome == "pending_cancelled":
-        return f"The pending switch was canceled. You stay on the {name} plan."
+        return f"The pending switch was canceled. You stay on the {name} plan{billed}."
     if outcome == "unchanged":
-        return f"You're already on the {name} plan."
-    return f"You're now on the {name} plan."
+        return f"You're already on the {name} plan{billed}."
+    return f"You're now on the {name} plan{billed}."
 
 
 def body_of(answer):
@@ -182,11 +242,12 @@ def unexpected(where):
     return f"{STRIPE_FAILED} Reference: {ref}"
 
 
-def remember_pending(session, plan, invoice_url, now=None):
-    """Keep an unpaid switch to `plan` in the session: the plan the visitor asked for, Stripe's invoice page if it is an https
-    address (else None), and the time."""
+def remember_pending(session, plan, invoice_url, now=None, interval="month"):
+    """Keep an unpaid switch to `plan` in the session: the plan and the interval the visitor asked for, Stripe's invoice page if it
+    is an https address (else None), and the time."""
     session[PENDING_KEY] = {
         "plan": plan,
+        "interval": interval,
         "invoice_url": https_only(invoice_url),
         "at": int(time.time() if now is None else now),
     }
@@ -196,12 +257,13 @@ def forget_pending(session):
     session.pop(PENDING_KEY, None)
 
 
-def pending_for(session, current_plan, now=None):
+def pending_for(session, current_plan, now=None, current_interval="month"):
     """The unpaid switch the Billing page should offer to settle, as {plan, name, invoice_url}, or None.
 
-    An entry holds while the workspace is on a paid plan that is not the one the switch named, the named plan is for sale, the
-    entry is under PENDING_SECONDS old, and it is the shape remember_pending writes. An entry that no longer holds is forgotten
-    here, so a stale hint does not wait for the next switch to go.
+    An entry holds while the workspace is on a paid plan and interval that is not the one the switch named, the named plan is for
+    sale, the entry is under PENDING_SECONDS old, and it is the shape remember_pending writes (an entry with no interval is a monthly
+    one, written before yearly billing). An entry that no longer holds is forgotten here, so a stale hint does not wait for the next
+    switch to go. The name says "yearly" for a yearly switch.
     """
     entry = session.get(PENDING_KEY)
     if entry is None:
@@ -209,15 +271,20 @@ def pending_for(session, current_plan, now=None):
     now = time.time() if now is None else now
     plan = entry.get("plan") if isinstance(entry, dict) else None
     at = entry.get("at") if isinstance(entry, dict) else None
+    interval = entry.get("interval", "month") if isinstance(entry, dict) else None
     paid = paid_plans()
     holds = (
         plan in paid
+        and interval in ("month", "year")
+        and for_sale(plan, interval)
         and current_plan in paid
-        and plan != current_plan
+        and (plan, interval) != (current_plan, current_interval)
         and isinstance(at, (int, float))
         and 0 <= now - at < PENDING_SECONDS
     )
     if not holds:
         forget_pending(session)
         return None
-    return {"plan": plan, "name": plan_name(plan), "invoice_url": https_only(entry.get("invoice_url"))}
+    # A move back to monthly names "monthly": beside "Keep Team yearly", "Your switch to Team" would not say which Team it is.
+    name = f"{plan_name(plan)} monthly" if (interval, current_interval) == ("month", "year") else billed_name(plan, interval)
+    return {"plan": plan, "name": name, "invoice_url": https_only(entry.get("invoice_url"))}

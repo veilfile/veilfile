@@ -34,9 +34,16 @@ See [SPEC.md](SPEC.md) for the product spec.
 | Team | $4/mo | 2,000 | 90 days | 25 GB | 5 |
 | Team Plus | $6/mo | 4,000 | 90 days | 40 GB | 10 |
 | Scale | $12/mo | 10,000 | 365 days | 100 GB | unlimited |
+| Team (yearly) | $40/yr | 2,000 | 90 days | 25 GB | 5 |
+| Team Plus (yearly) | $60/yr | 4,000 | 90 days | 40 GB | 10 |
+| Scale (yearly) | $120/yr | 10,000 | 365 days | 100 GB | unlimited |
 
-The source of truth is `backend/drop_core/plans.py` (Stripe prices live in
-Stripe and the `STRIPE_PRICE_*` variables). `backend/drop_core/tests_fix_docs.py`
+Yearly billing costs ten months' price, so two months are free. A yearly plan
+has the same limits as the monthly one.
+
+The source of truth is `backend/drop_core/plans.py` (`PLANS`, and
+`ANNUAL_PRICE_USD` for the yearly prices; Stripe prices live in Stripe and the
+`STRIPE_PRICE_*` variables). `backend/drop_core/tests_fix_docs.py`
 fails when a doc or template states a different price or cap.
 
 ## Quickstart (local dev)
@@ -87,6 +94,9 @@ Stripe sandbox/test key only on a local or staging copy.
 | `STRIPE_PRICE_TEAM` | billing | — | Price ID for the $4/mo Team plan (tax-inclusive) |
 | `STRIPE_PRICE_TEAMPLUS` | billing | — | Price ID for the $6/mo Team Plus plan (tax-inclusive). The name has no underscore between TEAM and PLUS |
 | `STRIPE_PRICE_SCALE` | billing | — | Price ID for the $12/mo Scale plan (tax-inclusive) |
+| `STRIPE_PRICE_TEAM_ANNUAL` | billing | — | Price ID for yearly Team billing, $40/yr (tax-inclusive) |
+| `STRIPE_PRICE_TEAMPLUS_ANNUAL` | billing | — | Price ID for yearly Team Plus billing, $60/yr (tax-inclusive). No underscore between TEAM and PLUS, as in `STRIPE_PRICE_TEAMPLUS` |
+| `STRIPE_PRICE_SCALE_ANNUAL` | billing | — | Price ID for yearly Scale billing, $120/yr (tax-inclusive) |
 | `EMAIL_BACKEND` | prod | console | Set `django.core.mail.backends.smtp.EmailBackend`; without SMTP no new user can verify their email, mint keys or approve CLI logins (`veilfile.W001`) |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | prod | — | SMTP settings (the live service uses Gmail SMTP) |
 | `DEFAULT_FROM_EMAIL` | prod | — | From address, e.g. `support@veilfile.com` |

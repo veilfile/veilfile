@@ -324,6 +324,8 @@ READING_TEST_MODULES = ("pages.tests_reading_family", "pages.tests_reading", "pa
                         "dashboard.tests_files",
                         "dashboard.tests_keys",
                         "dashboard.tests_billing",
+                        "dashboard.tests_annual_billing",
+                        "drop_core.tests_annual",
                         "pages.tests_dashboard_fixtures",
                         "dashboard.tests_recipe")
 
