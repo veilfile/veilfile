@@ -12,10 +12,11 @@ idempotent. Three layers run it:
   holds an upload up for more than about one batch.
 - The container entrypoint (``entrypoint.sh``) runs it at startup and then
   every 24h in a background loop, so expiry is honored even with no uploads.
-  Each finished pass of the command records ``drop_last_loop_pass_ts``;
-  ``maybe_sweep()`` logs an ERROR when that heartbeat is older than 36h (a
-  WARNING when it is missing), at most once every 6h. With no uploads the
-  watcher does not run, so a silent day raises nothing.
+  Each finished pass of the command records the loop heartbeat (the one
+  ``LoopHeartbeat`` row); ``maybe_sweep()`` logs an ERROR when that
+  heartbeat is older than 36h (a WARNING when no pass is on record), at most
+  once every 6h. With no uploads the watcher does not run, so a silent day
+  raises nothing.
 
 A storage-delete failure keeps the DB row so the next run retries; the row
 is only deleted after the file is gone, so files are never orphaned.
@@ -23,6 +24,7 @@ Revoked artifacts whose storage delete failed are kept expired, so the
 sweep retries those too. Sweep failures never propagate from maybe_sweep.
 """
 
+import datetime
 import logging
 import time
 from collections import namedtuple
@@ -35,15 +37,18 @@ logger = logging.getLogger(__name__)
 SWEEP_INTERVAL_SECONDS = 24 * 60 * 60
 _CACHE_KEY = "drop_last_sweep_ts"
 
-# Background-loop heartbeat, written by the sweep_expired command after each
-# pass (distinct from the lazy sweep's _CACHE_KEY). It never expires: a
-# 96h timeout let a long outage downgrade from ERROR to WARNING once the
-# key expired, so the longest outage read as the least serious. A stale
-# value stays readable and keeps logging ERROR until a pass succeeds; a
-# missing key still means only that no pass was ever recorded (fresh
-# deploy or a cleared cache) and stays a WARNING.
-LOOP_PASS_CACHE_KEY = "drop_last_loop_pass_ts"
+# Background-loop heartbeat: the one LoopHeartbeat row, written by the
+# sweep_expired command after each pass (distinct from the lazy sweep's
+# _CACHE_KEY). It is a database row, not a cache key, so a cull of the cache
+# table (MAX_ENTRIES) or a cleared cache cannot lose it and turn a missed
+# pass into a WARNING. Nothing expires it either: a stale value stays
+# readable and keeps logging ERROR until a pass succeeds. A missing row
+# means only that no pass has finished since the table was created (a fresh
+# deploy) and stays a WARNING.
+_LOOP_HEARTBEAT_PK = 1
 LOOP_PASS_STALE_SECONDS = 36 * 60 * 60
+# The alarm throttle stays in the cache: losing it costs at most one early
+# repeat of the alarm.
 _LOOP_PASS_ALARM_KEY = "drop_loop_pass_alarm_ts"
 LOOP_PASS_ALARM_INTERVAL_SECONDS = 6 * 60 * 60
 
@@ -130,17 +135,30 @@ def sweep_expired(limit=None, time_budget=None, stop_on_failure=False):
 
 def record_loop_pass():
     """Record that a sweep_expired pass finished (the loop heartbeat)."""
-    cache.set(LOOP_PASS_CACHE_KEY, time.time(), timeout=None)
+    from .models import LoopHeartbeat
+
+    # time.time() is the clock maybe_sweep() compares the heartbeat with.
+    LoopHeartbeat.objects.update_or_create(
+        pk=_LOOP_HEARTBEAT_PK,
+        defaults={
+            "last_pass": datetime.datetime.fromtimestamp(
+                time.time(), tz=datetime.timezone.utc
+            )
+        },
+    )
 
 
 def _check_loop_pass(now):
     """Log when the background loop's heartbeat is stale or missing.
 
     Stale (older than 36h) is an ERROR: the loop has missed a pass. Missing
-    is only a WARNING: a cleared cache table loses the key without any loop
-    failure. Either alarm is logged at most once every 6h.
+    is only a WARNING: no pass has finished since the heartbeat table was
+    created. Either alarm is logged at most once every 6h.
     """
-    last_pass = cache.get(LOOP_PASS_CACHE_KEY)
+    from .models import LoopHeartbeat
+
+    heartbeat = LoopHeartbeat.objects.filter(pk=_LOOP_HEARTBEAT_PK).first()
+    last_pass = heartbeat.last_pass.timestamp() if heartbeat else None
     if last_pass and now - last_pass <= LOOP_PASS_STALE_SECONDS:
         return
     last_alarm = cache.get(_LOOP_PASS_ALARM_KEY)
@@ -156,8 +174,7 @@ def _check_loop_pass(now):
         )
     else:
         logger.warning(
-            "sweep: no background loop pass on record (cache cleared or "
-            "loop not run yet)"
+            "sweep: no background loop pass on record (loop not run yet)"
         )
 
 

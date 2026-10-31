@@ -7,7 +7,7 @@ credential instead of reading it as "nothing expired". ``--limit`` and
 binds); the rest is left for the next run.
 
 Every pass that finishes, failed deletes included, records the loop
-heartbeat ``drop_last_loop_pass_ts`` that ``maybe_sweep()`` watches; a pass
+heartbeat (the ``LoopHeartbeat`` row) that ``maybe_sweep()`` watches; a pass
 that crashes or is killed by the entrypoint's ``timeout`` records none.
 """
 
