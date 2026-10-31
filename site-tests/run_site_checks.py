@@ -245,11 +245,11 @@ LATE_SWAP = """(() => { const start = Document.prototype.startViewTransition; wi
     return start.call(this, () => new Promise((resolve) => setTimeout(() => resolve(callback()), 600))); }; })();"""
 # A device that is late with the first frame of a fade: after shell.js has handled a click on a chapter link (a listener
 # on window runs after the document's, in the same task), the page is busy for LATE_FRAME_MS, so the fade out, which starts at
-# the next frame, begins that much late. 150 ms is late enough that a timer of the fade's own length (350 ms) from the click
-# swaps while <main> is still about 0.4 opaque, and early enough that the fade ends (at about 150 + 350 ms and a frame) 150 ms
-# or more ahead of the 700 ms backstop (twice --change-fade): a slow runner that is 100 ms late with the frame, which 250 ms
-# could not bear (the swap came from the backstop, <main> still opaque), still sees the fade end first.
-LATE_FRAME_MS = 150
+# the next frame, begins that much late. 350 ms, half the fade, is late enough that a timer of the fade's own length (700 ms) from
+# the click swaps while <main> is still about 0.2 opaque (ease, base.css), and early enough that the fade ends (at about 350 + 700 ms
+# and a frame) 300 ms or more ahead of the 1,400 ms backstop (twice --change-fade): a slow runner that is 100 ms late with the frame
+# still sees the fade end first. (With the .35s token it was 150 ms, against a 700 ms backstop.)
+LATE_FRAME_MS = 350
 LATE_FRAME = f"""window.addEventListener("click", (event) => {{ if (event.target.closest && event.target.closest('a[href="/plans/"]')) {{
   const end = performance.now() + {LATE_FRAME_MS}; while (performance.now() < end); }} }});"""
 # A fade that never reports its end (a tab in the background runs no animations): <main>'s animations are one that never finishes.
@@ -608,8 +608,9 @@ CLOTH_PROBE = """(() => {
       const name = names.get(location);
       cloth.uniforms[name] = Array.from(value);
       // Every frame's washes (their boxes, then their strengths, which follow in the same upload), for a check that
-      // must see each frame and not the last one.
-      if (name === "u_inkQ" && cloth.history.length < 4000) cloth.history.push({ frame: cloth.frames, p: cloth.uniforms.u_inkP, q: cloth.uniforms.u_inkQ });
+      // must see each frame and not the last one, with the canvas's size in pixels that frame (the boxes are in its pixels, and the
+      // cloth's resolution steps when frames run long: WASH_FRAME's at).
+      if (name === "u_inkQ" && cloth.history.length < 4000) cloth.history.push({ frame: cloth.frames, p: cloth.uniforms.u_inkP, q: cloth.uniforms.u_inkQ, w: this.canvas.width, h: this.canvas.height });
       if (name === "u_inkQ" && cloth.noInk) upload = new Float32Array(value.length);   // the shader is told no wash has any strength: the cloth alone
     }
     return uniform4fv.call(this, location, upload, ...rest);
@@ -754,11 +755,27 @@ def run_frames(page, count, step=1000 / 60):
 
 def wait_sheet_in_place(page, timeout=5000):
     """The menu's sheet has come in (SHEET_IN_PLACE). On a page with the cloth's probe (window.__cloth) frames come on the probe's virtual clock, which a
-    check holds still, and shell.js steps the sheet by the frames' times, so 20 frames (a third of a second of cloth time, more than the sheet's
-    0.24 s) are let pass first; with Motion off, or no cloth, run_frames returns at once and the sheet is in place already."""
+    check holds still, and shell.js steps the sheet by the frames' times, so 48 frames (0.8 s of cloth time, more than the sheet's
+    0.7 s) are let pass first; with Motion off, or no cloth, run_frames returns at once and the sheet is in place already."""
     if page.evaluate("() => Boolean(window.__cloth)"):
-        run_frames(page, 20)
+        run_frames(page, 48)
     page.wait_for_function(SHEET_IN_PLACE, timeout=timeout)
+
+
+# The menu is shut and has gone: MENU says shut and the list is not displayed. The menu, the column from 64rem up as well as the sheet, stays
+# displayed for the 0.7 s of its close (shell.js' driver), taking no pointer, while MENU already says shut.
+MENU_GONE = """() => { const toggle = document.querySelector('header [data-menu-toggle]'), menu = document.querySelector('#shell-menu');
+  return (!toggle || toggle.getAttribute('aria-expanded') === 'false') && (!menu || getComputedStyle(menu).display === 'none'); }"""
+
+
+def menu_gone(page, timeout=5000):
+    """True once the menu is shut and its close has run (MENU_GONE), waited for up to timeout ms (a bound, never a delay); False if it still shows
+    then. For a page whose frames run on their own: the cloth's virtual clock (run_frames) holds the driver still."""
+    try:
+        page.wait_for_function(MENU_GONE, timeout=timeout)
+        return True
+    except PlaywrightError:
+        return False
 
 
 def leap_frames(page, count=58):
@@ -791,9 +808,13 @@ def canvas_stats(page, rect):
 # box is not always the window (base.css gives it 100vw by 100%, and a phone's innerHeight moves with the toolbar while the
 # fixed canvas does not). frame.x(px) and frame.y(py) are a point in CSS pixels from the page's top left; frame.rx and
 # frame.ry a radius.
-WASH_FRAME = """const frame = (() => { const canvas = document.querySelector('canvas.veil'), b = canvas.getBoundingClientRect(),
-    sx = canvas.width / b.width, sy = canvas.height / b.height;
-  return { x: (px) => b.left + px / sx, y: (py) => b.bottom - py / sy, rx: (r) => r / sx, ry: (r) => r / sy }; })();"""
+# The canvas's frame as it is now; frame.at(w, h) is the frame of a canvas w by h pixels in the same box, for a frame of the history (CLOTH_PROBE
+# records each one's size): the cloth's resolution steps when frames run long (adaptive rendering), as frames of 100 ms or more do, so a wash
+# recorded before a step and read with the canvas's size after it would be placed by a third too far (one rung of the ladder) from where it was.
+WASH_FRAME = """const frame = (() => { const canvas = document.querySelector('canvas.veil'), b = canvas.getBoundingClientRect();
+  const at = (w = canvas.width, h = canvas.height) => { const sx = w / b.width, sy = h / b.height;
+    return { x: (px) => b.left + px / sx, y: (py) => b.bottom - py / sy, rx: (r) => r / sx, ry: (r) => r / sy }; };
+  return Object.assign(at(), { at }); })();"""
 INKS_DRAWN = "() => { const { u_inkP: p, u_inkQ: q } = window.__cloth.uniforms; " + WASH_FRAME + """
   const inks = [];
   for (let i = 0; p && i < p.length / 4; i++) if (q[i * 4 + 1] > 0.0005) inks.push({ x: frame.x(p[i * 4]), y: frame.y(p[i * 4 + 1]),
@@ -820,11 +841,19 @@ WASH_UNDER = "(selector) => { const { u_inkP: p, u_inkQ: q } = window.__cloth.un
 # (the sheet's links rise 6px as it closes) is last drawn somewhere on the way, which depends on how often frames come.
 WASH_HISTORY_AT = "([point, since, rise = 0]) => { " + WASH_FRAME + """
   const [cx, cy] = point;
-  return window.__cloth.history.filter((entry) => entry.frame >= since).map(({ frame: number, p, q }) => {
+  return window.__cloth.history.filter((entry) => entry.frame >= since).map(({ frame: number, p, q, w, h }) => {
+    const drawn = frame.at(w, h);
     for (let i = 0; i < p.length / 4; i++) {
-      const y = frame.y(p[i * 4 + 1]);
-      if (q[i * 4 + 1] > 0 && Math.abs(frame.x(p[i * 4]) - cx) < 2 && y > cy - rise - 2 && y < cy + 2) return [number, q[i * 4 + 1]]; }
+      const y = drawn.y(p[i * 4 + 1]);
+      if (q[i * 4 + 1] > 0 && Math.abs(drawn.x(p[i * 4]) - cx) < 2 && y > cy - rise - 2 && y < cy + 2) return [number, q[i * 4 + 1]]; }
     return [number, 0]; }); }"""
+# Every wash each frame drew, from the frame given on, for `count` frames: [frame, [[x, y, strength], ...]], centres in CSS pixels from the top left.
+# What a check that found no wash where it looked reports, so that a wash drawn somewhere else, or none at all, can be told apart.
+WASHES_FROM = "([since, count]) => { " + WASH_FRAME + """
+  return window.__cloth.history.filter((entry) => entry.frame >= since).slice(0, count).map(({ frame: number, p, q, w, h }) => {
+    const washes = [], drawn = frame.at(w, h);
+    for (let i = 0; i < p.length / 4; i++) if (q[i * 4 + 1] > 0) washes.push([Math.round(drawn.x(p[i * 4])), Math.round(drawn.y(p[i * 4 + 1])), +q[i * 4 + 1].toFixed(2)]);
+    return [number, washes]; }); }"""
 
 
 def wash_strength(page, selector):
@@ -1707,10 +1736,11 @@ def ink_frame_problems(browser, base_url, session_key):
 # [frame, age] pairs, age null where no wash was drawn there. A wash that was let go and begun again is young.
 WASH_AGES = "([selector, since]) => { " + WASH_FRAME + """
   const b = document.querySelector(selector).getBoundingClientRect(), cx = b.left + b.width / 2, cy = b.top + b.height / 2;
-  return window.__cloth.history.filter((entry) => entry.frame >= since).map(({ frame: number, p, q }) => {
+  return window.__cloth.history.filter((entry) => entry.frame >= since).map(({ frame: number, p, q, w, h }) => {
     let youngest = null;
+    const drawn = frame.at(w, h);
     for (let i = 0; i < p.length / 4; i++) {
-      if (q[i * 4 + 1] > 0 && Math.abs(frame.x(p[i * 4]) - cx) < 2 && Math.abs(frame.y(p[i * 4 + 1]) - cy) < 2) {
+      if (q[i * 4 + 1] > 0 && Math.abs(drawn.x(p[i * 4]) - cx) < 2 && Math.abs(drawn.y(p[i * 4 + 1]) - cy) < 2) {
         youngest = youngest === null ? q[i * 4 + 2] : Math.min(youngest, q[i * 4 + 2]); } }
     return [number, youngest]; }); }"""
 
@@ -2346,7 +2376,9 @@ def ink_problems(browser, base_url, session_key):
         clicked = page.evaluate("() => window.__cloth.frames")
         page.locator(link).click()
         page.wait_for_function("() => location.pathname === '/plans/'", timeout=20000)  # the swap has happened
-        run_frames(page, 8, step=300)  # 2.4 s of cloth time, from the swap on
+        # 4.2 s of cloth time, from the swap on: the column fades out over its 0.7 s first (five frames of 0.3 s, a quarter of the fade at most a
+        # step), under the pointer, and the wash fades over 1.8 s once it is let go, at the latest when the column has gone
+        run_frames(page, 14, step=300)
         swapped = page.evaluate("() => window.__change.swappedFrame")
         history = page.evaluate(WASH_HISTORY_AT, [place, clicked])  # in every frame the cloth drew
         before = [strength for frame, strength in history if frame <= swapped]
@@ -2358,7 +2390,7 @@ def ink_problems(browser, base_url, session_key):
                             f"but it fell to {min(before or [0]):.2f} of it")
         elif not after or after[0] < 0.75 or after[-1] > 0.02:
             problems.append(f"{label}: once the swap shuts the menu the wash should be let go of and fade over 1.8 s: {after[0] if after else 0:.2f} of "
-                            f"its strength in the first frame after the swap (a cut reads 0), {after[-1] if after else 0:.2f} 2.4 s on (it should be gone)")
+                            f"its strength in the first frame after the swap (a cut reads 0), {after[-1] if after else 0:.2f} 4.2 s on (it should be gone)")
         if page.locator("#shell-menu").is_visible():
             problems.append(f"{label}: the menu is open after the change in place, so nothing was checked")
     else:
@@ -2913,7 +2945,7 @@ def sheet_frame(page, name, **force):
 
 def sheet_page(browser, base_url, session_key, problems, label, *, theme, motion="on", touch=False, frames=90, scripts=(FREEZE,), path="/about/", come_in=False):
     """A phone (375x667) on path with the cloth running and the menu sheet open and settled: its fade (shell.js' driver, which steps by the cloth's
-    virtual frames here) has ended and the cloth has run `frames` frames (1.5 s at the default: the sheet's share has reached 1 in 0.24 s, and the
+    virtual frames here) has ended and the cloth has run `frames` frames (1.5 s at the default: the sheet's share has reached 1 in 0.7 s, and the
     current page's link has grown its wash, which takes 1.4 s), the pointer left in the margin where nothing answers it. With Motion off, the sheet the page draws alone. With come_in
     (the threshold) Come in is clicked first, so that the install line is on the page, as it is for most visitors. The context, the
     page and its console errors, or (None, None, None) with a problem when the cloth never started."""
@@ -3213,8 +3245,8 @@ def cloth_sheet_ink_problems(browser, base_url, session_key):
     that grows to full, as does one the keyboard focus is on, and a finger's tap on a link (made as a touch, its navigation cancelled) blooms
     one that fades as the finger lifts, each on the sheet and with no flat fill. After the sheet closes (a tap on its left half) the
     held wash is let go: it lingers on the cloth where the link was, visible a short moment later, and fades over 1.8 s; the sheet's
-    share falls to 0 over its 0.18 s. A tap on a link that changes the page in place closes the sheet like any close (the shader's share falls through
-    frames between 0 and 1 over its 0.18 s, and <main>'s mask with it; only a change that cross-fades, a link in the page or Back, takes the sheet away
+    share falls to 0 over its 0.7 s. A tap on a link that changes the page in place closes the sheet like any close (the shader's share falls through
+    frames between 0 and 1 over its 0.7 s, and <main>'s mask with it; only a change that cross-fades, a link in the page or Back, takes the sheet away
     at once) and lets the wash go the same way: it fades over 1.8 s from the strength it had, not cut. With Motion off nothing is washed (cloth_menu_sheet_problems has the fallback)."""
     problems = []
     held = '#shell-menu a[aria-current="page"]'
@@ -3262,15 +3294,11 @@ def cloth_sheet_ink_problems(browser, base_url, session_key):
         run_frames(page, 150)
         before = page.evaluate("() => window.__cloth.frames")
         page.mouse.click(40, 333)
-        run_frames(page, 5)   # the close's first frame has no time behind it (shell.js), so 4 frames of 1/60 s are 67 ms of its 0.18 s
+        run_frames(page, 13)   # the close's first frame has no time behind it (shell.js), so 12 frames of 1/60 s are 200 ms of its 0.7 s
         mid = page.evaluate("() => window.__cloth.uniforms.u_sheet")
         if mid is None or not 0.05 < mid < 0.95:
-            problems.append(f"{label}: 4 frames (67 ms) into its 0.18 s close the sheet's share is {mid}; it should be falling, not gone or still full")
-        run_frames(page, 25)   # half a second in all
-        if page.evaluate("() => window.__cloth.uniforms.u_sheet") != 0 or page.evaluate("() => document.querySelector('#shell-menu').classList.contains('is-open')"):
-            displayed = page.evaluate("() => getComputedStyle(document.querySelector('#shell-menu')).display !== 'none'")   # read as it is: SHEET_IN_PLACE keeps a count
-            problems.append(f"{label}: half a second after the sheet closed its share is {page.evaluate('() => window.__cloth.uniforms.u_sheet')} and it is "
-                            f"{'still' if displayed else 'no longer'} displayed; the share should be 0 and the sheet gone")
+            problems.append(f"{label}: 12 frames (200 ms) into its 0.7 s close the sheet's share is {mid}; it should be falling, not gone or still full")
+        run_frames(page, 17)   # half a second in all
         # The wash is where its link was when the link went. The groups of links rise 6px as the sheet fades out (menu.css) and the wash follows
         # the link in the frames that draw it, so it ends somewhere between the link's place and 6px above it, wherever the last frame that
         # drew the link fell (frames 100 ms apart, as a slow runner's, leave it a few px up). The strength is the thing read: it
@@ -3291,10 +3319,15 @@ def cloth_sheet_ink_problems(browser, base_url, session_key):
         page.evaluate("() => { window.__cloth.noInk = false; }")
         if abs(washed - bare) < SHEET_INK_SEEN * 0.7:
             problems.append(f"{label}: half a second after the sheet closed the lingering wash changes the cloth by only {abs(washed - bare):.3f} of luma where the link was; it should still show")
+        run_frames(page, 20)   # 0.83 s in all: the close (0.7 s) is over
+        if page.evaluate("() => window.__cloth.uniforms.u_sheet") != 0 or page.evaluate("() => document.querySelector('#shell-menu').classList.contains('is-open')"):
+            displayed = page.evaluate("() => getComputedStyle(document.querySelector('#shell-menu')).display !== 'none'")   # read as it is: SHEET_IN_PLACE keeps a count
+            problems.append(f"{label}: 0.83 s after the sheet closed its share is {page.evaluate('() => window.__cloth.uniforms.u_sheet')} and it is "
+                            f"{'still' if displayed else 'no longer'} displayed; the share should be 0 and the sheet gone")
         sheet_closed = page.evaluate(SHEET_LAYERS)
         if sheet_closed["main"] != "0" or sheet_closed["fx"] != "1":
             problems.append(f"{label}: after the sheet closed <main>'s --sheet is {sheet_closed['main']!r} and the display control's opacity {sheet_closed['fx']}; they are back to 0 and 1")
-        run_frames(page, 120)   # 2.5 s after the close: gone
+        run_frames(page, 100)   # 2.5 s after the close: gone
         if page.evaluate(INKS_DRAWN):
             problems.append(f"{label}: 2.5 s after the sheet closed a wash is still drawn ({page.evaluate(INKS_DRAWN)})")
         problems += [f"{label}: console: {error}" for error in errors]
@@ -3365,11 +3398,17 @@ def cloth_sheet_ink_problems(browser, base_url, session_key):
             problems.append(f"{label}: a view transition began; a change from the sheet fades by its own driver")
         if any(frame["shown"] for frame in fall if frame["heading"] == new):
             problems.append(f"{label}: the sheet is still displayed when the new content shows")
-        history = page.evaluate(WASH_HISTORY_AT, [place, since])
+        # The tapped link rises with its group as the sheet closes (6px over the close, menu.css) and its wash with it, so the wash is read anywhere
+        # up to 6px above the link's place, as for the held wash above: within 2px of it only the tap's frame and the next qualify at the close's
+        # pace (1.2 px, then 2.8 px up), and a runner whose first frame with the wash comes one later read no wash at all (the links are 45px apart).
+        history = page.evaluate(WASH_HISTORY_AT, [place, since, 6])
         strengths = [strength for _, strength in history]
         seen = [strength for strength in strengths if strength > 0]
         if not seen or max(seen) < 0.9:
-            problems.append(f"{label}: the tapped link never showed a wash of its own ({max(seen) if seen else 0:.2f} at most)")
+            drawn = page.evaluate(WASHES_FROM, [since, 12])
+            problems.append(f"{label}: the tapped link never showed a wash of its own ({max(seen) if seen else 0:.2f} at most); the link was at "
+                            f"{[round(value) for value in place]}, {page.evaluate('() => window.__cloth.history.length')} frames recorded, and the washes "
+                            f"drawn from the frame before the tap were [frame, [[x, y, strength], ...]] {drawn}")
         elif any(later > earlier + 0.001 for earlier, later in zip(seen, seen[1:])):
             problems.append(f"{label}: the wash grew again after it began to fade: {[round(value, 2) for value in seen]}")
         elif any(earlier - later > 0.25 for earlier, later in zip(seen, seen[1:])) or (strengths and strengths[-1] > 0.02):
@@ -3382,16 +3421,15 @@ def cloth_sheet_ink_problems(browser, base_url, session_key):
 
 def cloth_sheet_motion_problems(browser, base_url, session_key):
     """The sheet's one value (spec 4.4) as the cloth page shows it, frame by frame on the cloth's virtual clock (frames of 1/60 s, the probe lets it
-    run while a check reads and holds it still after): shell.js steps --sheet once per drawn frame, 240 ms opening and 180 ms closing, and the links,
+    run while a check reads and holds it still after): shell.js steps --sheet once per drawn frame, 700 ms opening and closing, and the links,
     the paper the cloth draws, <main>'s mask and the display control read that one value in the same frame. sheet_fade_findings (the pages part's
     sheet_fade_problems reads the same on a page with no cloth) replays the four fades (open, close, a close that interrupts the opening, an
     opening that interrupts the close) against the driver's own model at every
     frame and wants, in the same frame, the shader's share (u_sheet) EQUAL to --sheet (the paper moves in lockstep with the links and the page's
     fade-out: reading --sheet in the cloth's own frame would give it the last frame's value, which the cloth is handed the driver's step to avoid),
     <main> reading the same --sheet, the display control at 1 minus it and the links at their place by it. Here the opening and the closing are also
-    held to Earendil's curves, cubic-bezier(.22, 1, .36, 1) in 240 ms and ease-in in 180 ms, whatever the driver's polynomials: the share at each
-    frame lies within SHEET_EASE_ERROR (and a frame's worth of slack) of the CSS curve at the time since the fade's first frame, and shows at least
-    five frames between 0 and 1."""
+    held to Come in's own pace, ease in 700 ms rising and falling, whatever the driver's curve: the share at each frame lies within SHEET_EASE_ERROR
+    (and a frame's worth of slack) of the CSS curve at the time since the fade's first frame, and shows at least five frames between 0 and 1."""
     problems = []
     frame_ms = 1000 / 60
     label = "/about/ cloth at 375px, the sheet's value, frame by frame"
@@ -3418,19 +3456,19 @@ def cloth_sheet_motion_problems(browser, base_url, session_key):
                             f"{[round(sample['share'], 3) for sample in frames[:12]]}")
         origin = frames[0]["t"]   # the fade's first frame, which has no time behind it
         for sample in frames:
-            share = min(1.0, (sample["t"] - origin) / (240 if mode == "open" else 180))
-            true = SHEET_OPENING(share) if mode == "open" else 1 - SHEET_CLOSING(share)
+            share = min(1.0, (sample["t"] - origin) / 700)
+            true = SHEET_EASE(share) if mode == "open" else 1 - SHEET_EASE(share)
             if abs(sample["share"] - true) > SHEET_EASE_ERROR + 0.004:
                 problems.append(f"{where}: {sample['t'] - origin:.0f} ms into the fade the share is {sample['share']:.3f}; "
-                                f"{'cubic-bezier(.22, 1, .36, 1)' if mode == 'open' else 'ease-in'} makes {true:.3f}, and the driver's curve may lie {SHEET_EASE_ERROR} from it")
+                                f"ease {'rising' if mode == 'open' else 'falling'} makes {true:.3f}, and the driver's curve may lie {SHEET_EASE_ERROR} from it")
                 break
     problems += sheet_fade_findings(page, label, cloth=True)
     page.evaluate(FREEZE)
     problems += [f"{label}: console: {error}" for error in errors]
     context.close()
 
-    # From 64rem up the open menu is a column in the margin, not a sheet: the cloth draws none of it. shell.js keeps its value at 1 for an open menu
-    # at any width (the driver jumps to the end where the menu is a column; the cloth's own guard, SHEETED, keeps the paper off), so the cloth, which
+    # From 64rem up the open menu is a column in the margin, not a sheet: the cloth draws none of it. shell.js steps its value to 1 for an open menu
+    # at any width (the column fades by the same driver as the sheet; the cloth's own guard, SHEETED, keeps the paper off), so the cloth, which
     # draws the paper of the value it is given, must not be given it there: the paper would cover the left half of the cloth whenever the menu is open.
     label = "/about/ cloth at 1024px, the open menu column"
     context, _ = cloth_context(browser, base_url, session_key, page_named("/about/"), width=1024, height=640, scripts=(FREEZE,))
@@ -3654,8 +3692,9 @@ def axe_problems(page, label):
     # axe-core cannot measure contrast through a background image, so take the grain away first
     # (the page's own).
     page.add_style_tag(content="html { background-image: none !important; }")
-    # Whatever is fading in (a chapter's menu column opens as the page does, its items over .66 s) has to be done, or axe
-    # measures the contrast of a colour half way; a long page's screenshot, just before, can leave it half way. Bounded.
+    # Whatever is fading in has to be done, or axe measures the contrast of a colour half way; a long page's screenshot, just before,
+    # can leave it half way. Bounded. (The menu's fade, 0.7 s, is shell.js' driver and no animation: a caller with the menu open waits
+    # for SHEET_IN_PLACE first.)
     page.evaluate("""() => Promise.race([Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => null))),
         new Promise((done) => setTimeout(done, 3000))])""")
     if not page.evaluate("() => typeof axe !== 'undefined'"):
@@ -3705,14 +3744,15 @@ def menu_problems(page, label):
     toggle.click()
     if toggle.get_attribute("aria-expanded") != "true" or not page.locator("#shell-menu").is_visible():
         problems.append(f"{label}: MENU does not open the menu")
-    page.wait_for_timeout(700)  # let the items finish fading in before axe measures them
+    else:
+        page.wait_for_function(SHEET_IN_PLACE, timeout=5000)  # the menu has finished fading in (0.7 s) before axe measures it
     problems += menu_sideways_problems(page, f"{label} with the menu open")
     problems += axe_problems(page, f"{label} with the menu open")
     box = page.locator("#shell-menu").bounding_box()  # None when MENU failed to open it (reported above)
     if box and content_shows_under(page, box):
         problems.append(f"{label}: page content shows through the open menu")
     page.keyboard.press("Escape")
-    if toggle.get_attribute("aria-expanded") != "false" or page.locator("#shell-menu").is_visible():
+    if toggle.get_attribute("aria-expanded") != "false" or not menu_gone(page):
         problems.append(f"{label}: Escape does not close the menu")
     if not page.evaluate("() => document.activeElement && document.activeElement.hasAttribute('data-menu-toggle')"):
         problems.append(f"{label}: Escape does not return focus to MENU")
@@ -4368,7 +4408,7 @@ def chapter_change_problems(browser, base_url, session_key, site_page):
     if clicked and arrive(page, "/plans/", "Plans", label):
         if not page.evaluate(stayed):
             problems.append(f"{label}: the whole page reloaded")
-        if page.locator("#shell-menu").is_visible() or page.locator("header [data-menu-toggle]").get_attribute("aria-expanded") != "false":
+        if page.locator("header [data-menu-toggle]").get_attribute("aria-expanded") != "false" or not menu_gone(page):
             problems.append(f"{label}: the menu is open after the change; a link in it leaves the menu closed at every width, as the next page of earendil.com arrives")
         problems += chapter_head_findings(page, label, "Plans | Veilfile", "https://veilfile.com/plans/", "Plans")
         if not page.evaluate("() => document.activeElement === document.querySelector('main h1')"):
@@ -4731,9 +4771,9 @@ def token_ms(page, name):
 
 
 def chapter_transition_problems(browser, base_url, session_key, site_page):
-    """An in-place chapter change cross-fades quickly (spec 4.5), timed from inside the page (CHANGE_PROBE).
+    """An in-place chapter change cross-fades at Come in's pace (spec 4.5), timed from inside the page (CHANGE_PROBE).
     Where the browser has view transitions (Chromium does), Motion on uses one, scoped to <main> so the cloth and
-    the corners stay live, lasting about --change-fade (250 to 600 ms from its start to its end), and the content
+    the corners stay live, lasting about --change-fade (500 to 1000 ms from its start to its end), and the content
     is swapped as soon as the page has arrived: no wait of the script's own. With Motion off, or reduced motion
     and nothing saved, there is none and the swap is instant. Where the browser has none, <main> fades out from
     the click, while the page is on its way (a fetch held for 600 ms), and in again, each half --change-fade:
@@ -4778,8 +4818,8 @@ def chapter_transition_problems(browser, base_url, session_key, site_page):
         if named != "none":
             problems.append(f"{label}: <main> is still named {named!r} once the cross-fade has finished; the name is for the change only")
         # The animation's own length, not the time between two frames, which a slow machine stretches.
-        if call["fadeMs"] is None or not 250 <= call["fadeMs"] <= 600:
-            problems.append(f"{label}: the cross-fade lasts {call['fadeMs']} ms; it should last about --change-fade ({fade} ms), between 250 and 600")
+        if call["fadeMs"] is None or not 500 <= call["fadeMs"] <= 1000:
+            problems.append(f"{label}: the cross-fade lasts {call['fadeMs']} ms; it should last about --change-fade ({fade} ms), between 500 and 1000")
         if len(marks["calls"]) != 1:
             problems.append(f"{label}: {len(marks['calls'])} view transitions ran; one change should run one")
         if marks["leaving"] is not None:
@@ -4886,10 +4926,12 @@ def chapter_transition_problems(browser, base_url, session_key, site_page):
         toggle = page.evaluate(BOX_RECT, "header [data-menu-toggle]")
         page.mouse.click(toggle["x"] + toggle["width"] / 2, toggle["y"] + toggle["height"] / 2)
         begin = page.evaluate(BOX_RECT, '#shell-menu a[href="/begin/"]')
+        # the column the swap shut is still displayed for its 0.7 s fade, so its links have boxes whether or not the click reached MENU: MENU must say open
+        menu_open = page.evaluate("() => document.querySelector('header [data-menu-toggle]').getAttribute('aria-expanded') === 'true'")
         running = page.evaluate("() => window.__change.calls[0].finished === null")
         if not running:
             problems.append(f"{label}: the cross-fade was over before the pointer reached the link, so nothing was checked")
-        elif not begin:
+        elif not begin or not menu_open:
             problems.append(f"{label}: a click of the pointer on MENU while the content cross-fades did not open the menu; the page underneath "
                             f"should stay hittable (the transition's pseudo-elements take no pointer events)")
         else:
@@ -4918,7 +4960,7 @@ def chapter_transition_problems(browser, base_url, session_key, site_page):
     context.close()
 
     # A fade that never ends must not hold the change for ever: the timer bounds the wait, at twice --change-fade. The token is
-    # made .6s first, so that a number typed into shell.js, which the token's own .35s would agree with (700 ms), is found out:
+    # made .6s first, so that a number typed into shell.js, which the token's own .7s would agree with (1,400 ms), is found out:
     # since the swap waits for the fade's own end, this timer is the one wait that has a number to follow the token.
     label = f"{site_page.path} to Plans in place without view transitions, with a fade that never reports its end and --change-fade at .6s"
     context, page, errors = opened(scripts=(NO_VIEW_TRANSITIONS, FADE_NEVER_ENDS))
@@ -5296,7 +5338,7 @@ def fade_length_problems(browser, base_url, session_key, site_page):
     typed into the script would not follow, so with --fade made .2s the wait before Come in replaces the line is about
     200 ms, not the 700 ms of the .7s token. An in-place change that fades <main> out first (shell.js, where the browser
     has no view transitions) waits for the fade's own end, and the transition's length is --change-fade in the
-    stylesheet, so this check sees the wait follow the token (with it .1s, about 100 ms, not the 350 ms of the .35s token),
+    stylesheet, so this check sees the wait follow the token (with it .1s, about 100 ms, not the 700 ms of the .7s token),
     but it cannot see a number typed into shell.js's wait for the fade's end: the stylesheet decides that length, and
     nothing in the script is a length to follow. The one number there is the timer that bounds the wait, which
     chapter_transition_problems checks follows the token (twice --change-fade, with it made .6s, when a fade never ends).
@@ -5539,7 +5581,7 @@ def phone_menu_problems(page, label):
         problems.append(f"{label}: the page under the open menu sheet is not inert")
     problems += [f"{label}: {name!r} in the open menu sheet is covered by something painted over it"
                  for name in page.evaluate(COVERED, "#shell-menu a")]
-    page.wait_for_timeout(700)  # the sheet has finished fading in
+    page.wait_for_function(SHEET_IN_PLACE, timeout=5000)  # the sheet has finished fading in (0.7 s)
     view = page.viewport_size
     half = {"x": view["width"] / 2, "y": 0, "width": view["width"] / 2, "height": view["height"]}
     if content_shows_under(page, half, margin=0):
@@ -5570,7 +5612,7 @@ def phone_menu_problems(page, label):
 # The phone menu sheet as the page shows it now: whether and how it is drawn, what CSS runs on it (nothing should: its fade is shell.js' one value,
 # --sheet, stepped per drawn frame, and a CSS transition or animation is a function of time that a late frame can find over, so any on the sheet or its
 # groups is a problem), the first group of links' move (the groups all make the same one, and the sheet has no transform of its own), and the
-# animations on its items (from 64rem up the column's items fade in one by one; below it, none).
+# animations on its items (none, at any width: the menu fades as one piece, the column from 64rem up as the sheet does).
 SHEET_STATE = """() => { const sheet = document.querySelector('#shell-menu'), style = getComputedStyle(sheet), group = sheet.querySelector('.menu__group');
   const named = (animation) => animation.constructor.name === 'CSSTransition' ? [animation.transitionProperty]
     : Object.keys(animation.effect.getKeyframes()[0]).filter((key) => !['offset', 'computedOffset', 'easing', 'composite'].includes(key));
@@ -5601,15 +5643,16 @@ def sheet_timed_by_css_problems(state, label, what):
 
 
 def phone_sheet_problems(browser, base_url, session_key):
-    """The phone's menu sheet opens and closes like Earendil's (spec 4.4): it fades in and settles over 240 ms (cubic-bezier(.22, 1, .36, 1): opacity
-    SHEET_HELD_OPACITY to 1, the links 6px down into their place) and out over 180 ms (ease-in, the links 6px up), as ONE value, --sheet,
+    """The phone's menu sheet opens and closes at Come in's pace (spec 4.4): it fades in and settles over 700 ms (ease: opacity SHEET_HELD_OPACITY
+    to 1, the links 6px down into their place) and out over 700 ms (ease, the links 6px up), as ONE value, --sheet,
     that shell.js steps once per drawn frame and never by more than a quarter, with CSS reading it and timing nothing: no transition, no animation
     runs on the sheet or its groups (sheet_timed_by_css_problems). The sheet stays displayed while it fades out and takes no pointer then.
     The fade is also read frame by frame, against the driver's own model (sheet_fade_problems), where a sheet that blinks in shows no value between 0
     and 1, and with a frame of the opening held for 400 ms and with every frame held for 120 ms (sheet_slow_first_frame_problems,
     sheet_slow_frames_problems), which are the owner's blink and do not depend on the runner's speed.
     With Motion off, or a system asking for reduced motion with nothing saved, both are instant and nothing runs. The items do not
-    fade in one by one (from 64rem up the column keeps that). The page behind does not scroll while the sheet is open."""
+    fade in one by one. From 64rem up the column fades by the same value, in and out, and does not move. The page behind does not scroll
+    while the sheet is open."""
     problems = []
     begin = page_named("/begin/")
     for name, options in (("Motion on", dict(theme="light", motion="on")), ("Motion off", dict(theme="light", motion="off")),
@@ -5673,23 +5716,45 @@ def phone_sheet_problems(browser, base_url, session_key):
         problems += [f"/begin/ at 375px, the menu sheet with every frame slow: console error: {error}" for error in errors]
     context.close()
 
-    # From 64rem up the open menu is a column: no panel transition, and its items still fade in one by one.
-    label = "/ at 1280px, Motion on, the menu column"
-    context = new_context(browser, base_url, session_key, page_named("/"), width=1280, theme="light", motion="on")
-    page, errors = open_page(context, base_url + "/")
-    page.locator("header [data-menu-toggle]").click()
-    column = page.evaluate(SHEET_STATE)
-    if column["animations"]:
-        problems.append(f"{label}: the column has transitions of its own ({sorted(animation['property'] for animation in column['animations'])}); only the phone's sheet fades as a panel")
-    if not column["items"]:
-        problems.append(f"{label}: the column's items do not fade in one by one any more; that is how it opens from 64rem up")
-    if column["cursor"] == "pointer":
-        problems.append(f"{label}: the column has the pointer cursor; only the phone's sheet has it, since a tap on its surface closes it")
-    page.keyboard.press("Escape")
-    if page.evaluate(SHEET_STATE)["display"] != "none":
-        problems.append(f"{label}: the column should close at once")
-    problems += [f"{label}: console error: {error}" for error in errors]
-    context.close()
+    # From 64rem up the open menu is a column: it fades in and out as one piece by the same driver as the sheet, over Come in's 0.7 s (the owner's
+    # ask, 2026-10-31: it used to close at once), and does not move; Motion off and reduced motion still open and close it at once.
+    for name, options in (("Motion on", dict(theme="light", motion="on")), ("Motion off", dict(theme="light", motion="off")),
+                          ("reduced motion", dict(theme="light", motion=None, reduced_motion="reduce"))):
+        label = f"/ at 1280px, {name}, the menu column"
+        context = new_context(browser, base_url, session_key, page_named("/"), width=1280, **options)
+        page, errors = open_page(context, base_url + "/")
+        opening = page.evaluate(MENU_THEN_STATE)   # read in the click's own task, before a frame can be drawn
+        problems += sheet_timed_by_css_problems(opening, label, "opens")
+        if opening["cursor"] == "pointer":
+            problems.append(f"{label}: the column has the pointer cursor; only the phone's sheet has it, since a tap on its surface closes it")
+        if opening["transform"] != "none" or opening["lift"] != 0:
+            problems.append(f"{label}: the column moves as it opens (transform {opening['transform']}, its links {opening['lift']}px from their place); it only fades, as Come in does")
+        if name == "Motion on":
+            if opening["display"] == "none" or float(opening["opacity"]) != float(SHEET_HELD_OPACITY) or opening["sheetValue"] != "0":
+                problems.append(f"{label}: right after the click the column is display {opening['display']}, opacity {opening['opacity']}, --sheet {opening['sheetValue']!r}; "
+                                f"it should be displayed at opacity {SHEET_HELD_OPACITY} with --sheet 0, the first frame of its fade")
+            page.wait_for_function(SHEET_IN_PLACE, timeout=5000)
+            settled = page.evaluate(SHEET_STATE)
+            if (settled["display"], settled["opacity"]) != ("flex", "1"):
+                problems.append(f"{label}: the open column settles as {settled['display']}, opacity {settled['opacity']}; it should be shown and fully opaque")
+            problems += sheet_timed_by_css_problems(settled, label, "rests open")
+            closing = page.evaluate(ESCAPE_THEN_STATE)
+            problems += sheet_timed_by_css_problems(closing, label, "closes")
+            if closing["display"] == "none" or closing["pointer"] != "none":
+                problems.append(f"{label}: as it closes the column is display {closing['display']}, pointer-events {closing['pointer']}; it should stay displayed "
+                                f"while it fades and take no pointer")
+            if not menu_gone(page):
+                problems.append(f"{label}: the column is still displayed 5 s after Escape; it fades out over 0.7 s")
+            elif page.evaluate(SHEET_STATE)["sheetValue"] != "0":
+                problems.append(f"{label}: once the column is gone --sheet is {page.evaluate(SHEET_STATE)['sheetValue']!r}; it should be 0")
+        else:
+            if opening["display"] == "none" or opening["opacity"] != "1" or opening["sheetValue"] != "1":
+                problems.append(f"{label}: the column should open at once; it is display {opening['display']}, opacity {opening['opacity']}, --sheet {opening['sheetValue']!r}")
+            closing = page.evaluate(ESCAPE_THEN_STATE)
+            if closing["display"] != "none" or closing["sheetValue"] != "0":
+                problems.append(f"{label}: the column should close at once; it is display {closing['display']} with --sheet {closing['sheetValue']!r}")
+        problems += [f"{label}: console error: {error}" for error in errors]
+        context.close()
 
     # The page does not scroll while the sheet is open (wheel and keys), and does again once it is shut.
     label = "/begin/ at 375px, the menu sheet over a scrolled page"
@@ -5750,7 +5815,7 @@ def phone_sheet_problems(browser, base_url, session_key):
 # is seen part way through its fade (opacity between .25 and .75; `before` and `after` are read just before and just after it), not at a fixed
 # delay, which a slow runner can miss (its fade may not have begun, or may be over). With no such frame there is no second click and no `before`.
 # Every sample is the sheet's state at a frame (below). The probe runs until the sheet is at rest, not for a fixed time: an opening takes
-# its first frame and .24 s of frames, which on a runner whose frames are 100 ms or more apart is more than any fixed time one would pick. At rest
+# its first frame and .7 s of frames, which on a runner whose frames are 100 ms or more apart is more than any fixed time one would pick. At rest
 # is the menu shut and the sheet not displayed, or open and fully opaque, at two frames running; `bound` (ms) ends the probe anyway, and
 # the result says so (`bounded`). stall > 0 holds one frame of the opening that many ms, which is how slow WebKit's frame can be on a phone (CI's
 # frames: 533 ms, 194 ms). `when` says which frame, since the cost of drawing a full-screen sheet for the first time lands in different ones:
@@ -5816,17 +5881,17 @@ FADE_SLACK = 0.02   # opacity may differ by this between two readings of a fade 
 FADE_FRAME_LIMIT_MS = 50
 FADE_BOUND_MS = 3000   # a fade probe stops at this even if the sheet is not at rest (FADE_PROBE)
 SLOW_FIRST_FRAME_MS = 400   # how long the slow-first-frame probe holds the sheet's first frame
-# How fast the sheet's opacity may move between two frames after an opening interrupts the close, per ms between them. The steepest parts of the
-# driver's curves are the opening's start (v = 1 - q ** 5 over 240 ms: 5 per unit of progress, .0208 a ms) and the closing's end (v = 1 - q ** 1.7
-# over 180 ms: 1.7 per unit, .0094 a ms); a reversal goes on at that pace, not faster. The limits are just above that, plus REVERSAL_STEP_SLACK, since a
-# limit on the step itself would fail a legitimate reversal as soon as one frame is longer than the others.
-REVERSAL_RISE_PER_MS = 0.021
-REVERSAL_FALL_PER_MS = 0.0105
+# How fast the sheet's opacity may move between two frames after an opening interrupts the close, per ms between them. The steepest part of the
+# driver's curve (1 - (1 - p ** 1.48) ** 3.68, opening and closing alike, over 700 ms) is 1.95 per unit of progress, .00278 a ms, a fifth of the way
+# through; a reversal goes on at that pace, not faster. The limits are just above that, plus REVERSAL_STEP_SLACK, since a limit on the step itself would
+# fail a legitimate reversal as soon as one frame is longer than the others.
+REVERSAL_RISE_PER_MS = 0.0029
+REVERSAL_FALL_PER_MS = 0.0029
 REVERSAL_STEP_SLACK = 0.04
 REVERSAL_TURN_FRAMES = 1   # the click's own frame has no time behind it (the step is 0), then the sheet moves the other way
-# How far the driver's polynomial curves (v = 1 - q ** k, k 5 opening and 1.7 closing) may lie from Earendil's own, cubic-bezier(.22, 1, .36, 1) and
-# ease-in, at any time of the fade, in opacity (measured: .0113 and .0098), and how far a recorded value may lie from the driver's model of itself.
-SHEET_EASE_ERROR = 0.012
+# How far the driver's curve may lie from Come in's own, CSS's ease, at any time of the fade, in opacity (measured: .0227, the same both ways), and how
+# far a recorded value may lie from the driver's model of itself.
+SHEET_EASE_ERROR = 0.023
 SHEET_MODEL_TOLERANCE = 0.001
 SHEET_SAME_VALUE = 1e-5   # two readings of one value (the shader's, the links', <main>'s): a browser prints a number to six digits, so they differ by that and no more; a step of a frame is .02 or more
 
@@ -5846,14 +5911,14 @@ def css_bezier(x1, y1, x2, y2):
     return curve
 
 
-SHEET_OPENING, SHEET_CLOSING = css_bezier(0.22, 1, 0.36, 1), css_bezier(0.42, 0, 1, 1)   # Earendil's: out with a quick settle; ease-in
+SHEET_EASE = css_bezier(0.25, 0.1, 0.25, 1)   # ease, Come in's (base.css): the sheet rises by it and falls by 1 minus it
 
 
 class SheetModel:
-    """The phone sheet's driver (shell.js, setUpMenu) in Python, to replay a recorded fade against: --sheet, v, goes to `to` (1 open, 0 shut) by a
-    share of the fade that is the frame's time over 240 ms opening, 180 ms closing, never more than a quarter, v = 1 - q ** k with k 5 opening and
-    1.7 closing, q recovered from v each step so that a turn-around starts where v is. The first step of a fade has no time behind it. A step is
-    made once for a frame's time."""
+    """The menu's driver (shell.js, setUpMenu) in Python, to replay a recorded fade against: --sheet, v, goes to `to` (1 open, 0 shut) by a share of
+    the fade that is the frame's time over 700 ms, opening and closing alike, never more than a quarter; what is left to go is (1 - p ** 1.48) ** 3.68
+    of the progress p, which is recovered from v each step so that a turn-around starts where v is. The first step of a fade has no time behind it.
+    A step is made once for a frame's time."""
 
     def __init__(self, v):
         self.v, self.to, self.last = float(v), round(v), 0
@@ -5863,9 +5928,8 @@ class SheetModel:
 
     def step(self, time):
         if self.v != self.to and time != self.last:
-            k = 5 if self.to else 1.7
-            q = (1 - self.v) ** (1 / k) - (1 if self.to else -1) * min(0.25, (time - (self.last or time)) / (240 if self.to else 180))
-            self.v = 1 - min(1, max(0, q)) ** k
+            p = (1 - abs(self.to - self.v) ** (1 / 3.68)) ** (1 / 1.48) + min(0.25, (time - (self.last or time)) / 700)
+            self.v = abs(self.to - (1 - min(1, p) ** 1.48) ** 3.68)
             self.last = time
         return self.v
 
@@ -5962,7 +6026,7 @@ def sheet_reversal_findings(where, samples, before, after):
 def sheet_replay_findings(where, mode, samples, *, cloth=False):
     """The recorded fade (FADE_PROBE) against shell.js' driver (SheetModel), frame by frame: the value the page shows in --sheet at every sample is the
     one the driver makes of the frames' own times (the time each frame was given, as the driver was), within SHEET_MODEL_TOLERANCE. That holds the
-    lengths (240 ms opening, 180 ms closing, per drawn frame and never more than a quarter at a step), the curves, the first step with no time
+    lengths (700 ms opening and closing, per drawn frame and never more than a quarter at a step), the curve, the first step with no time
     behind it, a reversal starting from the value it has, and the end at exactly 1 and 0. And what follows the value, in the same frame: the sheet's
     opacity is max(.01, v) and its first group of links is 6px * (1 - v) above their place, <main> reads the same --sheet; on a page with the cloth
     the shader's share is it exactly (the cloth is handed the driver's step, so the paper is drawn with the value of its own frame and not the
@@ -6218,8 +6282,8 @@ SHEET_CHANGE_PROBE = """([href, stall, bound, want]) => new Promise((done) => {
   link.click(); look('tap');
   requestAnimationFrame(frames); })"""
 SHEET_CHANGE_PROBE = SHEET_CHANGE_PROBE.replace("FACE_LOADED_JS", FACE_LOADED)
-FIRST_STEP_MS = 16   # how long after a fade's first frame (which has no time behind it) a frame must come to be judged against 1: the fade's easing has moved it by .001 by 6 ms
-SHEET_CHANGE_BOUND_MS = 6000   # a change from the sheet is over within this, at frames 120 ms apart as at normal speed (it takes about 1 s at most then)
+FIRST_STEP_MS = 16   # how long after a fade's first frame (which has no time behind it) a frame must come to be judged against 1: the fade's easing (0.7 s) has moved it by .001 by 3 ms and by .01 by 16
+SHEET_CHANGE_BOUND_MS = 6000   # a change from the sheet is over within this, at frames 120 ms apart as at normal speed (its two fades of 0.7 s take about 2 s then)
 # The pages a change from the open sheet is tried between (the menu's links): About to How, two chapters, and Terms to Privacy, the two tallest reading
 # pages (about 5,400 px at 375 wide, 16,200 device px at 3x, above the largest texture many mobile browsers take), as (from, to, from's heading, to's heading).
 SHEET_CHANGES = (("/about/", "/how/", "A quiet place for what your agents make", "The life of a file"),
@@ -7047,7 +7111,7 @@ def webkit_sheet_problems(playwright, base_url):
 
 def sheet_scrolled_close_problems(browser, base_url, session_key):
     """The sheet's surface stays where it is while a scrolled sheet fades out (spec 4.4). On a phone turned sideways (667x375) the links
-    reach past the sheet's bottom, so it scrolls; the 6px its links rise as it closes (0.18 s) must not be a transform of the sheet itself,
+    reach past the sheet's bottom, so it scrolls; the 6px its links rise as it closes (0.7 s) must not be a transform of the sheet itself,
     which would make it the containing block of its position: fixed surface, take the surface off the screen and scroll it away with the links for
     the fade, leaving the page bare behind them. With the sheet scrolled to its end and its --sheet pinned half way on the sheet (as a close half
     through has it: the driver's value is the root's, the sheet's own declaration holds it still, which a fade timed by CSS could be held by pausing
@@ -7375,13 +7439,13 @@ def menu_rest_problems(browser, base_url, session_key, site_page):
                 if fills[0] != "rgba(0, 0, 0, 0)" or fills[1] == "rgba(0, 0, 0, 0)":
                     problems.append(f"{label}: the current link's fill is {fills[0]} on the link and {fills[1]} on its inset mark")
             if width >= 1024:  # the column; below it the sheet covers the page
-                page.wait_for_timeout(700)  # the items have finished fading in
+                page.wait_for_function(SHEET_IN_PLACE, timeout=5000)  # the column has finished fading in (0.7 s)
                 problems += menu_sideways_problems(page, label)
                 box = menu.bounding_box()
                 if box and content_shows_under(page, box):
                     problems.append(f"{label}: page content shows under the open menu")
                 page.mouse.click(4, 320)  # the left margin, where nothing answers the click
-                if toggle.get_attribute("aria-expanded") != "false" or menu.is_visible():
+                if toggle.get_attribute("aria-expanded") != "false" or not menu_gone(page):
                     problems.append(f"{label}: a click elsewhere on the page leaves the menu open")
         problems += [f"{label}: console error: {error}" for error in errors]
         context.close()
@@ -8101,7 +8165,7 @@ def reading_arrival_problems(page, label, path):
                         f'page is data-layout="reading" with the class layout-reading (layouts/reading.html, registry layout)')
     if found["opacity"] != "1" or found["leaving"]:
         problems.append(f"{label}: <main> is not showing (opacity {found['opacity']})")
-    if page.locator("header [data-menu-toggle]").get_attribute("aria-expanded") != "false" or page.locator("#shell-menu").is_visible():
+    if page.locator("header [data-menu-toggle]").get_attribute("aria-expanded") != "false" or not menu_gone(page):
         problems.append(f"{label}: the menu is open on a reading page at 1280px; the menu starts closed on every page and never pins "
                         f"open, so it should be closed after a change in place too (shell.js, spec 4.4)")
     return problems

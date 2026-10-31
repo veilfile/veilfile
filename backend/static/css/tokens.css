@@ -89,8 +89,8 @@
   --form-measure: 26rem; /* a form page's column (layout-form, base.css): about fifty characters of Newsreader */
   --app-measure: 60rem; /* the dashboard's column at most (layout-app, base.css): the room between the corners is narrower than this until the window is about 1650px wide */
   --font-heading: italic 400 1.45em/1.2 var(--font-display); /* a chapter's heading and a plan's name; the em is the text around them */
-  --fade: .7s; /* Come in's cross-fade (come-in.js reads it to know how long to wait) */
-  --change-fade: .35s; /* a chapter change in place: the cross-fade of the content (a view transition, base.css), or where there is none each half of the fade out and in (shell.js reads it to know how long to wait); a change chosen from the phone sheet fades the old content out over the sheet's close (.18s) and the new in over .17s, which sum to it (shell.js) */
+  --fade: .7s; /* Come in's cross-fade (come-in.js reads it to know how long to wait): its line fades out over it, then the install line in. The menu's fade (shell.js, 700) and --change-fade are as long */
+  --change-fade: .7s; /* a chapter change in place, paced like Come in: the cross-fade of the content (a view transition, base.css), or where there is none each half of the fade out and in (shell.js reads it to know how long to wait); a change chosen from the phone sheet fades the old content out over the sheet's close (.7s) and the new in over another .7s, each half as long as it (shell.js) */
   --scene-fade: 1.4s; /* a switch of appearance: every colour token fades with the cloth (spec 3.2) */
 }
 

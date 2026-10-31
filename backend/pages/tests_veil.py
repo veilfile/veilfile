@@ -170,11 +170,11 @@ class PhoneSheetTests(SimpleTestCase):
         self.assertIn("export function start({ canvas, gl, off, ended, sheet = () => 0 }) {", self.veil)
         self.assertIn("const share = leaving || !SHEETED.matches ? 0 : sheet(time);", self.veil,
                       "static/js/veil.js: u_sheet is the driver's value for this frame (the driver's step is idempotent for a frame's time), taken before anything reads "
-                      "where the links are; 0 once the cloth is leaving, and 0 where the open menu is a column, where the driver jumps to the end and this guard keeps the paper off")
+                      "where the links are; 0 once the cloth is leaving, and 0 where the open menu is a column, which the driver fades as well and this guard keeps the paper off")
         self.assertIn("gl.uniform1f(at.sheet, share);", self.veil)
 
     def test_it_is_drawn_at_the_widths_where_the_menu_is_a_sheet(self):
-        # shell.js keeps the value at 1 for an open menu at any width (a column from 64rem up): the paper must not cover the cloth there
+        # shell.js steps the value to 1 for an open menu at any width (a column from 64rem up, which fades by it too): the paper must not cover the cloth there
         self.assertIn('const SHEETED = window.matchMedia("(max-width: 63.99rem)");', self.veil)
         self.assertIn("@media (max-width: 63.99rem) {", self.menu)
 

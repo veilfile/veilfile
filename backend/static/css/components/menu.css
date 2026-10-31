@@ -58,20 +58,20 @@
   gap: .95em;
 }
 
-@keyframes menu-item-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/* From 64rem up the open menu is a column in the page's right-hand margin, clear of the content (base.css,
+   --corner-reach). Below that it is a sheet (further down). Either way it fades in and out as one piece over .7s, as Come in
+   fades: its opacity is --sheet, the one value shell.js advances once per drawn frame (the sheet's block below says why, and why
+   it is .01 and not 0 at --sheet 0). Only the menu in the corner has a driver; a menu shown inside the page (the catalog's
+   samples) is shown as it is. */
+.js .shell-corner .menu__list {
+  opacity: max(.01, var(--sheet));
 }
 
-/* From 64rem up the open menu is a column in the page's right-hand margin, clear of the content (base.css,
-   --corner-reach); its items fade in one by one. Below that it is a sheet, which fades in as one piece (further down). */
-@media (min-width: 64rem) {
-  :root:not([data-motion="off"]) .menu__list.is-open li {
-    animation: menu-item-in .5s ease both;
-  }
-
-  .menu__list.is-open .menu__group:nth-child(2) li { animation-delay: .08s; }
-  .menu__list.is-open .menu__group:nth-child(3) li { animation-delay: .16s; }
+/* MENU says shut while the menu is still fading out: it takes no pointer then, so a click or a tap belongs to the page behind it, which is not
+   inert any more. Only with the script (.js): without it (no JavaScript, shell.js failing to load or throwing, which take .js away) the toggle is
+   still marked shut in the markup and the list is the links on the page, which must take taps. */
+.js .menu__toggle[aria-expanded="false"] + .menu__list {
+  pointer-events: none;
 }
 
 /* Below 64rem the open menu is a sheet over the page, as on earendil.com's phone menu (spec 4.4). Its surface, the page's ground
@@ -120,9 +120,10 @@
   }
 
   /* The sheet's fade is not CSS's: it is one value, --sheet (0 shut, 1 open), that shell.js advances once per drawn frame, by that
-     frame's share of the fade (.24s in, cubic-bezier(.22, 1, .36, 1); .18s out, ease-in) and never by more than a quarter of it, and writes on the
-     sheet, its groups of links, <main> and the corners (it does not inherit: base.css says why). The links, the paper the cloth draws (veil.js)
-     and the page's fade-out under the right half (base.css) all read that one value, so they fade together.
+     frame's share of the fade (.7s in and .7s out, ease, as Come in fades) and never by more than a quarter of it, and writes on the
+     sheet, its groups of links, <main> and the corners (it does not inherit: base.css says why). The links (the sheet's opacity, further up, and
+     its groups' move, here), the paper the cloth draws (veil.js) and the page's fade-out under the right half (base.css) all read that one value,
+     so they fade together.
      Nothing here is a transition, an animation or a keyframe, on purpose: those are functions of time, and a frame that comes late (WebKit's
      first frame of a full-screen sheet on a phone, a slow runner, a phone drawing the cloth) can find one over between two frames drawn, so the
      sheet blinks. CI's frames showed it: 250 ms a frame, and every CSS fade, with or without will-change, a layer of its own, no mask, no grain,
@@ -137,20 +138,9 @@
      away with the links for the whole fade (sheet_scrolled_close_problems). Only the sheet in the corner has a driver; a menu shown inside the
      page (the catalog's samples) is shown as it is. Motion off, and a system asking for reduced motion with nothing saved, take the value to its
      end at once (shell.js), as does a change that cross-fades (a link in the page, Back or Forward); a link chosen from the sheet closes it by the
-     driver like any close, and the old content fades out with it. */
-  .js .shell-corner .menu__list {
-    opacity: max(.01, var(--sheet));
-  }
-
+     driver like any close, and the old content fades out with it. The column from 64rem up fades by the same value and does not move. */
   .js .shell-corner .menu__group {
     transform: translateY(calc((1 - var(--sheet)) * -6px));
-  }
-
-  /* MENU says shut while the sheet is still fading out: it takes no pointer then, so a tap belongs to the page behind it, which is not inert any more.
-     Only with the script (.js): without it (no JavaScript, shell.js failing to load or throwing, which take .js away) the toggle is still marked
-     shut in the markup and the list is the links on the page, which must take taps. */
-  .js .menu__toggle[aria-expanded="false"] + .menu__list {
-    pointer-events: none;
   }
 
   /* The page does not scroll while the sheet is open (the wheel, touch, keys). */

@@ -1354,12 +1354,11 @@ html[data-motion="off"] {
    backdrop-filter inside <main> (the install box's slight blur, spec 4.2) only what is painted inside <main>, which
    is nothing, instead of the cloth behind it. The pseudo-elements below are styled here all the same. */
 .shell-main {
-  transition: opacity var(--change-fade) ease-out;
+  transition: opacity var(--change-fade) ease;
 }
 
 .shell-main.is-leaving {
   opacity: 0;
-  transition-timing-function: ease-in;
 }
 
 /* The rest of the page is not part of the transition. The root is not captured (the UA names it "root"; no name, no
