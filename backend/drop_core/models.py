@@ -455,3 +455,17 @@ class EmailSendLog(models.Model):
 
     def __str__(self):
         return f"{self.purpose} ({self.created_at:%Y-%m-%d %H:%M})"
+
+
+class LoopHeartbeat(models.Model):
+    """One row: when the background loop's sweep_expired pass last finished.
+
+    Written by ``drop_core.sweep.record_loop_pass()`` and watched by
+    ``maybe_sweep()``. It lives in the database, not the cache, so a cull of
+    the cache table or a cleared cache cannot lose it.
+    """
+
+    last_pass = models.DateTimeField()
+
+    def __str__(self):
+        return f"last loop pass {self.last_pass:%Y-%m-%d %H:%M}"
