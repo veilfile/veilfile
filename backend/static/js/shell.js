@@ -4,6 +4,7 @@
 const THEME_KEY = "veilfile-theme";
 const MOTION_KEY = "veilfile-motion";
 const SLOW_KEY = "veilfile-veil-off"; // in sessionStorage; shell.html's boot script reads it
+const FADED_KEY = "veilfile-faded-nav"; // in sessionStorage; shell.html's boot script reads it
 const APPEARANCE_ORDER = ["dark", "system", "light"]; // Ink, Auto, Paper
 const APPEARANCE_WORD = { dark: "Ink", system: "Auto", light: "Paper" };
 const PHONE = window.matchMedia("(max-width: 63.99rem)"); // the open menu is a full sheet
@@ -263,6 +264,10 @@ function fadeMs() {
   return Number.isFinite(ms) ? ms : 700;
 }
 
+// Gone when its fade has ended; the timer is for a page whose animations do not run.
+const fadedOut = (main, ...more) => Promise.race([Promise.all([...more, ...main.getAnimations().map((animation) => animation.finished.catch(() => {}))]),
+  new Promise((resolve) => setTimeout(resolve, 2 * fadeMs()))]);
+
 async function changeTo(url, push, scroll = 0, sheeted = false) {
   const change = ++changes;
   const layout = document.body.dataset.layout;
@@ -284,9 +289,7 @@ async function changeTo(url, push, scroll = 0, sheeted = false) {
     fade.go(1, true); // a change overtaken from the sheet leaves <main> faded
     if (motion && !crossfade) {
       main.classList.add("is-leaving");
-      // Gone when its fade has ended; the timer is for a page whose animations do not run.
-      const ended = main.getAnimations().map((animation) => animation.finished.catch(() => {}));
-      faded = Promise.race([Promise.all(ended), new Promise((resolve) => setTimeout(resolve, 2 * fadeMs()))]);
+      faded = fadedOut(main);
     }
   }
   const controller = new AbortController();
@@ -401,6 +404,61 @@ function restoreScroll() {
   if (history.scrollRestoration === "manual" && typeof saved === "number") window.scrollTo(0, saved);
 }
 
+// An ordinary load fades out, and the next page in (Leaving for another page).
+let leaving; // the change that is an ordinary load fading out, while it is the newest
+
+function fadeNext(on) {
+  try {
+    if (on) sessionStorage.setItem(FADED_KEY, "1");
+    else sessionStorage.removeItem(FADED_KEY);
+  } catch (error) {
+    // Storage is blocked: the next page comes in at once.
+  }
+}
+
+function leave(event, url, link) {
+  const page = !/\.\w+$/.test(url.pathname); // a plain file (llms.txt) is no page
+  if (leaving === changes) {
+    leaving = ++changes; // a newer link goes at once
+    fadeNext(page);
+    return;
+  }
+  if (!page || instant()) return;
+  event.preventDefault();
+  const change = leaving = ++changes;
+  const main = document.querySelector("main");
+  main.classList.add("is-leaving");
+  fadedOut(main, link.closest("#shell-menu") && closeSheet()).then(() => {
+    if (change !== changes) return;
+    fadeNext(true);
+    location.assign(url.href);
+    setTimeout(() => change === changes && stay(), FETCH_TIMEOUT_MS); // no page came (a download)
+  });
+}
+
+// Kept by Back as it was left, or no page came: shown at once.
+function stay() {
+  const main = document.querySelector("main");
+  ++changes;
+  fadeNext(false);
+  main.style.transition = "none";
+  main.classList.remove("is-leaving");
+  getComputedStyle(main).opacity;
+  main.style.transition = "";
+}
+
+// Come by an ordinary load that faded out: <main> fades in from hidden (data-arriving, shell.html).
+function arrive() {
+  const main = document.querySelector("main");
+  if (root.hasAttribute("data-arriving")) {
+    main.classList.add("is-leaving");
+    root.removeAttribute("data-arriving");
+    getComputedStyle(main).opacity;
+    requestAnimationFrame(() => main.classList.remove("is-leaving"));
+  }
+  fadeNext(false);
+}
+
 function setUpChapterChanges() {
   let scrolling;
   window.addEventListener("scroll", () => {
@@ -418,12 +476,11 @@ function setUpChapterChanges() {
     if (!link || event.defaultPrevented || event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     if ((link.target && link.target !== "_self") || link.hasAttribute("download") || link.hasAttribute("data-come-in")) return;
-    if (!document.body.dataset.layout) return;
     const url = new URL(link.href, window.location.href);
     if (url.origin !== window.location.origin) return;
     if (url.hash) return; // a #fragment is the browser's to scroll to
-    // Only a page of this layout changes in place.
-    if (!(document.body.dataset.layoutPaths || "").split(" ").includes(url.pathname)) return;
+    // Only a page of this layout changes in place; any other is an ordinary load.
+    if (!document.body.dataset.layout || !(document.body.dataset.layoutPaths || "").split(" ").includes(url.pathname)) return leave(event, url, link);
     event.preventDefault();
     const push = url.href !== window.location.href;
     if (push && window.location.pathname + window.location.search === shown) {
@@ -444,9 +501,13 @@ function setUpChapterChanges() {
     // Back and Forward: the entry as it was left.
     if (document.body.dataset.layout) changeTo(window.location.href, false, (history.state && history.state.scroll) || 0);
   });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) stay();
+  });
 }
 
 try {
+  arrive();
   document.querySelectorAll("[data-menu]").forEach(setUpMenu);
   document.querySelectorAll("[data-appearance-toggle]").forEach(setUpAppearance);
   document.querySelectorAll("[data-motion-toggle]").forEach(setUpMotion);

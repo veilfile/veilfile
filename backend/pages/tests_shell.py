@@ -574,6 +574,122 @@ class ChangeFromTheSheetScriptTests(SimpleTestCase):
         self.assertIn("write(v, to, true);", self.script, "static/js/shell.js: the driver tells write when a frame's step made the value")
 
 
+class OrdinaryLoadFadeScriptTests(SimpleTestCase):
+    """An ordinary load fades too (spec 4.5): a link to a page outside this page's layout family, which shell.js does not change in place, fades <main>
+    out over --change-fade (is-leaving), with the menu closing alongside if the link is in it. Then the page goes, and the next one fades in. Hidden from
+    its first paint by the boot script, it fades in from shell.js. Which links change in place is not touched, and neither is a form's submit. Back and Forward,
+    a direct load and a reload never fade, and Motion off is instant. The browser check (ordinary_fade_problems) reads what the browser does with it."""
+
+    longMessage = False
+
+    def setUp(self):
+        script = (STATIC / "js/shell.js").read_text(encoding="utf-8")
+        self.script = script
+        self.clicks = script[script.index("function setUpChapterChanges"):script.index("window.addEventListener(\"popstate\"")]
+        self.leave = script[script.index("function leave("):script.index("function setUpChapterChanges")]
+        self.boot = render_shell()
+        self.boot = self.boot[self.boot.index('<script id="veilfile-shell-boot">'):]
+        self.boot = self.boot[:self.boot.index("</script>")]
+
+    def function(self, name):
+        start = self.script.index(f"function {name}(")
+        return self.script[start:self.script.index("\n}\n", start)]
+
+    def test_every_page_outside_the_layout_is_an_ordinary_load_after_the_same_guards(self):
+        # The guards of a change in place come first and stay as they were: a left click with no modifier, no target, download or Come in, the
+        # same origin and no #fragment. Then a page of this layout changes in place, exactly as before, and every other page goes to leave().
+        call = 'if (!document.body.dataset.layout || !(document.body.dataset.layoutPaths || "").split(" ").includes(url.pathname)) return leave(event, url, link);'
+        self.assertIn(call, self.clicks, "static/js/shell.js: a page outside this page's layout (or any page from a page with no layout) is an ordinary load, which leave() fades")
+        for guard in ('if (!link || event.defaultPrevented || event.button !== 0) return;', "if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;",
+                      'if ((link.target && link.target !== "_self") || link.hasAttribute("download") || link.hasAttribute("data-come-in")) return;',
+                      "if (url.origin !== window.location.origin) return;", "if (url.hash) return;"):
+            self.assertIn(guard, self.clicks)
+            self.assertLess(self.clicks.index(guard), self.clicks.index(call), f"static/js/shell.js: `{guard}` leaves the link to the browser before leave() is asked")
+        in_place = self.clicks[self.clicks.index(call):]
+        self.assertRegex(in_place, r"\n\s*event\.preventDefault\(\);\n", "static/js/shell.js: a page of this layout still changes in place")
+        self.assertIn("changeTo(url.href, push, 0, sheeted);", in_place)
+        self.assertNotIn("leave(", self.script[self.script.index("async function changeTo"):self.script.index("// Where the page is scrolled")],
+                         "static/js/shell.js: a change in place does not fade like an ordinary load as well")
+
+    def test_motion_off_and_a_plain_file_are_left_to_the_browser(self):
+        # Motion off and reduced motion (instant()) go at once, as a link does, and set no flag; so does a plain file such as llms.txt, which is no page
+        # and runs no shell.js to fade in.
+        self.assertIn(r"const page = !/\.\w+$/.test(url.pathname);", self.leave, "static/js/shell.js: an address whose last part has an extension (llms.txt) is a plain file")
+        self.assertIn("if (!page || instant()) return;", self.leave)
+        self.assertLess(self.leave.index("if (!page || instant()) return;"), self.leave.index("event.preventDefault();"),
+                        "static/js/shell.js: with Motion off, and for a plain file, the browser follows the link itself")
+
+    def test_main_fades_out_by_is_leaving_and_the_menu_closes_with_it_and_then_the_page_goes(self):
+        fade = self.leave[self.leave.index("event.preventDefault();"):]
+        self.assertIn('main.classList.add("is-leaving");', fade, "static/js/shell.js: <main> fades out by is-leaving and its transition over --change-fade (base.css)")
+        self.assertIn('fadedOut(main, link.closest("#shell-menu") && closeSheet()).then(() => {', fade,
+                      "static/js/shell.js: a link in the menu closes it by its driver while <main> fades, and the page goes once both are done")
+        self.assertRegex(fade, r"if \(change !== changes\) return;\n\s*fadeNext\(true\);\n\s*location\.assign\(url\.href\);",
+                         "static/js/shell.js: the page goes, flagged to fade in, unless a newer change has overtaken it")
+        self.assertIn("const change = leaving = ++changes;", fade, "static/js/shell.js: an ordinary load is a change, so a newer one (a change in place, Back) overtakes it")
+
+    def test_the_fade_out_waits_as_a_change_in_place_does(self):
+        wait = self.script[self.script.index("const fadedOut"):self.script.index("async function changeTo")]
+        self.assertIn("main.getAnimations().map((animation) => animation.finished.catch(() => {}))", wait)
+        self.assertIn("new Promise((resolve) => setTimeout(resolve, 2 * fadeMs()))", wait, "static/js/shell.js: a page whose animations do not run does not wait for ever")
+        self.assertIn("faded = fadedOut(main);", self.script[self.script.index("async function changeTo"):], "static/js/shell.js: a change in place waits for its fade out the same way")
+
+    def test_a_newer_link_during_the_fade_goes_at_once(self):
+        # The page is part faded out already: the newest link wins at once, by the browser, and the load overtaken never goes.
+        newer = re.search(r"if \(leaving === changes\) \{(.*?)\n  \}", self.leave, re.S)
+        self.assertTrue(newer, "static/js/shell.js: leave() knows an ordinary load is fading out (leaving === changes)")
+        self.assertRegex(newer.group(1), r"leaving = \+\+changes;[^\n]*\n\s*fadeNext\(page\);\n\s*return;",
+                         "static/js/shell.js: the newer link overtakes it and goes at once, flagged unless it is a plain file, and so does any link after it")
+        self.assertLess(self.leave.index("if (leaving === changes)"), self.leave.index("event.preventDefault();"))
+        self.assertIn("let leaving;", self.script, "static/js/shell.js: no ordinary load is fading out when the page arrives (undefined is no change)")
+
+    def test_the_flag_is_set_only_as_the_page_goes_and_its_key_is_the_boot_scripts(self):
+        self.assertEqual(self.script.count("fadeNext(true)"), 1, "static/js/shell.js: the flag is set as the page goes, never at the click (a change in place may still overtake the load)")
+        key = re.search(r'const FADED_KEY = "([^"]+)";', self.script)
+        self.assertTrue(key, "static/js/shell.js: FADED_KEY names the flag in sessionStorage")
+        self.assertIn(f'sessionStorage.getItem("{key.group(1)}")', self.boot, "templates/shell.html: the boot script reads the flag shell.js sets")
+        flag = self.function("fadeNext")
+        self.assertIn("sessionStorage.setItem(FADED_KEY", flag)
+        self.assertIn("sessionStorage.removeItem(FADED_KEY)", flag)
+        self.assertIn("catch (error)", flag, "static/js/shell.js: blocked storage fades no page in, and breaks nothing")
+
+    def test_the_boot_script_hides_main_from_the_first_paint_only_when_the_page_will_fade_in(self):
+        # shell.js is a module, run after the page is parsed and perhaps after its first paint: <main> must already be hidden then, or it would show and blink out.
+        self.assertIn('try { if (motion !== "off" && sessionStorage.getItem("veilfile-faded-nav")) root.setAttribute("data-arriving", ""); } catch (error) {}', self.boot)
+        self.assertLess(self.boot.index('sessionStorage.getItem("veilfile-veil-off")'), self.boot.index("data-arriving"), "templates/shell.html: data-arriving is decided once Motion is")
+        base = re.sub(r"/\*.*?\*/", "", (STATIC / "css/base.css").read_text(encoding="utf-8"), flags=re.S)
+        self.assertRegex(base, r"\.shell-main\.is-leaving,\n\.js\[data-arriving\] \.shell-main \{\n  opacity: 0;\n\}",
+                         "static/css/base.css: data-arriving hides <main> as is-leaving does, and only with .js, which shell.js failing to load or throwing takes away")
+
+    def test_the_next_page_fades_in_from_hidden_and_the_flag_is_cleared_with_motion_off_too(self):
+        arrive = self.function("arrive")
+        self.assertRegex(arrive, r'main\.classList\.add\("is-leaving"\);\n\s*root\.removeAttribute\("data-arriving"\);\n\s*getComputedStyle\(main\)\.opacity;[^\n]*\n'
+                                 r'\s*requestAnimationFrame\(\(\) => main\.classList\.remove\("is-leaving"\)\);',
+                         "static/js/shell.js: arrive() starts <main> at is-leaving, already hidden, and takes it away on the next frame, so its transition runs over --change-fade")
+        self.assertIn('if (root.hasAttribute("data-arriving")) {', arrive, "static/js/shell.js: only a page the boot script hid fades in: never with Motion off, a direct load, a reload or Back")
+        self.assertRegex(arrive, r"\n  \}\n  fadeNext\(false\);$", "static/js/shell.js: the flag is cleared whether or not the page fades in, so a later load does not fade")
+        setup = self.script[self.script.rindex("try {"):]
+        self.assertLess(setup.index("arrive();"), setup.index("setUpChapterChanges();"))
+
+    def test_a_page_kept_by_back_or_with_no_page_in_its_place_is_shown_at_once(self):
+        self.assertRegex(self.function("setUpChapterChanges"), r'window\.addEventListener\("pageshow", \(event\) => \{\s*if \(event\.persisted\) stay\(\);',
+                         "static/js/shell.js: a page the browser kept as it was left (Back, Forward) is shown at once, not left faded out")
+        self.assertIn("setTimeout(() => change === changes && stay(), FETCH_TIMEOUT_MS);", self.leave,
+                      "static/js/shell.js: a load that brings no page in this one's place (a download, a 204) gives it back")
+        stay = self.function("stay")
+        self.assertRegex(stay, r'main\.style\.transition = "none";\n\s*main\.classList\.remove\("is-leaving"\);\n\s*getComputedStyle\(main\)\.opacity;[^\n]*\n\s*main\.style\.transition = "";')
+        self.assertIn("++changes;", stay, "static/js/shell.js: whatever was on its way when the page was kept goes no further")
+        self.assertIn("fadeNext(false);", stay)
+
+    def test_no_cross_document_view_transition_and_no_submit_is_held(self):
+        # Out of scope here: a form's submit goes as it always has, and cross-document view transitions (@view-transition) are not used; the same-document
+        # rules (:root's name none, the chapter's) stay as they are.
+        self.assertNotIn('"submit"', self.script, "static/js/shell.js: a form's submit is never delayed")
+        for path in sorted((STATIC / "css").rglob("*.css")):
+            self.assertNotIn("@view-transition", path.read_text(encoding="utf-8"), f"{path.relative_to(STATIC)}: ordinary loads fade by shell.js, not by a cross-document view transition")
+        self.assertRegex((STATIC / "css/base.css").read_text(encoding="utf-8"), r":root \{\s*view-transition-name: none;\s*\}")
+
+
 class FacesScriptTests(SimpleTestCase):
     """No change waits on a font (spec 4.5): shell.js loads the faces any page of the layout may show (the body's data-faces, tests_faces) when the menu
     opens and when a change begins, in parallel with the fetch, and waits for them before it swaps or starts a view transition, while the page still draws;

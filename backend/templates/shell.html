@@ -9,6 +9,7 @@
   if (theme !== "light" && theme !== "dark") theme = "system";
   if (motion !== "on" && motion !== "off") motion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "off" : "on";
   try { if (sessionStorage.getItem("veilfile-veil-off") === "slow") { motion = "off"; root.setAttribute("data-veil-off", "slow"); } } catch (error) {}
+  try { if (motion !== "off" && sessionStorage.getItem("veilfile-faded-nav")) root.setAttribute("data-arriving", ""); } catch (error) {}
   root.setAttribute("data-theme", theme);
   root.setAttribute("data-motion", motion);
   if ("noModule" in HTMLScriptElement.prototype) root.classList.add("js");

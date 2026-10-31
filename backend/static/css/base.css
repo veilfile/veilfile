@@ -1357,7 +1357,11 @@ html[data-motion="off"] {
   transition: opacity var(--change-fade) ease;
 }
 
-.shell-main.is-leaving {
+/* An ordinary load fades too (shell.js, spec 4.5): <main> fades out by is-leaving before the page goes, and the next page's <main> is hidden from
+   its first paint (data-arriving, which shell.html's boot script sets when this tab's last page faded out) until shell.js fades it in. Only with
+   .js, which shell.js failing to load or throwing takes away, so a page whose script never runs is never left blank. */
+.shell-main.is-leaving,
+.js[data-arriving] .shell-main {
   opacity: 0;
 }
 

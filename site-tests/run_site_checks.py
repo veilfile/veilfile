@@ -4720,6 +4720,395 @@ def chapter_change_problems(browser, base_url, session_key, site_page):
     return problems
 
 
+FADE_MS = 700   # --change-fade (tokens.css): an ordinary load's fade out, and the next page's fade in
+# Watches ordinary loads from inside every page of a context (ordinary_fade_problems): each click on a link and whether shell.js took it (cancelled its
+# default), <main>'s opacity and is-leaving and the menu's --sheet in every frame, the boot script's data-arriving, the flag shell.js leaves in
+# sessionStorage for the next page (as the page began and as it went) and the moment it went (beforeunload, which a load fires as it starts,
+# location.assign's as well as a link's). A page keeps what it saw in sessionStorage as it goes ("site-checks-left"), so the next can say what the last did.
+ORDINARY_PROBE = """(() => {
+  const now = () => performance.timeOrigin + performance.now();
+  const flag = () => { try { return sessionStorage.getItem("veilfile-faded-nav"); } catch (error) { return "blocked"; } };
+  const probe = window.__ordinary = { path: location.pathname, flag: flag(), arriving: [], frames: [], clicks: [], left: null };
+  new MutationObserver((records) => records.forEach((record) => record.target === document.documentElement && probe.arriving.push(record.target.hasAttribute("data-arriving"))))
+    .observe(document, { subtree: true, attributes: true, attributeFilter: ["data-arriving"] });   // <html> is not there yet when this runs
+  const read = () => { const main = document.querySelector("main"), list = document.querySelector("#shell-menu");
+    return main && { at: now(), opacity: +getComputedStyle(main).opacity, leaving: main.classList.contains("is-leaving"),
+                     sheet: list ? +(getComputedStyle(list).getPropertyValue("--sheet") || 0) : null }; };
+  const frame = () => { const seen = read(); if (seen) probe.frames.push(seen); if (probe.frames.length < 900) requestAnimationFrame(frame); };
+  requestAnimationFrame(frame);
+  document.addEventListener("click", (event) => { const link = event.target.closest && event.target.closest("a[href]");
+    if (link) probe.clicks.push({ at: now(), href: link.getAttribute("href"), taken: null }); }, true);
+  window.addEventListener("click", (event) => { const click = probe.clicks[probe.clicks.length - 1]; if (click && click.taken === null) click.taken = event.defaultPrevented; });
+  window.addEventListener("beforeunload", () => { const toggle = document.querySelector("header [data-menu-toggle]");
+    probe.left = { ...read(), path: location.pathname, flag: flag(), expanded: toggle && toggle.getAttribute("aria-expanded") };
+    try { sessionStorage.setItem("site-checks-left", JSON.stringify(probe)); } catch (error) {} });
+})();"""
+# The page at the address has come and settled: the probe is its own, <main> is at full strength with nothing fading, and data-arriving has gone.
+ORDINARY_SETTLED = """(path) => { const main = document.querySelector("main");
+  return location.pathname === path && Boolean(window.__ordinary) && window.__ordinary.path === path && document.readyState === "complete" && Boolean(main)
+    && !main.classList.contains("is-leaving") && getComputedStyle(main).opacity === "1" && !document.documentElement.hasAttribute("data-arriving"); }"""
+# What the page that went saw (its probe, kept as it went, then forgotten so the next trip reads its own), what this page sees, and the flag now.
+ORDINARY_READ = """() => { const left = JSON.parse(sessionStorage.getItem("site-checks-left")); sessionStorage.removeItem("site-checks-left");
+  return [left, window.__ordinary, sessionStorage.getItem("veilfile-faded-nav")]; }"""
+# Clicks made on links of the page by script (an Alt click, a middle button, a link with a target...), each stopped by a listener on window after shell.js has
+# had it, so that nothing loads: whether shell.js took it, and <main> and the flag two frames later.
+UNTOUCHED_CLICKS = """async (cases) => {
+  const main = document.querySelector("main"), frames = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  let taken = null;
+  const stop = (event) => { taken = event.defaultPrevented; event.preventDefault(); };
+  window.addEventListener("click", stop);
+  const seen = [];
+  for (const [name, selector, href, attributes, init] of cases) {
+    let link = selector && document.querySelector(selector);
+    if (!link) { link = document.createElement("a"); link.href = href; link.textContent = name;
+      for (const [key, value] of Object.entries(attributes)) link.setAttribute(key, value);
+      main.append(link); }
+    taken = null;
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window, button: 0, ...init }));
+    await frames();
+    seen.push({ name, taken, leaving: main.classList.contains("is-leaving"), opacity: getComputedStyle(main).opacity, flag: sessionStorage.getItem("veilfile-faded-nav") });
+    if (!selector) link.remove();
+  }
+  window.removeEventListener("click", stop);
+  return seen; }"""
+
+
+def ordinary_departure_findings(label, left, *, faded, menu=False):
+    """What the page that went saw from the last link clicked (ORDINARY_PROBE). With faded: shell.js took the click, <main> faded out from it over about
+    --change-fade (frames between, never coming back up) and the page went once it had, flagged for the next to fade in; with menu, the menu closed
+    alongside, the two part way in the same frames. Without: the browser followed the link at once, nothing faded and no flag was set. A helper of
+    ordinary_fade_problems, so not named ..._problems."""
+    if not left or not left.get("left") or not left.get("clicks"):
+        return [f"{label}: the page that went kept no record of the click and of going (ORDINARY_PROBE)"]
+    click, went = left["clicks"][-1], left["left"]
+    after = [frame for frame in left["frames"] if frame["at"] >= click["at"]]
+    took = went["at"] - click["at"]
+    if not faded:
+        dimmed = any(frame["leaving"] or frame["opacity"] < 0.99 for frame in after)
+        if click["taken"] or took > 300 or dimmed or went["flag"]:
+            return [f"{label}: the browser should follow the link at once, with nothing faded and no flag; shell.js took the click: {click['taken']}, the page "
+                    f"went {took:.0f} ms after it, <main> dimmed: {dimmed}, flag {went['flag']!r}"]
+        return []
+    problems = []
+    if not click["taken"]:
+        problems.append(f"{label}: shell.js did not take the click, so the page went without fading out")
+    if not FADE_MS * 0.9 <= took <= FADE_MS * 2 + 600:
+        problems.append(f"{label}: the page went {took:.0f} ms after the click; it should go once <main> has faded out over --change-fade ({FADE_MS} ms)")
+    if went["opacity"] > 0.02 or not went["leaving"]:
+        problems.append(f"{label}: <main> was at opacity {went['opacity']} (is-leaving: {went['leaving']}) as the page went; it should have faded out")
+    between = [frame for frame in after if 0.05 < frame["opacity"] < 0.95]
+    if len(between) < 2:
+        problems.append(f"{label}: <main> showed {len(between)} frame(s) between full strength and gone; it should fade out, not cut")
+    rises = [(a["opacity"], b["opacity"]) for a, b in zip(after, after[1:]) if b["opacity"] > a["opacity"] + 0.02]
+    if rises:
+        problems.append(f"{label}: <main> came back up while it faded out ({rises[:3]})")
+    if went["flag"] != "1":
+        problems.append(f"{label}: the flag for the next page to fade in was {went['flag']!r} as the page went, not '1'")
+    if menu:
+        both = [frame for frame in after if frame["sheet"] is not None and 0.1 < frame["sheet"] < 0.9 and 0.1 < frame["opacity"] < 0.9]
+        if went["expanded"] != "false" or (went["sheet"] or 0) > 0.01 or not both:
+            problems.append(f"{label}: the menu should close while <main> fades out, the two together, and be shut as the page goes; MENU said expanded "
+                            f"{went['expanded']!r} and --sheet was {went['sheet']} as it went, and {len(both)} frame(s) had both part way")
+    return problems
+
+
+def ordinary_arrival_findings(label, now, flag, *, faded):
+    """What the page that came saw of itself (ORDINARY_PROBE), and the flag once shell.js had run. With faded: it came flagged, <main> was hidden from its
+    first frame (data-arriving, set by the boot script and taken away by shell.js) and faded in over about --change-fade, never falling back. Without: it
+    came unflagged and showed <main> at full strength from its first frame. Either way the flag is gone, so a later load does not fade in. A helper of
+    ordinary_fade_problems."""
+    problems = [] if flag is None else [f"{label}: the flag is still {flag!r} after the page came; a later direct load or reload would fade in"]
+    frames = now["frames"]
+    if not frames:
+        return problems + [f"{label}: the page drew no frame of <main>"]
+    if not faded:
+        dimmed = [frame for frame in frames if frame["opacity"] < 0.99 or frame["leaving"]]
+        if now["flag"] or now["arriving"] or dimmed:
+            problems.append(f"{label}: the page should come in at once with nothing faded; it came with the flag {now['flag']!r}, data-arriving went "
+                            f"{now['arriving']} and {len(dimmed)} frame(s) of <main> were under full strength")
+        return problems
+    if now["flag"] != "1":
+        problems.append(f"{label}: the page came without the flag (it read {now['flag']!r}), so it could not fade in")
+    if now["arriving"][:1] != [True] or now["arriving"][-1:] != [False]:
+        problems.append(f"{label}: data-arriving went {now['arriving']}; the boot script should set it and shell.js take it away")
+    if frames[0]["opacity"] > 0.01:
+        problems.append(f"{label}: <main> showed at opacity {frames[0]['opacity']} in its first frame; it should be hidden from the first paint and fade in")
+    hidden = max((index for index, frame in enumerate(frames) if frame["opacity"] <= 0.01), default=0)
+    full = next((index for index, frame in enumerate(frames) if index > hidden and frame["opacity"] >= 0.99), None)
+    if full is None:
+        return problems + [f"{label}: <main> never came to full strength"]
+    span = frames[full]["at"] - frames[hidden]["at"]
+    between = [frame for frame in frames[hidden:full] if 0.05 < frame["opacity"] < 0.95]
+    if len(between) < 2 or span < FADE_MS * 0.6:
+        problems.append(f"{label}: <main> came in over {span:.0f} ms with {len(between)} frame(s) between hidden and full strength; "
+                        f"it should fade in over --change-fade ({FADE_MS} ms)")
+    falls = [(a["opacity"], b["opacity"]) for a, b in zip(frames[hidden:], frames[hidden + 1:]) if b["opacity"] < a["opacity"] - 0.02]
+    if falls:
+        problems.append(f"{label}: <main> fell back while it faded in ({falls[:3]})")
+    return problems
+
+
+def ordinary_fade_problems(browser, base_url, session_key):
+    """An ordinary load fades too (spec 4.5): a link to a page outside the page's layout family (or any link on a form or error page, which have none)
+    fades <main> out over --change-fade, the menu closing alongside when the link is in it, and the page that comes is hidden from its first paint and fades
+    in. Tried from a chapter to a form page by a link in the page, from a form page to the threshold by the mark, from a chapter to the Docs by the menu at
+    1280 and from the phone's sheet at 375. A change in place does not fade like this as well. Motion off and reduced motion go at once with no flag; a
+    modified click, a middle button, a link with a target or download, a #fragment, another site and a plain file (llms.txt) are the browser's. A newer link
+    while <main> fades out goes at once, and the load it overtook never goes (a change in place overtakes it too). A reload, a direct load and Back never
+    fade, and a page the browser keeps for Back is shown at once. With the next page's shell.js late <main> stays hidden until it comes; with it failing
+    <main> shows. A load that brings no page (a 204) gives the page back."""
+    problems = []
+    about = page_named("/about/")
+
+    def context_for(**options):
+        context = new_context(browser, base_url, session_key, about, theme=None, **{"width": 1280, "motion": "on", **options})
+        context.add_init_script(ORDINARY_PROBE)
+        return context
+
+    def trip(page, label, selector, path, *, faded=True, menu=False):
+        """Click the link and judge the way out and the way in; False when the page at path never came. A link in the menu is clicked once the menu is
+        open and at rest, as a visitor would, so that its close is seen from the start."""
+        if menu:
+            set_menu(page, True)
+            try:
+                page.wait_for_function(SHEET_IN_PLACE, timeout=5000)
+            except PlaywrightError:
+                problems.append(f"{label}: the menu never came to rest open")
+        if not try_click(problems, page, selector, label, no_wait_after=True):
+            return False
+        try:
+            page.wait_for_function(ORDINARY_SETTLED, arg=path, timeout=10000)
+        except PlaywrightError as error:
+            problems.append(f"{label}: never came to {path}: {error.message.splitlines()[0]}")
+            return False
+        left, now, flag = page.evaluate(ORDINARY_READ)
+        problems.extend(ordinary_departure_findings(label, left, faded=faded, menu=menu))
+        problems.extend(ordinary_arrival_findings(label, now, flag, faded=faded))
+        return True
+
+    def at_rest(page, label, how):
+        """After a load that must not fade (a reload, a direct load, Back): <main> at full strength at once, nothing faded, no flag. The frames are judged on a
+        page loaded again, not on one the browser kept (window.__kept, set before it was left), whose frames are of its own fade out."""
+        state = page.evaluate("""() => { const main = document.querySelector("main");
+            return { opacity: getComputedStyle(main).opacity, leaving: main.classList.contains("is-leaving"), running: main.getAnimations().length,
+                     arriving: document.documentElement.hasAttribute("data-arriving"), flag: sessionStorage.getItem("veilfile-faded-nav"),
+                     probe: window.__ordinary && !window.__kept && { flag: window.__ordinary.flag, arriving: window.__ordinary.arriving,
+                       dimmed: window.__ordinary.frames.filter((frame) => frame.opacity < 0.99 || frame.leaving).length } }; }""")
+        probe = state["probe"] or {}
+        if state["opacity"] != "1" or state["leaving"] or state["running"] or state["arriving"] or state["flag"] or probe.get("arriving") or probe.get("dimmed"):
+            problems.append(f"{label}: {how} should show <main> at once with nothing faded and no flag; it read {state}")
+
+    # Motion on, at 1280: a chapter to a form page by a link in the page (Begin's Dashboard link, which sign in answers for a visitor signed out), a reload
+    # of it, the form page to the threshold by the mark, a change in place from there, the Docs from the menu, Back, and a direct load.
+    context = context_for()
+    page, errors = open_page(context, base_url + "/begin/")
+    label = "ordinary loads: Begin to sign in by a link in the page"
+    if trip(page, label, 'main a[href="/app/"]', "/accounts/login/"):
+        page.reload(wait_until="load")
+        try:
+            page.wait_for_function(ORDINARY_SETTLED, arg="/accounts/login/", timeout=10000)
+            at_rest(page, f"{label}, then a reload", "a reload")
+        except PlaywrightError:
+            problems.append(f"{label}, then a reload: the page never settled")
+        trip(page, "ordinary loads: sign in to the threshold by the mark", ".shell-corner--top-left .lockup", "/")
+    page.evaluate("() => { window.stayedPut = true; window.__ordinary.clicks = []; window.__ordinary.frames = []; }")
+    label = "ordinary loads: the threshold to About, a change in place"
+    if try_click(problems, page, '#shell-menu a[href="/about/"]', label) and settle_on(page, "/about/", "A quiet place for what your agents make"):
+        state = page.evaluate("""() => ({ stayed: window.stayedPut === true, flag: sessionStorage.getItem("veilfile-faded-nav"),
+            clicks: window.__ordinary.clicks, leaving: window.__ordinary.frames.filter((frame) => frame.leaving).length })""")
+        # Chromium has view transitions, so a change in place cross-fades and never sets is-leaving: no fade out of an ordinary load on top of it.
+        if not state["stayed"] or state["flag"] or state["leaving"] or [click["taken"] for click in state["clicks"]][-1:] != [True]:
+            problems.append(f"{label}: should change in place, cross-faded, with no ordinary fade and no flag; it read {state}")
+    page.evaluate("() => { window.stayedPut = undefined; window.__kept = true; }")
+    label = "ordinary loads: About to the Docs from the menu at 1280"
+    if trip(page, label, '#shell-menu a[href="/docs/"]', "/docs/", menu=True):
+        try:
+            page.go_back(wait_until="load")
+            page.wait_for_function("() => location.pathname === '/about/' && document.readyState === 'complete'", timeout=10000)
+            at_rest(page, f"{label}, then Back", "Back")
+        except PlaywrightError as error:
+            problems.append(f"{label}, then Back: {error.message.splitlines()[0]}")
+    page.goto(base_url + "/promises/", wait_until="load")
+    try:
+        page.wait_for_function(ORDINARY_SETTLED, arg="/promises/", timeout=10000)
+        at_rest(page, "ordinary loads: a direct load after them", "a direct load")
+    except PlaywrightError:
+        problems.append("ordinary loads: a direct load after them never settled")
+    # A page the browser keeps as it was left and gives back for Back (Playwright's Chromium keeps none, so its pageshow is played): shown at once.
+    kept = page.evaluate("""() => { const main = document.querySelector("main"); main.classList.add("is-leaving"); sessionStorage.setItem("veilfile-faded-nav", "1");
+        window.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+        return { opacity: getComputedStyle(main).opacity, leaving: main.classList.contains("is-leaving"), running: main.getAnimations().length,
+                 flag: sessionStorage.getItem("veilfile-faded-nav") }; }""")
+    if kept != {"opacity": "1", "leaving": False, "running": 0, "flag": None}:
+        problems.append(f"ordinary loads: a page kept for Back and shown again (pageshow, persisted) should show <main> at once and clear the flag; it read {kept}")
+    problems += [f"ordinary loads, at 1280: console error: {error}" for error in errors]
+    context.close()
+
+    # From the open phone sheet at 375: the sheet closes by its driver while <main> fades out.
+    context = context_for(width=375, height=667)
+    page, errors = open_page(context, base_url + "/about/")
+    trip(page, "ordinary loads: About to the Docs from the phone's sheet", '#shell-menu a[href="/docs/"]', "/docs/", menu=True)
+    problems += [f"ordinary loads, from the phone's sheet: console error: {error}" for error in errors]
+    context.close()
+
+    # Motion off, and reduced motion with nothing saved: the browser follows the link at once, no fade, no flag.
+    for how, options in (("Motion off", {"motion": "off"}), ("reduced motion with nothing saved", {"motion": None, "reduced_motion": "reduce"})):
+        context = context_for(**options)
+        page, errors = open_page(context, base_url + "/about/")
+        trip(page, f"ordinary loads with {how}: About to the Docs", '#shell-menu a[href="/docs/"]', "/docs/", faded=False)
+        problems += [f"ordinary loads with {how}: console error: {error}" for error in errors]
+        context.close()
+
+    # The links shell.js leaves to the browser, each clicked by script and stopped once shell.js has had it.
+    context = context_for()
+    page, errors = open_page(context, base_url + "/about/")
+    cases = [[f"{key} click", None, "/docs/", {}, {key.lower() + "Key": True}] for key in ("Ctrl", "Meta", "Shift", "Alt")]
+    cases += [["middle button", None, "/docs/", {}, {"button": 1}], ["a link with a target", None, "/docs/", {"target": "_blank"}, {}],
+              ["a download", None, "/docs/", {"download": ""}, {}], ["a #fragment", None, "/docs/#sections", {}, {}],
+              ["another site", None, "https://example.com/", {}, {}], ["llms.txt, a plain file, from the menu", '#shell-menu a[href="/llms.txt"]', None, {}, {}]]
+    for seen in page.evaluate(UNTOUCHED_CLICKS, cases):
+        if seen["taken"] or seen["leaving"] or seen["opacity"] != "1" or seen["flag"]:
+            problems.append(f"ordinary loads: {seen['name']} should be left to the browser, with nothing faded and no flag; it read {seen}")
+    problems += [f"ordinary loads, links left to the browser: console error: {error}" for error in errors]
+    context.close()
+
+    # A newer link while <main> fades out: from the sign-in page the mark, then Sign up part way through the fade. Sign up comes at once, faded in, and the
+    # threshold is never asked for.
+    context = context_for()
+    page, errors = open_page(context, base_url + "/accounts/login/")
+    navigations = []
+    page.on("request", lambda request: navigations.append(request.url) if request.is_navigation_request() and request.frame == page.main_frame else None)
+    label = "ordinary loads: the mark and then Sign up while sign in fades out"
+    part_way = "() => { const opacity = +getComputedStyle(document.querySelector('main')).opacity; return opacity > 0.1 && opacity < 0.9; }"
+    if try_click(problems, page, ".shell-corner--top-left .lockup", label, no_wait_after=True):
+        try:
+            page.wait_for_function(part_way, timeout=5000)
+            page.locator('.form-links a[href="/accounts/signup/"]').click(timeout=5000, no_wait_after=True)
+            page.wait_for_function(ORDINARY_SETTLED, arg="/accounts/signup/", timeout=10000)
+            left, now, flag = page.evaluate(ORDINARY_READ)
+            clicks, went = (left or {}).get("clicks") or [], (left or {}).get("left") or {}
+            first, second = clicks[-2:] if len(clicks) >= 2 else ({}, {})
+            if not first.get("taken") or second.get("taken") is not False or went.get("at", 0) - second.get("at", 0) > 300 or went.get("flag") != "1":
+                problems.append(f"{label}: the mark should start the fade and Sign up go at once, flagged; it read clicks {left and left.get('clicks')}, went {went}")
+            problems.extend(ordinary_arrival_findings(label, now, flag, faded=True))
+            if any(url.rstrip("/") == base_url.rstrip("/") for url in navigations):
+                problems.append(f"{label}: the threshold, which Sign up overtook, was still asked for ({navigations})")
+        except PlaywrightError as error:
+            problems.append(f"{label}: {error.message.splitlines()[0]}")
+    problems += [f"{label}: console error: {error}" for error in errors]
+    context.close()
+
+    # A change in place overtakes an ordinary load still fading out: the Docs from the menu, then the mark (the threshold is About's family). The threshold
+    # comes in place and the Docs are never asked for.
+    context = context_for()
+    page, errors = open_page(context, base_url + "/about/")
+    navigations = []
+    page.on("request", lambda request: navigations.append(request.url) if request.is_navigation_request() and request.frame == page.main_frame else None)
+    page.evaluate("() => { window.stayedPut = true; }")
+    label = "ordinary loads: the Docs from the menu and then the mark while About fades out"
+    if try_click(problems, page, '#shell-menu a[href="/docs/"]', label, no_wait_after=True):
+        try:
+            page.wait_for_function(part_way, timeout=5000)
+            page.locator(".shell-corner--top-left .lockup").click(timeout=5000)
+            page.wait_for_function("""() => location.pathname === '/' && document.querySelector('[data-threshold-line]')
+                && !document.querySelector('main').classList.contains('is-leaving') && getComputedStyle(document.querySelector('main')).opacity === '1'""", timeout=10000)
+            page.wait_for_timeout(FADE_MS * 3)   # the Docs would have been asked for by now
+            state = page.evaluate("() => ({ stayed: window.stayedPut === true, flag: sessionStorage.getItem('veilfile-faded-nav'), path: location.pathname })")
+            if not state["stayed"] or state["flag"] or state["path"] != "/" or any("/docs/" in url for url in navigations):
+                problems.append(f"{label}: the threshold should come in place with no flag and the Docs never asked for; it read {state}, asked for {navigations}")
+        except PlaywrightError as error:
+            problems.append(f"{label}: {error.message.splitlines()[0]}")
+    problems += [f"{label}: console error: {error}" for error in errors]
+    context.close()
+
+    # An ordinary load overtakes a change in place still on its way: Plans from the menu with its page held, then the Docs from the menu, then Plans' page let
+    # go. The Docs come, and Plans is never swapped in: the page that went was About, faded out.
+    context = context_for()
+    held = []
+    context.route("**/plans/", lambda route: held.append(route) if route.request.resource_type == "fetch" else route.continue_())
+    page, errors = open_page(context, base_url + "/about/")
+    label = "ordinary loads: Plans in place, held on its way, and then the Docs from the menu"
+    set_menu(page, True)
+    if try_click(problems, page, '#shell-menu a[href="/plans/"]', label):
+        for _ in range(100):
+            if held:
+                break
+            page.wait_for_timeout(50)
+        if not held:
+            problems.append(f"{label}: Plans' page was never asked for, so there was no change in place to overtake")
+        elif try_click(problems, page, '#shell-menu a[href="/docs/"]', label, no_wait_after=True):
+            page.wait_for_function(part_way, timeout=5000)
+            for route in held:
+                route.continue_()
+            try:
+                page.wait_for_function(ORDINARY_SETTLED, arg="/docs/", timeout=10000)
+                left, now, flag = page.evaluate(ORDINARY_READ)
+                went = (left or {}).get("left") or {}
+                if went.get("path") != "/about/" or not went.get("leaving") or went.get("opacity", 1) > 0.02:
+                    problems.append(f"{label}: the Docs should overtake Plans, which is never swapped in; the page went from {went.get('path')} with <main> at "
+                                    f"opacity {went.get('opacity')} (is-leaving: {went.get('leaving')})")
+                problems.extend(ordinary_arrival_findings(label, now, flag, faded=True))
+            except PlaywrightError as error:
+                problems.append(f"{label}: never came to the Docs: {error.message.splitlines()[0]}")
+    problems += [f"{label}: console error: {error}" for error in errors]
+    context.close()
+
+    # The next page's shell.js late: <main> stays hidden from the first frame until it comes, then fades in (never shown and blinked out). Failing: <main> shows.
+    for failure in ("late", "failing"):
+        context = context_for()
+        holding, held = [False], []
+
+        def holder(failure):
+            # One parameter only: Playwright hands a handler (route, request) for every parameter it names.
+            def hold(route):
+                if not holding[0]:
+                    return route.continue_()
+                return held.append(route) if failure == "late" else route.abort()
+            return hold
+
+        context.route(SHELL_SCRIPT, holder(failure))
+        page, errors = open_page(context, base_url + "/about/")
+        holding[0] = True
+        label = f"ordinary loads: About to the Docs with the Docs' shell.js {failure}"
+        if try_click(problems, page, '#shell-menu a[href="/docs/"]', label, no_wait_after=True):
+            try:
+                if failure == "late":
+                    page.wait_for_function("() => window.__ordinary && window.__ordinary.path === '/docs/' && window.__ordinary.frames.length >= 20", timeout=10000)
+                    early = page.evaluate("() => window.__ordinary.frames.map((frame) => frame.opacity)")
+                    if not early or max(early) > 0.01:
+                        problems.append(f"{label}: <main> showed (opacity up to {max(early or [None])}) before shell.js came; it should stay hidden and fade in once it runs")
+                    holding[0] = False
+                    for route in held:
+                        route.continue_()
+                    page.wait_for_function(ORDINARY_SETTLED, arg="/docs/", timeout=10000)
+                    left, now, flag = page.evaluate(ORDINARY_READ)
+                    problems.extend(ordinary_arrival_findings(label, now, flag, faded=True))
+                else:
+                    page.wait_for_function("""() => location.pathname === '/docs/' && !document.documentElement.classList.contains('js')
+                        && getComputedStyle(document.querySelector('main')).opacity === '1'""", timeout=10000)
+            except PlaywrightError as error:
+                problems.append(f"{label}: {error.message.splitlines()[0]}")
+        problems += [f"{label}: console error: {error}" for error in errors if failure == "late" or ("shell.js" not in error and "net::ERR_FAILED" not in error)]
+        context.close()
+
+    # A load that brings no page (a 204, or a download): the page stays, so after shell.js has waited for one (FETCH_TIMEOUT_MS, 8 s) <main> is given back and
+    # the flag cleared.
+    context = context_for()
+    context.route("**/docs/", lambda route: route.fulfill(status=204) if route.request.resource_type == "document" else route.continue_())
+    page, errors = open_page(context, base_url + "/about/")
+    label = "ordinary loads: About to an address that answers 204"
+    if try_click(problems, page, '#shell-menu a[href="/docs/"]', label, no_wait_after=True):
+        try:
+            page.wait_for_function("""() => location.pathname === '/about/' && !document.querySelector('main').classList.contains('is-leaving')
+                && getComputedStyle(document.querySelector('main')).opacity === '1' && sessionStorage.getItem('veilfile-faded-nav') === null
+                && window.__ordinary.frames.some((frame) => frame.leaving)""", timeout=14000)
+        except PlaywrightError:
+            problems.append(f"{label}: <main> was not given back with the flag cleared within 14 s; the page stays when no page comes in its place")
+    problems += [f"{label}: console error: {error}" for error in errors]
+    context.close()
+    return problems
+
+
 def settle_on(page, path, heading):
     """Wait for an in-place change to arrive at a chapter and finish cross-fading (or fading back in); False if it never arrives."""
     try:
@@ -8463,6 +8852,7 @@ def run_pages(browser, base_url, session_key, out, device):
     problems += timed("pages", grain_scale_problems, browser, base_url, session_key)
     problems += timed("pages", code_block_problems, browser, base_url, session_key)
     problems += timed("pages", corner_type_problems, browser, base_url, session_key)
+    problems += timed("pages", ordinary_fade_problems, browser, base_url, session_key)
     return problems
 
 
@@ -9101,7 +9491,9 @@ DASH_DIRECT = """async (address) => { const loaded = new DOMParser().parseFromSt
 # A change in place has landed: the address, the new <h1> (the old one was marked), focus on it (the last thing shell.js does) and no cross-fade still running. A whole load has: the address and readyState.
 DASH_ARRIVED = """([path, search]) => location.pathname === path && location.search === search && !document.querySelector('main h1[data-before]')
   && document.activeElement === document.querySelector('main h1') && !document.getAnimations().some((a) => a.playState === 'running' || a.playState === 'pending')"""
-DASH_LOADED = """([path, search]) => location.pathname === path && (search === null || location.search === search) && !document.querySelector('main h1[data-before]') && document.readyState === 'complete'"""
+# A whole load has come once its <main> is at full strength: a page reached by an ordinary load fades in (spec 4.5), and axe, a screenshot or a read of the page must not meet it half way.
+DASH_LOADED = """([path, search]) => location.pathname === path && (search === null || location.search === search) && !document.querySelector('main h1[data-before]') && document.readyState === 'complete'
+  && (() => { const main = document.querySelector('main'); return !main || (!main.classList.contains('is-leaving') && !document.documentElement.hasAttribute('data-arriving') && getComputedStyle(main).opacity === '1'); })()"""
 # The Sign out form of the menu, and the words of the menu's links and button as they are set.
 SIGN_OUT_FORM = """() => { const form = document.querySelector('#shell-menu form'), button = form && form.querySelector('button'), token = form && form.querySelector('input[name=csrfmiddlewaretoken]');
   const set = (e) => { const s = getComputedStyle(e); return [s.fontFamily, s.fontSize, s.letterSpacing, s.textTransform]; };
