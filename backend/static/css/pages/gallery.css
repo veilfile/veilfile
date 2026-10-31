@@ -1,5 +1,0 @@
-/* The social cards gallery: one page's grid, in the shell's tokens. */
-.gallery { display: grid; gap: var(--space-4); grid-template-columns: 1fr; margin-top: var(--space-4); }
-.gallery img { display: block; width: 100%; height: auto; border: 1px solid var(--hair); }
-@media (min-width: 600px) { .gallery { grid-template-columns: repeat(2, 1fr); } }
-@media (min-width: 1000px) { .gallery { grid-template-columns: repeat(3, 1fr); } }

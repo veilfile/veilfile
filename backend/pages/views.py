@@ -86,11 +86,6 @@ def chapter(request, name):
     return render(request, f"chapters/{name}.html", CHAPTER_CONTEXT.get(name))
 
 
-def gallery(request):
-    """The social cards gallery (unlisted): the nine social cards on the shell, with no menu or sitemap entry."""
-    return render(request, "pages/gallery.html")
-
-
 def plans(request):
     """Plans (spec 4.3): the four plans from drop_core/plans.py, each a link into sign-up with it chosen."""
     cards = plan_cards()
