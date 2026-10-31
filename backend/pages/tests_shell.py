@@ -254,43 +254,50 @@ class MenuStartsClosedTests(SimpleTestCase):
 
 class MotionCssTests(SimpleTestCase):
     def test_motion_off_stops_animations(self):
+        # Motion off stops every CSS transition and animation; the menu has none of its own (its fade is shell.js' driver, which instant() takes to its end at once).
         base = (STATIC / "css/base.css").read_text(encoding="utf-8")
-        menu = (STATIC / "css/components/menu.css").read_text(encoding="utf-8")
+        menu = re.sub(r"/\*.*?\*/", "", (STATIC / "css/components/menu.css").read_text(encoding="utf-8"), flags=re.S)
         self.assertIn('[data-motion="off"] *,', base)
-        self.assertIn(':root:not([data-motion="off"]) .menu__list.is-open li', menu)
+        for word in ("transition", "animation", "@keyframes"):
+            self.assertNotIn(word, menu, f"menu.css: no {word}; the menu's fade, at every width, is --sheet, advanced per drawn frame by shell.js")
 
 
 class PhoneSheetCssTests(SimpleTestCase):
-    """The phone menu's sheet (spec 4.4): a surface of the page's ground masked to fade across the left half, and a fade in and out whose
-    lengths and easings are earendil.com's, as ONE value, --sheet, that shell.js advances once per drawn frame and CSS only reads:
-    the links' opacity and move, the paper the cloth draws and the page's fade-out under the right half all follow it, so none of them can
-    finish between two late frames (a CSS transition, an animation or a curve timed from a clock can: CI's WebKit blinked). The browser checks
-    (phone_sheet_problems, cloth_menu_sheet_problems, sheet_slow_frames_problems) read what the browser does with these rules."""
+    """The phone menu's sheet (spec 4.4): a surface of the page's ground masked to fade across the left half, and a fade in and out paced like
+    Come in (.7s each way, ease), as ONE value, --sheet, that shell.js advances once per drawn frame and CSS only reads: the links' opacity and
+    move, the paper the cloth draws and the page's fade-out under the right half all follow it, so none of them can finish between two late
+    frames (a CSS transition, an animation or a curve timed from a clock can: CI's WebKit blinked). From 64rem up the column fades by the same
+    value. The browser checks (phone_sheet_problems, cloth_menu_sheet_problems, sheet_slow_frames_problems) read what the browser does with these rules."""
 
     def setUp(self):
         self.menu = (STATIC / "css/components/menu.css").read_text(encoding="utf-8")
         self.base = (STATIC / "css/base.css").read_text(encoding="utf-8")
+        self.rules = re.sub(r"/\*.*?\*/", "", self.menu, flags=re.S)
         self.phone = self.menu[self.menu.index("@media (max-width: 63.99rem)"):]
         self.phone_rules = re.sub(r"/\*.*?\*/", "", self.phone, flags=re.S)
+        self.every_width = self.rules[:self.rules.index("@media (max-width: 63.99rem)")]
 
-    def test_the_sheets_opacity_and_the_groups_move_are_read_from_the_one_value(self):
-        # opacity .01 at 0, so that WebKit paints the sheet from its first frame (it does not paint a layer at 0), up to 1; the groups come from
-        # 6px up into place. Only the sheet in the corner: a menu shown in the page (the catalog's samples) has no driver and stays as it is.
-        self.assertRegex(self.phone_rules, r"\.js \.shell-corner \.menu__list \{\s*opacity: max\(\.01, var\(--sheet\)\);\s*\}")
+    def test_the_menus_opacity_and_the_groups_move_are_read_from_the_one_value(self):
+        # opacity .01 at 0, so that WebKit paints the sheet from its first frame (it does not paint a layer at 0), up to 1, at every width: the
+        # column from 64rem up fades by it too. Below 64rem the groups come from 6px up into place; the column does not move, as Come in moves
+        # nothing. Only the menu in the corner: a menu shown in the page (the catalog's samples) has no driver and stays as it is.
+        self.assertRegex(self.every_width, r"\.js \.shell-corner \.menu__list \{\s*opacity: max\(\.01, var\(--sheet\)\);\s*\}")
+        self.assertNotIn("@media (min-width: 64rem)", self.every_width, "menu.css: the menu's opacity rule is for every width, the column's included")
         self.assertRegex(self.phone_rules, r"\.js \.shell-corner \.menu__group \{\s*transform: translateY\(calc\(\(1 - var\(--sheet\)\) \* -6px\)\);\s*\}")
+        self.assertNotIn("translateY", self.every_width, "menu.css: only the phone sheet's links move")
 
-    def test_css_times_nothing_about_the_sheet(self):
-        # A transition, an animation or a keyframe is a function of time and can be over between two late frames; the driver is the only clock.
+    def test_css_times_nothing_about_the_menu(self):
+        # A transition, an animation or a keyframe is a function of time and can be over between two late frames; the driver is the only clock, at every width.
         for word in ("transition", "animation", "@keyframes", "@starting-style", "allow-discrete", "is-shown", "will-change"):
-            self.assertNotIn(word, self.phone_rules, f"menu.css: the phone sheet's block has no {word}; --sheet, advanced per drawn frame by shell.js, is all of its fade")
-        self.assertNotRegex(self.phone_rules, r"\.menu__list(?:\:not\(\.is-open\)|\.is-open)[^{]*\{[^}]*opacity", "menu.css: the sheet's opacity is not set by its open state any more")
+            self.assertNotIn(word, self.rules, f"menu.css has no {word}; --sheet, advanced per drawn frame by shell.js, is all of the menu's fade")
+        self.assertNotRegex(self.rules, r"\.menu__list(?:\:not\(\.is-open\)|\.is-open)[^{]*\{[^}]*opacity", "menu.css: the menu's opacity is not set by its open state any more")
 
-    def test_a_closing_sheet_takes_no_pointer(self):
-        # is-open stays until the close has run, so the sheet is displayed while MENU already says it is shut: it must not take the tap that
-        # belongs to the page behind it. Only with the script: components/menu.html renders the toggle with aria-expanded="false" as the list's
-        # sibling, so without .js (no JavaScript, shell.js not loading or throwing) the links on the page would take no tap at all.
-        self.assertRegex(self.phone_rules, r'\.js \.menu__toggle\[aria-expanded="false"\] \+ \.menu__list \{\s*pointer-events: none;\s*\}')
-        self.assertNotRegex(self.phone_rules, r'(?<!\.js )\.menu__toggle\[aria-expanded="false"\] \+ \.menu__list', "menu.css: the closing sheet's pointer rule is scoped to .js; without it the menu's links are the page's and take taps")
+    def test_a_closing_menu_takes_no_pointer(self):
+        # is-open stays until the close has run, so the sheet, or the column, is displayed while MENU already says it is shut: it must not take
+        # the tap that belongs to the page behind it. Only with the script: components/menu.html renders the toggle with aria-expanded="false" as
+        # the list's sibling, so without .js (no JavaScript, shell.js not loading or throwing) the links on the page would take no tap at all.
+        self.assertRegex(self.every_width, r'\.js \.menu__toggle\[aria-expanded="false"\] \+ \.menu__list \{\s*pointer-events: none;\s*\}')
+        self.assertNotRegex(self.rules, r'(?<!\.js )\.menu__toggle\[aria-expanded="false"\] \+ \.menu__list', "menu.css: the closing menu's pointer rule is scoped to .js; without it the menu's links are the page's and take taps")
         self.assertIn('aria-expanded="false"', (STATIC.parent / "templates/components/menu.html").read_text(encoding="utf-8"),
                       "components/menu.html renders the toggle shut, which is why the rule above needs .js")
 
@@ -310,10 +317,10 @@ class PhoneSheetCssTests(SimpleTestCase):
     def test_the_page_stays_put_while_the_sheet_is_open(self):
         self.assertRegex(self.phone, r"html:has\(\.menu__list\.is-open\) \{\s*overflow: hidden;")
 
-    def test_the_items_fade_one_by_one_only_from_64rem(self):
-        self.assertNotIn("menu-item-in", self.phone)
-        wide = self.menu[self.menu.index("@media (min-width: 64rem)"):self.menu.index("@media (max-width: 63.99rem)")]
-        self.assertIn(':root:not([data-motion="off"]) .menu__list.is-open li', wide)
+    def test_the_items_do_not_fade_one_by_one_at_any_width(self):
+        # the menu fades as one piece, the column as the sheet does, as Come in fades (the owner's ask, 2026-10-31)
+        self.assertNotIn("menu-item-in", self.menu)
+        self.assertNotRegex(self.rules, r"\.menu__list[^{]*\bli\b[^{]*\{", "menu.css: nothing is set on the menu's items one by one")
 
 
 class TapHighlightTests(SimpleTestCase):
@@ -363,12 +370,17 @@ class StaleWordsTests(SimpleTestCase):
             with self.subTest(file=name):
                 self.assertIsNone(stale.search(text), f"{name}: a change in place does not take the sheet away at once; only one that cross-fades does (a link chosen from the sheet closes it by its driver)")
 
-    def test_the_change_fade_token_says_what_the_sheets_path_adds_up_to(self):
+    def test_the_change_fade_token_says_what_the_sheets_path_takes(self):
+        # Every change is paced like Come in (--fade), which fades its line out over .7s and then the install line in over .7s: a change from the
+        # sheet fades the old content out with the sheet's close and the new in after it, each as long as the token, as each half of a fade out and
+        # in is where there is no view transition.
         tokens = (STATIC / "css/tokens.css").read_text(encoding="utf-8")
         line = next(line for line in tokens.splitlines() if "--change-fade:" in line)
-        self.assertIn("(.18s)", line, "static/css/tokens.css: --change-fade's comment gives the length of the sheet path's fade out")
-        self.assertIn(".17s", line, "static/css/tokens.css: --change-fade's comment gives the length of the sheet path's fade in, which with the fade out sums to it")
-        self.assertEqual(round(.18 + .17, 2), float(re.search(r"--change-fade:\s*([\d.]+)s", line).group(1)))
+        token = float(re.search(r"--change-fade:\s*([\d.]+)s", line).group(1))
+        self.assertEqual(token, float(re.search(r"--fade:\s*([\d.]+)s", tokens).group(1)), "static/css/tokens.css: a change in place is paced like Come in (--fade)")
+        self.assertIn(f"over the sheet's close ({token:g}s)".replace("0.", "."), line, "static/css/tokens.css: --change-fade's comment gives the length of the sheet path's fade out")
+        self.assertIn(f"the new in over another {token:g}s".replace("0.", "."), line, "static/css/tokens.css: --change-fade's comment gives the length of the sheet path's fade in")
+        self.assertNotRegex(line, r"\.35s|\.18s|\.17s|sum to it", "static/css/tokens.css: --change-fade's comment still gives the old lengths")
 
 
 class PhoneSheetDriverTests(SimpleTestCase):
@@ -394,8 +406,14 @@ class PhoneSheetDriverTests(SimpleTestCase):
     def test_a_step_is_the_frames_share_of_the_fade_and_never_more_than_a_quarter(self):
         self.assertRegex(self.driver, r"Math\.min\(\.25, \(time - \(last \|\| time\)\) / ms\)",
                          "static/js/shell.js: a step is min(.25, dt / the fade's length), 0 for the first frame of a fade (last is 0)")
-        self.assertRegex(self.menu, r"\}, \[240, 5\], \[180, 1\.7\]\);", "static/js/shell.js: the sheet's lengths are 240 ms opening and 180 ms closing")
         self.assertRegex(self.driver, r"to = goal;\s*last = 0;", "static/js/shell.js: a fade begun or turned round has no time behind its first step")
+
+    def test_the_menu_opens_and_closes_over_come_ins_fade(self):
+        # The owner's ask (2026-10-31): the menu's transitions are paced like Come in's, the --fade token (.7s), opening and closing alike.
+        found = re.search(r"\}, (\d+)\);\n  if \(isShellMenu\)", self.menu)
+        self.assertTrue(found, "static/js/shell.js: the menu's driver is driver(write, ms)")
+        come_in = re.search(r"--fade:\s*([\d.]+)s", (STATIC / "css/tokens.css").read_text(encoding="utf-8"))
+        self.assertEqual(int(found.group(1)), round(float(come_in.group(1)) * 1000), "static/js/shell.js: the menu fades in and out over Come in's --fade")
 
     def test_a_step_is_a_function_of_the_frame_not_of_a_clock(self):
         # one step for each frame time, whoever asks first (the cloth is handed the step; which of its callback and the driver's own comes first in a frame does not matter)
@@ -405,18 +423,16 @@ class PhoneSheetDriverTests(SimpleTestCase):
             self.assertNotIn("Date.now", part)
             self.assertNotIn("setTimeout", part, "static/js/shell.js: nothing in the driver or the menu is timed by a timer")
 
-    def test_the_curves_are_polynomials_of_the_steps_progress_and_a_turn_starts_from_the_value_it_has(self):
-        # v = 1 - q ** k, q the share of the fade still to go: k = 5 is cubic-bezier(.22, 1, .36, 1) within .0114 and k = 1.7 is ease-in (as the
-        # opacity falls) within .010 (SHEET_EASE_ERROR in the site checks measures both); q is recovered from v each step, so a turn-around
-        # neither snaps nor jumps
-        self.assertIn("const [ms, k] = to ? opening : closing;", self.driver)
-        self.assertIn("q = (1 - v) ** (1 / k) - ", self.driver, "static/js/shell.js: the progress along the curve now is recovered from the value, so a reversal starts from where the sheet is")
-        self.assertIn("v = 1 - Math.min(1, Math.max(0, q)) ** k;", self.driver)
+    def test_the_curve_is_one_easing_rising_or_falling_and_a_turn_starts_from_the_value_it_has(self):
+        # What is left to go is (1 - p ** a) ** b, p the share of the fade that has run, rising (v = 1 - it) or falling (v = it), as CSS applies one
+        # easing to a rise and a fall; p is recovered from v each step, so a turn-around neither snaps nor jumps
+        self.assertIn("const p = (1 - Math.abs(to - v) ** (1 / 3.68)) ** (1 / 1.48) + ", self.driver,
+                      "static/js/shell.js: the progress along the curve now is recovered from the value, so a reversal starts from where the sheet is")
+        self.assertIn("v = Math.abs(to - (1 - Math.min(1, p) ** 1.48) ** 3.68);", self.driver)
 
-    def test_the_polynomial_curves_are_close_to_earendils(self):
-        # How close the driver's v = 1 - q ** k are to the CSS curves they stand for, over the whole fade, in opacity: opening, k against
-        # cubic-bezier(.22, 1, .36, 1) (q = 1 - s, s the share of the 240 ms); closing, k against ease-in, cubic-bezier(.42, 0, 1, 1), as the opacity
-        # falls (q = c, c the share of the 180 ms). The exponents are read from shell.js.
+    def test_the_curve_is_close_to_come_ins_ease(self):
+        # How close the driver's 1 - (1 - p ** a) ** b is to CSS's ease, cubic-bezier(.25, .1, .25, 1), which Come in fades by (base.css), over the whole
+        # fade, in opacity: the same both ways, since a fall is 1 minus the rise. The exponents are read from shell.js.
         def bezier(x1, y1, x2, y2):
             def curve(x):
                 low, high = 0.0, 1.0
@@ -426,29 +442,28 @@ class PhoneSheetDriverTests(SimpleTestCase):
                 t = (low + high) / 2
                 return 3 * (1 - t) ** 2 * t * y1 + 3 * (1 - t) * t ** 2 * y2 + t ** 3
             return curve
-        found = re.search(r"\}, \[\d+, ([\d.]+)\], \[\d+, ([\d.]+)\]\);", self.menu)
-        self.assertTrue(found, "static/js/shell.js: the sheet's exponents (driver(write, [opening ms, k], [closing ms, k]))")
-        opening_k, closing_k = float(found.group(1)), float(found.group(2))
-        opening, easing = bezier(0.22, 1, 0.36, 1), bezier(0.42, 0, 1, 1)
+        found = re.search(r"Math\.min\(1, p\) \*\* ([\d.]+)\) \*\* ([\d.]+)\);", self.driver)
+        self.assertTrue(found, "static/js/shell.js: the curve's exponents (v = Math.abs(to - (1 - Math.min(1, p) ** a) ** b))")
+        a, b = float(found.group(1)), float(found.group(2))
+        self.assertIn(f"** (1 / {b:g})) ** (1 / {a:g})", self.driver, "static/js/shell.js: the progress is recovered by the same curve's inverse")
+        ease = bezier(0.25, 0.1, 0.25, 1)
         grid = [index / 1000 for index in range(1001)]
-        off_opening = max(abs(1 - (1 - share) ** opening_k - opening(share)) for share in grid)
-        off_closing = max(abs(1 - share ** closing_k - (1 - easing(share))) for share in grid)
-        self.assertLess(off_opening, 0.012, f"static/js/shell.js: 1 - q ** {opening_k} lies {off_opening:.4f} of opacity from cubic-bezier(.22, 1, .36, 1)")
-        self.assertLess(off_closing, 0.012, f"static/js/shell.js: 1 - q ** {closing_k} lies {off_closing:.4f} of opacity from ease-in")
-        # and these are the best of their kind: a neighbouring exponent is no closer (the figures in spec 4.4 and AGENTS.md are .0114 and .010)
-        for neighbour in (opening_k - 0.5, opening_k + 0.5):
-            self.assertGreater(max(abs(1 - (1 - share) ** neighbour - opening(share)) for share in grid), off_opening)
-        for neighbour in (closing_k - 0.1, closing_k + 0.1):
-            self.assertGreater(max(abs(1 - share ** neighbour - (1 - easing(share))) for share in grid), off_closing)
+        eased = [ease(share) for share in grid]
+        off = lambda a, b: max(abs(1 - (1 - share ** a) ** b - value) for share, value in zip(grid, eased))
+        self.assertLess(off(a, b), 0.023, f"static/js/shell.js: 1 - (1 - p ** {a}) ** {b} lies {off(a, b):.4f} of opacity from ease")
+        # and they are the best of their kind: a neighbouring pair is no closer (the figure in spec 4.4 and AGENTS.md is .0227)
+        for neighbour in ((a - 0.02, b), (a + 0.02, b), (a, b - 0.1), (a, b + 0.1)):
+            self.assertGreater(off(*neighbour), off(a, b), f"static/js/shell.js: the curve with {neighbour} is closer to ease")
 
     def test_the_sheet_is_displayed_until_the_close_has_run_and_the_old_two_steps_are_gone(self):
         self.assertIn('list.classList.toggle("is-open", to || v);', self.menu, "static/js/shell.js: is-open (display) stays until the value has reached 0")
         for old in ("is-shown", "showSheet"):
             self.assertNotIn(old, self.script, f"static/js/shell.js: no {old}; the fade is the driver's, not a second class two frames after the first")
 
-    def test_motion_off_a_change_that_cross_fades_and_a_wide_screen_jump_to_the_end(self):
-        self.assertIn("sheet.go(+open, atOnce || instant() || !PHONE.matches || !isShellMenu);", self.menu,
-                      "static/js/shell.js: at once, with Motion off or reduced motion, where the menu is a column, and for a menu shown in the page (it has no sheet)")
+    def test_motion_off_and_a_change_that_cross_fades_jump_to_the_end_and_a_wide_screen_fades(self):
+        # From 64rem up the column fades by the same driver as the sheet (the owner's ask, 2026-10-31: it used to open and close at once there)
+        self.assertIn("sheet.go(+open, atOnce || instant() || !isShellMenu);", self.menu,
+                      "static/js/shell.js: at once with Motion off or reduced motion, and for a menu shown in the page (it has no driver); the column fades like the sheet")
         self.assertRegex(self.menu, r'"veilfile:leaving", \(\) => \{\s*if \(isShellMenu && PHONE\.matches\) setOpen\(false, false, true\);',
                          "static/js/shell.js: a change that cross-fades takes the sheet away at once; one chosen from the sheet closes it by its driver")
 
@@ -537,20 +552,26 @@ class ChangeFromTheSheetScriptTests(SimpleTestCase):
         self.assertLess(self.change.index("holdMain(false);\n      fade.go(1);\n      // The menu follows"), self.change.index("heading.focus("),
                         "static/js/shell.js: an inert heading cannot take focus")
 
-    def test_both_fades_are_the_drivers_and_together_last_the_cross_fade(self):
-        found = re.search(r"const fade = driver\(\(v, to\) => \{(.*?)\}, \[(\d+), ([\d.]+)\], \[(\d+), ([\d.]+)\], 1\);", self.script, re.S)
-        self.assertTrue(found, "static/js/shell.js: <main>'s fade is the sheet's driver (const fade = driver(write, [opening ms, k], [closing ms, k]))")
-        write, coming, k_in, going, k_out = found.groups()
-        # out with the sheet, by the same lengths and curve: the two drivers see the same frames, so the two values are equal in every frame
-        self.assertEqual((int(going), float(k_out)), (180, 1.7))
-        # in: the --change-fade token (tokens.css) less what the old content took to go
+    def test_both_fades_are_the_drivers_and_each_lasts_the_cross_fade(self):
+        found = re.search(r"const fade = driver\(\(v, to, stepped\) => \{(.*?)\}, (\d+), 1\);", self.script, re.S)
+        self.assertTrue(found, "static/js/shell.js: <main>'s fade is the sheet's driver (const fade = driver(write, ms, 1))")
+        write, ms = found.groups()
+        # out with the sheet, by the same length and curve: the two drivers see the same frames, so the two values are equal in every frame
+        sheet = re.search(r"\}, (\d+)\);\n  if \(isShellMenu\)", self.script)
+        self.assertEqual(ms, sheet.group(1), "static/js/shell.js: the old content fades out with the sheet's close, by the same driver's length")
+        # in over as long: each half is the --change-fade token's length (tokens.css), as Come in fades its line out and then the install line in
         token = re.search(r"--change-fade:\s*([\d.]+)s", (STATIC / "css/tokens.css").read_text(encoding="utf-8"))
-        self.assertEqual(int(going) + int(coming), round(float(token.group(1)) * 1000), "static/js/shell.js: the fade out and the fade in last the cross-fade's length")
-        self.assertEqual(float(k_in), 5, "static/js/shell.js: the fade in is the sheet's opening curve")
+        self.assertEqual(int(ms), round(float(token.group(1)) * 1000), "static/js/shell.js: the fade out and the fade in each last the cross-fade's length")
         # nothing timed by CSS while the driver has <main>: a transition on its opacity would lag every step; given back at rest
-        self.assertIn('main.style.transition = driven ? "none" : "";', write)
+        self.assertIn('main.style.transition = driven || stepped ? "none" : "";', write)
         self.assertIn('main.style.opacity = driven ? v : "";', write)
         self.assertIn("const driven = v < 1 || !to;", write)
+        # and at the end of its own fade in, the opacity comes to rest before the transition is given back: given back together, the transition
+        # would fade the last step (the last value the driver wrote to 1) over --change-fade after the driver has finished. Only a frame's step:
+        # given back at once (a newer change, which fades <main> out with is-leaving in the same task) it fades from where <main> was.
+        self.assertRegex(write, r'if \(stepped && !driven\) \{\s*getComputedStyle\(main\)\.opacity;[^\n]*\n\s*main\.style\.transition = "";\s*\}',
+                         "static/js/shell.js: at the fade's own end the opacity takes effect (a style read) before the transition is given back")
+        self.assertIn("write(v, to, true);", self.script, "static/js/shell.js: the driver tells write when a frame's step made the value")
 
 
 class FacesScriptTests(SimpleTestCase):

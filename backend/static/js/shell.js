@@ -34,16 +34,17 @@ function holdMain(on) {
 // Loads the faces any page of this layout may show, so that no change waits on one (Faces). A promise for when they have.
 const loadFaces = () => Promise.all((document.body.dataset.faces || "").split("|").filter(Boolean).map((face) => document.fonts.load(face).catch(() => {})));
 
-// One value stepped once per drawn frame, for the sheet and for <main>'s fade (Sheet driver). write(v, to) is told each value.
-function driver(write, opening, closing, v = 0) {
+// One value stepped once per drawn frame over ms, for the menu and for <main>'s fade (Sheet driver). write(v, to, stepped) is told each value,
+// stepped when a frame's step made it.
+function driver(write, ms, v = 0) {
   let to = v, last = 0, rest = () => {};
   const step = (time) => {
     if (v !== to && time !== last) {
-      const [ms, k] = to ? opening : closing;
-      const q = (1 - v) ** (1 / k) - (to ? 1 : -1) * Math.min(.25, (time - (last || time)) / ms);
-      v = 1 - Math.min(1, Math.max(0, q)) ** k;
+      // ease, as Come in fades, rising or falling: what is left to go is (1 - p ** 1.48) ** 3.68, p the fade's progress, recovered from v
+      const p = (1 - Math.abs(to - v) ** (1 / 3.68)) ** (1 / 1.48) + Math.min(.25, (time - (last || time)) / ms);
+      v = Math.abs(to - (1 - Math.min(1, p) ** 1.48) ** 3.68);
       last = time;
-      write(v, to);
+      write(v, to, true);
     }
     return v;
   };
@@ -65,13 +66,17 @@ function driver(write, opening, closing, v = 0) {
   };
 }
 
-// <main>'s fade when a change is chosen from the phone sheet (Choosing): out with the sheet, in once the new page is there.
-const fade = driver((v, to) => {
+// <main>'s fade when a change is chosen from the phone sheet (Choosing): out with the sheet, in once the new page is there, each over --change-fade.
+const fade = driver((v, to, stepped) => {
   const main = document.querySelector("main");
   const driven = v < 1 || !to;
-  main.style.transition = driven ? "none" : "";
+  main.style.transition = driven || stepped ? "none" : "";
   main.style.opacity = driven ? v : "";
-}, [170, 5], [180, 1.7], 1);
+  if (stepped && !driven) {
+    getComputedStyle(main).opacity; // at its own end the opacity is at rest before the transition is given back, so CSS fades no last step
+    main.style.transition = "";
+  }
+}, 700, 1);
 
 function setUpMenu(nav) {
   const toggle = nav.querySelector("[data-menu-toggle]");
@@ -88,12 +93,12 @@ function setUpMenu(nav) {
     covered.forEach((part) => { part.inert = sheet || (away && part.localName === "main"); });
   };
   const shut = [];
-  // The sheet's fade (spec 4.4): one value, --sheet, stepped per drawn frame (Sheet driver).
+  // The menu's fade, the sheet's or the column's, over Come in's --fade (spec 4.4): one value, --sheet, stepped per drawn frame (Sheet driver).
   const sheet = driver((v, to) => {
     [list, ...list.children, ...covered].forEach((reader) => reader.style.setProperty("--sheet", v)); // not inherited: see base.css
     list.classList.toggle("is-open", to || v);
     if (!(to || v)) shut.splice(0).forEach((resolve) => resolve());
-  }, [240, 5], [180, 1.7]);
+  }, 700);
   if (isShellMenu) {
     sheetStep = sheet.step;
     closeSheet = () => setOpen(false, false);
@@ -102,7 +107,7 @@ function setUpMenu(nav) {
   }
   const setOpen = (open, returnFocus, atOnce) => {
     toggle.setAttribute("aria-expanded", String(open));
-    const rest = sheet.go(+open, atOnce || instant() || !PHONE.matches || !isShellMenu);
+    const rest = sheet.go(+open, atOnce || instant() || !isShellMenu);
     updateInert();
     if (open) loadFaces();
     if (!open && returnFocus) toggle.focus();
@@ -251,11 +256,11 @@ function instant() {
   return motion === "off" || (motion === null && REDUCE.matches);
 }
 
-// The --change-fade token (".35s") in ms; unreadable: 350.
+// The --change-fade token (".7s") in ms; unreadable: 700.
 function fadeMs() {
   const match = /^\s*([\d.]+)(m?s)\s*$/.exec(getComputedStyle(root).getPropertyValue("--change-fade"));
   const ms = match ? parseFloat(match[1]) * (match[2] === "s" ? 1000 : 1) : NaN;
-  return Number.isFinite(ms) ? ms : 350;
+  return Number.isFinite(ms) ? ms : 700;
 }
 
 async function changeTo(url, push, scroll = 0, sheeted = false) {
