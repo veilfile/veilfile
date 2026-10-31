@@ -1,0 +1,19 @@
+{% extends "layouts/chapter.html" %}
+{% load static %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block styles %}<link rel="stylesheet" href="{% static 'css/pages/gallery.css' %}">{% endblock %}
+{% block chapter %}
+<h1 class="chapter__title">Social cards</h1>
+<p>Nine cards for social posts, in the site's paper style.</p>
+<div class="gallery">
+<img src="{% static 'img/social/post-01.png' %}" alt="Veilfile card showing the push command, a share link, and the line a link that dies on its own" width="1080" height="1080">
+<img src="{% static 'img/social/post-02.png' %}" alt="Veilfile card with struck-through workarounds and the line none of these expire" width="1080" height="1080">
+<img src="{% static 'img/social/post-03.png' %}" alt="Veilfile card showing the push command, a share link, and the line revoke it sooner" width="1080" height="1080">
+<img src="{% static 'img/social/post-04.png' %}" alt="Veilfile card listing secret shapes and the line the scan is a brake, not a gate" width="1080" height="1080">
+<img src="{% static 'img/social/post-05.png' %}" alt="Veilfile card listing three tools and the line no custom code" width="1080" height="1080">
+<img src="{% static 'img/social/post-06.png' %}" alt="Veilfile card listing plans and the line the price is the price" width="1080" height="1080">
+<img src="{% static 'img/social/post-07.png' %}" alt="Veilfile card listing limits and the line the limits are deliberate" width="1080" height="1080">
+<img src="{% static 'img/social/post-08.png' %}" alt="Veilfile card with the line the key stays out of the transcript" width="1080" height="1080">
+<img src="{% static 'img/social/post-09.png' %}" alt="Veilfile card reading brand new, one operator, no paying customers yet" width="1080" height="1080">
+</div>
+{% endblock %}

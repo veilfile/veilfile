@@ -81,6 +81,10 @@ PAGES = (
          "Report a file that violates our terms by emailing abuse@veilfile.com with the link "
          "and details. We report apparent child sexual exploitation to NCMEC.",
          layout="reading"),
+    Page("gallery", "Social cards | Veilfile",
+         "Nine cards made for Veilfile's social posts, drawn in the site's paper style. "
+         "This page is not linked from anywhere on the site.",
+         in_sitemap=False, layout=""),
 )
 
 # The menu's three groups (spec 4.4). MENU[0] is the chapters, in the order the menu shows them.
