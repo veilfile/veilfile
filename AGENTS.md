@@ -580,14 +580,20 @@ npm and PyPI each trust one publisher, release.yml in this repository. npm 0.4.1
 
 ## Pricing changes
 
-Plan prices and caps are defined in `backend/drop_core/plans.py` (`PLANS`) and
-enforced from there. Stripe prices are separate objects in Stripe, wired via
-`STRIPE_PRICE_TEAM`, `STRIPE_PRICE_TEAMPLUS` and `STRIPE_PRICE_SCALE`, each mapped by name in
+Plan prices and caps are defined in `backend/drop_core/plans.py` (`PLANS`, and
+`ANNUAL_PRICE_USD` for yearly billing, ten months' price) and enforced from there: a
+yearly subscriber is on the same plan slug, with the same caps, as a monthly one.
+Stripe prices are separate objects in Stripe, wired via
+`STRIPE_PRICE_TEAM`, `STRIPE_PRICE_TEAMPLUS` and `STRIPE_PRICE_SCALE`, and yearly via
+`STRIPE_PRICE_TEAM_ANNUAL`, `STRIPE_PRICE_TEAMPLUS_ANNUAL` and `STRIPE_PRICE_SCALE_ANNUAL`,
+each mapped by name, by plan and interval, in
 `backend/drop_billing/account.py` (Team Plus's is `STRIPE_PRICE_TEAMPLUS`, the owner's choice, never the
 slug's `STRIPE_PRICE_TEAM_PLUS`); changing a price needs new Stripe
 prices (the owner does that) and then every place that advertises it. A test
 (`backend/drop_core/tests_fix_docs.py`) scans these and fails on any mismatch
-with `plans.py`:
+with `plans.py` (a price followed by `/yr`, `/year`, "a year" or "per year" is
+checked against `ANNUAL_PRICE_USD`, and a table row "Team (yearly)" against
+Team's caps):
 
 `README.md`, `SPEC.md`, `docs/API.md`, `docs/llms.txt`,
 `backend/docs/pages/*.md`,
@@ -722,8 +728,9 @@ How it works, Begin, Promises and Plans.
    gist?"; Plans' "Prices include tax. The price you see is the price you pay."
    and, in the cards that `backend/pages/plan_cards.py`
    writes, "Unlimited keys", the words around each figure ("N uploads a
-   month", "Links last up to N days", "N GB of storage", "$N a month"),
-   Free's price "$0" and Team's button "Choose Team"; and Begin's three
+   month", "Links last up to N days", "N GB of storage", "$N a month",
+   "$N a year, two months free"), Free's price "$0", Team's button "Choose
+   Team" and each paid plan's "Choose yearly"; and Begin's three
    headings ("Connect your agent", "Or use the command line", "Or plain
    HTTP", in that order; the test finds them with `.index()`, so a
    renamed one fails with a bare ValueError that names no

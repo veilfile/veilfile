@@ -9919,15 +9919,18 @@ def dashboard_billing_problems(browser, base_url, session_key, fixtures):
         dash_open(page, base_url, "/app/billing/")
         words = page.locator("main").inner_text()
         invoice = page.locator('main a[href^="https://invoice.stripe.com/"]')
+        # The Switch to Scale names are matched with "." where the label has "/" ("$12/mo"): Playwright 1.49 writes a pattern into its selector
+        # as /.../ without escaping a slash in it, and a "/" there ends the pattern (InvalidSelectorError, PR 14's first run).
         for ok, what in (("Your last payment failed" in words, "the stored past_due status shows no warning"),
                          ("waiting for payment" in words, "the switch waiting for payment is not shown (the session hint of the fixture)"),
                          (invoice.count() == 1 and invoice.get_attribute("target") == "_blank" and "noopener" in (invoice.get_attribute("rel") or ""), "Complete payment is not one link to Stripe's invoice opening in a new tab with rel=noopener"),
                          (page.get_by_role("button", name=re.compile(r"^Keep ")).count() == 1, "no Keep button for the plan held"),
-                         (page.get_by_role("link", name=re.compile(r"^Switch to Scale")).count() == 1, "no Switch to Scale link")):
+                         (page.get_by_role("link", name=re.compile(r"^Switch to Scale \(\$\d+.mo\)")).count() == 1, "no monthly Switch to Scale link"),
+                         (page.get_by_role("link", name=re.compile(r"^Switch to Scale \(\$\d+.yr\)")).count() == 1, "no yearly Switch to Scale link")):
             if not ok:
                 problems.append(f"/app/billing/ of the subscriber: {what}")
         problems += page_problems(page, "/app/billing/ of the subscriber at 1280px")
-        page.get_by_role("link", name=re.compile(r"^Switch to Scale")).click()
+        page.get_by_role("link", name=re.compile(r"^Switch to Scale \(\$\d+.mo\)")).click()
         label = "the switch confirmation page"
         dash_land(problems, page, "/app/billing/switch/scale/", None, label, in_place=False)
         found = page.evaluate("() => ({ heading: (document.querySelector('main h1') || { textContent: '' }).textContent.trim(), layout: document.body.dataset.layout || '', forms: document.querySelectorAll('main form[method=post] input[name=csrfmiddlewaretoken]').length })")

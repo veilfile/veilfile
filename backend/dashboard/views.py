@@ -135,18 +135,19 @@ def billing(request):
     """Billing: the plan, what Stripe says of it, what is over a limit and the ways to change plan. It reads the database and
     nothing else: billing.status makes no Stripe call, and nor does a GET of any billing address."""
     status = billing_account.status(request.user).body
-    pending = billing_page.pending_for(request.session, status["plan"])
+    pending = billing_page.pending_for(request.session, status["plan"], current_interval=billing_page.interval_of(status["billing_interval"]))
     return render(request, "dashboard/billing.html", billing_page.page_context(status, pending))
 
 
 @dashboard_view
 def billing_checkout(request):
-    """POST: start Stripe Checkout for the plan the form named. The browser is sent (303) to the address Stripe returned, if it
-    is an https one; anything else is one sentence on Billing. A GET does nothing and goes to Billing."""
+    """POST: start Stripe Checkout for the plan (and, if the form names one, the billing interval) the form named. The browser is
+    sent (303) to the address Stripe returned, if it is an https one; anything else is one sentence on Billing. A GET does nothing
+    and goes to Billing."""
     if request.method != "POST":
         return redirect("app-billing")
     try:
-        answer = billing_account.checkout(request.user, request.POST.get("plan", ""))
+        answer = billing_account.checkout(request.user, request.POST.get("plan", ""), request.POST.get("interval") or "month")
     except Exception:
         messages.error(request, billing_page.unexpected("checkout"))
         return redirect("app-billing")
@@ -177,41 +178,46 @@ def billing_portal(request):
 @dashboard_view
 @require_http_methods(["GET", "HEAD", "POST"])
 def billing_switch(request, plan):
-    """GET: the page that asks before a plan switch. POST: the switch. A plan that is not for sale is the shell's 404."""
-    if plan not in billing_page.paid_plans():
+    """GET: the page that asks before a plan switch. POST: the switch. The address names the plan, and ?interval=year a yearly
+    price (none is monthly); the confirmation form posts to its own address, so the interval rides along. A plan that is not for
+    sale, or an interval that is neither, is the shell's 404."""
+    interval = request.GET.get("interval", "month")
+    if not billing_page.for_sale(plan, interval):
         # Returned, not raised, so that dashboard_view puts its header on it as on every /app/ response.
         return not_found(request)
     if request.method == "POST":
-        return _switch_plan(request, plan)
-    return _confirm_switch(request, plan)
+        return _switch_plan(request, plan, interval)
+    return _confirm_switch(request, plan, interval)
 
 
-def _confirm_switch(request, plan):
-    """The confirmation page. It only shows a form; there is nothing to confirm without a subscription or for the plan held."""
+def _confirm_switch(request, plan, interval):
+    """The confirmation page. It only shows a form; there is nothing to confirm without a subscription or for the plan and
+    interval held."""
     status = billing_account.status(request.user).body
     if not status["has_subscription"]:
         messages.info(request, billing_page.NOT_SUBSCRIBED)
         return redirect("app-billing")
-    if status["plan"] == plan:
-        messages.info(request, billing_page.switch_result(plan, "unchanged"))
+    current_interval = billing_page.interval_of(status["billing_interval"])
+    if (status["plan"], current_interval) == (plan, interval):
+        messages.info(request, billing_page.switch_result(plan, "unchanged", interval))
         return redirect("app-billing")
-    return render(request, "dashboard/billing_switch.html", billing_page.switch_context(status["plan"], plan))
+    return render(request, "dashboard/billing_switch.html", billing_page.switch_context(status["plan"], plan, current_interval, interval))
 
 
-def _switch_plan(request, plan):
+def _switch_plan(request, plan, interval):
     """The switch. Plan state changes only inside billing.switch, from what Stripe returns (invariant 3); this keeps the
     unpaid-switch hint and turns the answer into the one line Billing shows."""
     try:
-        answer = billing_account.switch(request.user, plan)
+        answer = billing_account.switch(request.user, plan, interval)
     except Exception:
         messages.error(request, billing_page.unexpected("switch"))
         return redirect("app-billing")
     body = billing_page.body_of(answer)
     if answer.status == 200:
         billing_page.forget_pending(request.session)
-        messages.success(request, billing_page.switch_result(body.get("plan") or plan, body.get("status")))
+        messages.success(request, billing_page.switch_result(body.get("plan") or plan, body.get("status"), interval))
         return redirect("app-billing")
     if answer.status == 402 and body.get("code") == "payment_required":
-        billing_page.remember_pending(request.session, plan, body.get("invoice_url"))
+        billing_page.remember_pending(request.session, plan, body.get("invoice_url"), interval=interval)
     messages.error(request, billing_page.refusal(answer, billing_page.NO_SUCH_PLAN, "switch"))
     return redirect("app-billing")

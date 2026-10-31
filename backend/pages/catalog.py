@@ -54,7 +54,8 @@ def entries():
                        "sign_out": "catalog-not-a-token"},)),
         Entry("controls", "The appearance switch sits at the bottom left of every page and the motion switch (FX) at the bottom right, "
                           "each alone in its corner (a corner passes show). Here they are shown together, with no show."),
-        Entry("plan", "Each plan on the Plans chapter shows its name, price, limits and a link into sign-up. Here the plan is Team.",
+        Entry("plan", "Each plan on the Plans chapter shows its name, price, limits and a link into sign-up, and a paid plan also its yearly "
+                      "price and a link to choose that. Here the plan is Team.",
               {"plan": next(card for card in plan_cards() if card["slug"] == "team")}),
         Entry("install_line", "After Come in, the threshold shows tabs for MCP, npm and pip, a Copy button, and the line after Copy.",
               {"tabs": INSTALL_TABS, "id_prefix": "catalog-install"}),

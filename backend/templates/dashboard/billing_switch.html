@@ -1,17 +1,21 @@
 {% extends "layouts/form.html" %}
-{# Page: confirm a plan switch (spec 4.8). The figures come from the view, which reads plans.py (AGENTS.md, Pricing changes); the two sentences are the React dashboard's switchConfirmText. #}
+{# Page: confirm a plan switch (spec 4.8). The figures come from the view, which reads plans.py (AGENTS.md, Pricing changes); the upgrade and downgrade sentences are the React dashboard's switchConfirmText, and a switch between monthly and yearly billing has its own (billing_page.switch_change). #}
 {% block title %}Switch plan | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block form_page %}
-<h1>Do you want to switch to {{ target.name }} (${{ target.price }}/mo)?</h1>
-{% if upgrade %}
-<p>You'll be charged now for the prorated difference for the rest of this billing period, then ${{ target.price }}/mo from your next renewal. If that payment doesn't go through, you stay on {{ current.name }}.</p>
+<h1>Do you want to switch to {{ target.name }} (${{ target.price }}/{{ target.per }})?</h1>
+{% if change == "upgrade" %}
+<p>You'll be charged now for the prorated difference for the rest of this billing period, then ${{ target.price }}/{{ target.per }} from your next renewal. If that payment doesn't go through, you stay on {{ current.name }}.</p>
+{% elif change == "to_yearly" %}
+<p>Your billing becomes yearly from today. You'll be charged ${{ target.price }} now, less a credit for the unused part of your current month, then ${{ target.price }}/yr at each renewal. {% if lower %}Once it is paid, {{ target.name }} limits apply. Existing API keys and links are not removed. {% endif %}If that payment doesn't go through, you stay on {{ current.name }}, billed monthly.</p>
+{% elif change == "to_monthly" %}
+<p>Your billing becomes monthly from today. The unused part of your current year is credited against your first month at ${{ target.price }}/mo, and any credit left over goes toward your next invoices rather than back to your card. {% if lower %}{{ target.name }} limits apply as soon as the switch is made. Existing API keys and links are not removed. {% endif %}If a payment is due and doesn't go through, you stay on {{ current.name }}.</p>
 {% else %}
 <p>The unused part of your current period becomes a credit on your next invoices, and {{ target.name }} limits apply right away. Existing API keys and links are not removed.</p>
 {% endif %}
 <form method="post">
 {% csrf_token %}
-<button class="action interactive" type="submit">Switch to {{ target.name }}</button>
+<button class="action interactive" type="submit">Switch to {{ target.label }}</button>
 </form>
 <p class="form-links"><a class="label interactive" href="{% url 'app-billing' %}">Back to billing</a></p>
 {% endblock %}

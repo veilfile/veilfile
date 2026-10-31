@@ -18,7 +18,7 @@ from django.conf import settings
 from django.test import SimpleTestCase
 from django.urls import Resolver404, resolve
 
-from drop_core.plans import PLANS
+from drop_core.plans import ANNUAL_PRICE_USD, PLANS
 from drop_mcp.views import TOOLS
 
 REPO = Path(settings.BASE_DIR).parent
@@ -58,6 +58,11 @@ API_DOC_FILES = ["docs/API.md", "docs/llms.txt", "backend/docs/pages/api.md"]
 BANNED_CODES = ("artifact_not_found", "invalid_base64")
 
 NAME_TO_PLAN = {"Free": "free", "Team": "team", "Team Plus": "team_plus", "Scale": "scale"}
+# A table row for a plan billed yearly ("| Team (yearly) | $40/yr | ...") has the plan's caps, which the row must state as they are.
+YEARLY_ROW = re.compile(r"\s*\((?:yearly|annual)\)$")
+# What follows a yearly price: "$40/yr", "$40/year", "$40 a year", "$40 per year". Such a price is checked against ANNUAL_PRICE_USD,
+# not the monthly price_usd.
+YEARLY = re.compile(r"(?:/yr|/year|\s+a\s+year|\s+per\s+year)\b")
 # The names as a regex alternation, "Team Plus" before "Team" so that the longer name wins.
 PLAN_NAMES = "Free|Team Plus|Team|Scale"
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
@@ -78,15 +83,26 @@ def _num(text):
     return int(text.replace(",", ""))
 
 
-def _price_facts(text):
-    """(plan, dollars) pairs stated in ``text``."""
-    facts = []
+def _named_prices(text):
+    """(plan, dollars, yearly) for each price written after a plan's name: "Team $4", "Team ($4/month)", "| Team | $4/mo |",
+    "Team **$4/month**", and yearly, "Team $40/yr", "| Team (yearly) | $40/yr |"."""
     price = r"\$(\d+(?:\.\d+)?)"
-    # "Team $4", "Team ($4/month)", "| Team | $4/mo |", "Team **$4/month**"
     for m in re.finditer(r"\b(" + PLAN_NAMES + r")\b[^\n$0-9/]{0,20}" + price, text):
         if " to " in m.group(0):  # a range such as "Free to $12" (the landing description reads "Plans cost $0 to $12 a month.")
             continue
-        facts.append((NAME_TO_PLAN[m.group(1)], float(m.group(2))))
+        yield NAME_TO_PLAN[m.group(1)], float(m.group(2)), bool(YEARLY.match(text, m.end()))
+
+
+def _annual_price_facts(text):
+    """(plan, dollars) pairs for the yearly prices stated in ``text``."""
+    return [(plan, dollars) for plan, dollars, yearly in _named_prices(text) if yearly]
+
+
+def _price_facts(text):
+    """(plan, dollars) pairs for the monthly prices stated in ``text`` (a yearly one is _annual_price_facts')."""
+    facts = []
+    price = r"\$(\d+(?:\.\d+)?)"
+    facts.extend((plan, dollars) for plan, dollars, yearly in _named_prices(text) if not yearly)
     # "$4 Team / $12 Scale", "$6/mo Team Plus"
     for m in re.finditer(price + r"(?:/mo)?\s+(Team Plus|Team|Scale)\b", text):
         facts.append((NAME_TO_PLAN[m.group(2)], float(m.group(1))))
@@ -153,8 +169,9 @@ def _table_facts(text):
                 elif "keys" in c:
                     columns["keys"] = i
             continue
-        if columns and cells and cells[0] in NAME_TO_PLAN:
-            plan = NAME_TO_PLAN[cells[0]]
+        name = YEARLY_ROW.sub("", cells[0]) if cells else ""
+        if columns and name in NAME_TO_PLAN:
+            plan = NAME_TO_PLAN[name]
             for what, i in columns.items():
                 if i >= len(cells):
                     continue
@@ -201,6 +218,28 @@ class PlanCopyMatchesPlansTests(SimpleTestCase):
         # Guard against the regexes silently matching nothing.
         self.assertGreaterEqual(found, 25)  # 29 once the Stripe runbook moved to the private ops repository (it held 6)
 
+    def test_yearly_prices_match_plans(self):
+        found = 0
+        for path in _files(PLAN_COPY_GLOBS):
+            for plan, dollars in _annual_price_facts(_read(path)):
+                found += 1
+                self.assertIn(plan, ANNUAL_PRICE_USD, f"{path.relative_to(REPO)} states a yearly price for {plan}, which has none in plans.py")
+                self.assertEqual(
+                    dollars,
+                    float(ANNUAL_PRICE_USD[plan]),
+                    f"{path.relative_to(REPO)} states {plan} = ${dollars:g} a year, "
+                    f"but plans.py (ANNUAL_PRICE_USD) says ${ANNUAL_PRICE_USD[plan]}",
+                )
+        # Guard against the regexes silently matching nothing: the README, SPEC, API.md, llms.txt and How it works each state all three.
+        self.assertGreaterEqual(found, 15)
+
+    def test_every_plan_table_lists_every_yearly_price(self):
+        for rel in ("README.md", "docs/API.md", "backend/docs/pages/how-it-works.md"):
+            text = _read(REPO / rel)
+            facts = _annual_price_facts(text)
+            for plan, dollars in ANNUAL_PRICE_USD.items():
+                self.assertIn((plan, float(dollars)), facts, f"{rel}: the plan table is missing the yearly row for {plan}")
+
     def test_caps_match_plans(self):
         found = 0
         for path in _files(PLAN_COPY_GLOBS):
@@ -243,6 +282,13 @@ class PlanCopyMatchesPlansTests(SimpleTestCase):
                         facts,
                         f"{rel}: the plan table is missing {plan}/{what}",
                     )
+
+    def test_a_yearly_price_is_read_as_yearly_and_its_row_as_the_plans_caps(self):
+        text = ("| Plan | Price | Storage | API keys |\n| Team (yearly) | $40/yr | 25 GB | 5 |\n"
+                "Team Plus $60/yr, Scale ($120 a year), Team $4/mo, Scale $120 per year, Team **$40/year**")
+        self.assertEqual(_annual_price_facts(text), [("team", 40.0), ("team_plus", 60.0), ("scale", 120.0), ("scale", 120.0), ("team", 40.0)])
+        self.assertEqual(_price_facts(text), [("team", 4.0)])
+        self.assertEqual(_table_facts(text), [("team", "storage_gb", 25), ("team", "keys", 5)])
 
     def test_team_plus_is_read_as_its_own_plan(self):
         # "Team" alone must not swallow "Team Plus", or every Team Plus figure would be read as Team's.

@@ -3,7 +3,7 @@
 {% block title %}Checkout | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex">{% endblock %}
 {% block form_page %}
-<h1>Subscribe to the {{ plan_name }} plan (${{ price_usd }}/mo, tax included)</h1>
+<h1>Subscribe to the {{ plan_name }} plan (${{ price_usd }}/{{ per }}, tax included)</h1>
 <p>You're signed in as {{ user.get_username }}. Checkout opens on Stripe, and nothing is charged until you confirm there.</p>
 <form method="post">
 {% csrf_token %}

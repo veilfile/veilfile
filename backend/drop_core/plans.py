@@ -14,6 +14,11 @@ PLANS = {
     "scale": {"uploads": 10000, "ttl_days": 365, "keys": None, "price_usd": 12, "storage_gb": 100},
 }
 
+# Yearly billing of the paid plans: ten months' price for a year, so two months are free. Only the price and the billing
+# interval differ. A yearly subscriber is on the same plan, with the same caps, as a monthly one: every cap above is
+# enforced from PLANS whichever way the plan is paid. The Stripe prices are separate objects (drop_billing/account.py).
+ANNUAL_PRICE_USD = {"team": 40, "team_plus": 60, "scale": 120}
+
 
 def plan_name(slug):
     """A plan as the pages name it: its slug capitalised, with an underscore read as a space ("team_plus" is "Team Plus")."""

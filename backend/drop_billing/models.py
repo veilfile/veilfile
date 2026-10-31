@@ -20,6 +20,10 @@ class Subscription(models.Model):
     )
     status = models.CharField(max_length=32, blank=True, default="")
     current_period_end = models.DateTimeField(null=True, blank=True)
+    # "month" or "year", from the price the subscription's plan item is on (drop_billing.account._plan_and_interval);
+    # "" until a webhook or a read-back from Stripe has set it, and for a price that maps to no plan. The database keeps
+    # the default too (db_default), so a row inserted by code that predates the column, as during a deploy, still saves.
+    billing_interval = models.CharField(max_length=8, blank=True, default="", db_default="")
 
     def __str__(self):  # pragma: no cover - debug helper
         return f"Subscription({self.workspace_id}, {self.status})"

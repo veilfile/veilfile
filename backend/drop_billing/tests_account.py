@@ -98,6 +98,7 @@ class StatusTests(AccountCase):
                     "has_subscription": False,
                     "subscription_status": "",
                     "current_period_end": None,
+                    "billing_interval": "",
                 },
             ),
             f"{WHERE}: status() is the body of GET /api/v1/billing/status",

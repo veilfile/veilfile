@@ -13,6 +13,9 @@ Environment:
     STRIPE_PRICE_TEAM     - Price ID for the Team ($4/mo) subscription.
     STRIPE_PRICE_TEAMPLUS - Price ID for the Team Plus ($6/mo) subscription.
     STRIPE_PRICE_SCALE    - Price ID for the Scale ($12/mo) subscription.
+    STRIPE_PRICE_TEAM_ANNUAL, STRIPE_PRICE_TEAMPLUS_ANNUAL, STRIPE_PRICE_SCALE_ANNUAL
+                          - Price IDs for yearly billing of the same plans
+                            (Team $40/yr, Team Plus $60/yr, Scale $120/yr).
     DROP_BASE_URL         - Public base URL used for Stripe redirect URLs.
 
 Plan state is derived from Stripe, never from a single event: every webhook
@@ -135,6 +138,13 @@ def _sync_workspace(stripe_mod, workspace, event_customer=""):
 # ---------------------------------------------------------------------------
 
 
+def _interval(data):
+    """The billing interval a request body names. A body without one (every client written before yearly billing) is
+    monthly; anything else is passed on for ``account`` to refuse."""
+    interval = data.get("interval")
+    return "month" if interval in (None, "") else interval
+
+
 class CheckoutView(APIView):
     """Create a Stripe Checkout session for a paid plan subscription.
 
@@ -150,32 +160,32 @@ class CheckoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        plan = (request.data or {}).get("plan")
-        return answer_response(account.checkout(request.user, plan))
+        data = request.data or {}
+        return answer_response(account.checkout(request.user, data.get("plan"), _interval(data)))
 
 
-def create_checkout_session_for_user(user, plan):
-    """Create a Stripe Checkout session for user and plan.
+def create_checkout_session_for_user(user, plan, interval="month"):
+    """Create a Stripe Checkout session for user and plan, billed every interval.
 
     Returns (checkout_url, None) on success, or (None, error Response).
     Shared by the dashboard checkout API and the plan-aware signup flow.
     Refuses with 409 ``already_subscribed`` when Stripe already holds a live
     subscription for the workspace's customer.
     """
-    answer = account.checkout(user, plan)
+    answer = account.checkout(user, plan, interval)
     if answer.status == 200:
         return answer.body["checkout_url"], None
     return None, answer_response(answer)
 
 
-def paid_signup_redirect(user, plan):
-    """Where the plan-aware signup flow sends a user who picked a paid plan.
+def paid_signup_redirect(user, plan, interval="month"):
+    """Where the plan-aware signup flow sends a user who picked a paid plan (and, with ``?interval=year``, yearly billing).
 
     Stripe Checkout on success; the dashboard with ``billing=already_subscribed``
     for subscribers; otherwise the dashboard with ``billing=error`` (and an
     ERROR log line), where the user can retry.
     """
-    url, err = create_checkout_session_for_user(user, plan)
+    url, err = create_checkout_session_for_user(user, plan, interval)
     if url:
         return url
     data = err.data if isinstance(err.data, dict) else {}
@@ -192,7 +202,7 @@ def paid_signup_redirect(user, plan):
 
 
 class SwitchPlanView(APIView):
-    """Switch an existing subscription between Team, Team Plus and Scale in place.
+    """Switch an existing subscription between Team, Team Plus and Scale, monthly or yearly, in place.
 
     See ``account.switch`` for what it asks of Stripe.
 
@@ -204,8 +214,8 @@ class SwitchPlanView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        plan = (request.data or {}).get("plan")
-        return answer_response(account.switch(request.user, plan))
+        data = request.data or {}
+        return answer_response(account.switch(request.user, data.get("plan"), _interval(data)))
 
 
 class PortalView(APIView):
