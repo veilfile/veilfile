@@ -129,6 +129,7 @@ urlpatterns = [
     # Old address of Promises (spec 4.3): permanent, so search engines move it over.
     path("trust/", RedirectView.as_view(url="/promises/", permanent=True), name="trust-redirect"),
     path("about/", pages_views.chapter, {"name": "about"}, name="about"),
+    path("gallery/", pages_views.gallery, name="gallery"),
     path('', include('legal.urls')),
     path("app/components/", pages_views.component_catalog, name="component-catalog"),
     # The signed-in dashboard (spec 4.8): five sections, each a Django view. Anything else under /app/ is the shell's 404.
