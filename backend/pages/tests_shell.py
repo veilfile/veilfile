@@ -578,7 +578,8 @@ class OrdinaryLoadFadeScriptTests(SimpleTestCase):
     """An ordinary load fades too (spec 4.5): a link to a page outside this page's layout family, which shell.js does not change in place, fades <main>
     out over --change-fade (is-leaving), with the menu closing alongside if the link is in it. Then the page goes, and the next one fades in. Hidden from
     its first paint by the boot script, it fades in from shell.js. Which links change in place is not touched, and neither is a form's submit. Back and Forward,
-    a direct load and a reload never fade, and Motion off is instant. The browser check (ordinary_fade_problems) reads what the browser does with it."""
+    a direct load and a reload never fade, and Motion off is instant. A page whose load brings nothing in its place is given back, whichever link went, and
+    one that is only slow still fades in. The browser check (ordinary_fade_problems) reads what the browser does with it."""
 
     longMessage = False
 
@@ -622,9 +623,9 @@ class OrdinaryLoadFadeScriptTests(SimpleTestCase):
     def test_main_fades_out_by_is_leaving_and_the_menu_closes_with_it_and_then_the_page_goes(self):
         fade = self.leave[self.leave.index("event.preventDefault();"):]
         self.assertIn('main.classList.add("is-leaving");', fade, "static/js/shell.js: <main> fades out by is-leaving and its transition over --change-fade (base.css)")
-        self.assertIn('fadedOut(main, link.closest("#shell-menu") && closeSheet()).then(() => {', fade,
+        self.assertIn('await fadedOut(main, link.closest("#shell-menu") && closeSheet());', fade,
                       "static/js/shell.js: a link in the menu closes it by its driver while <main> fades, and the page goes once both are done")
-        self.assertRegex(fade, r"if \(change !== changes\) return;\n\s*fadeNext\(true\);\n\s*location\.assign\(url\.href\);",
+        self.assertRegex(fade, r"if \(change !== changes\) return;\n  \}\n  const went = leaving = \+\+changes;[^\n]*\n  fadeNext\(page\);\n  if \(fades\) location\.assign\(url\.href\);",
                          "static/js/shell.js: the page goes, flagged to fade in, unless a newer change has overtaken it")
         self.assertIn("const change = leaving = ++changes;", fade, "static/js/shell.js: an ordinary load is a change, so a newer one (a change in place, Back) overtakes it")
 
@@ -636,15 +637,21 @@ class OrdinaryLoadFadeScriptTests(SimpleTestCase):
 
     def test_a_newer_link_during_the_fade_goes_at_once(self):
         # The page is part faded out already: the newest link wins at once, by the browser, and the load overtaken never goes.
-        newer = re.search(r"if \(leaving === changes\) \{(.*?)\n  \}", self.leave, re.S)
-        self.assertTrue(newer, "static/js/shell.js: leave() knows an ordinary load is fading out (leaving === changes)")
-        self.assertRegex(newer.group(1), r"leaving = \+\+changes;[^\n]*\n\s*fadeNext\(page\);\n\s*return;",
+        self.assertIn("const fades = leaving !== changes;", self.leave, "static/js/shell.js: leave() knows an ordinary load is fading out (leaving === changes)")
+        held = self.leave[self.leave.index("  if (fades) {\n"):]
+        held = held[:held.index("\n  }\n")]
+        self.assertIn("event.preventDefault();", held, "static/js/shell.js: only a link that fades is held; a newer one is the browser's at once")
+        self.assertLess(self.leave.index("const fades = leaving !== changes;"), self.leave.index("event.preventDefault();"))
+        tail = self.leave[self.leave.index(held) + len(held):]
+        self.assertRegex(tail, r"const went = leaving = \+\+changes;[^\n]*\n\s*fadeNext\(page\);",
                          "static/js/shell.js: the newer link overtakes it and goes at once, flagged unless it is a plain file, and so does any link after it")
-        self.assertLess(self.leave.index("if (leaving === changes)"), self.leave.index("event.preventDefault();"))
         self.assertIn("let leaving;", self.script, "static/js/shell.js: no ordinary load is fading out when the page arrives (undefined is no change)")
 
     def test_the_flag_is_set_only_as_the_page_goes_and_its_key_is_the_boot_scripts(self):
-        self.assertEqual(self.script.count("fadeNext(true)"), 1, "static/js/shell.js: the flag is set as the page goes, never at the click (a change in place may still overtake the load)")
+        sets = [value for value in re.findall(r"fadeNext\((\w+)\);", self.script) if value != "false"]
+        self.assertEqual(sets, ["page"], "static/js/shell.js: the flag is set in one place, the tail of leave(), as the page goes")
+        self.assertLess(self.leave.index("await fadedOut("), self.leave.index("fadeNext(page);"),
+                        "static/js/shell.js: the flag is set as the page goes, never at the click (a change in place may still overtake the load)")
         key = re.search(r'const FADED_KEY = "([^"]+)";', self.script)
         self.assertTrue(key, "static/js/shell.js: FADED_KEY names the flag in sessionStorage")
         self.assertIn(f'sessionStorage.getItem("{key.group(1)}")', self.boot, "templates/shell.html: the boot script reads the flag shell.js sets")
@@ -655,7 +662,8 @@ class OrdinaryLoadFadeScriptTests(SimpleTestCase):
 
     def test_the_boot_script_hides_main_from_the_first_paint_only_when_the_page_will_fade_in(self):
         # shell.js is a module, run after the page is parsed and perhaps after its first paint: <main> must already be hidden then, or it would show and blink out.
-        self.assertIn('try { if (motion !== "off" && sessionStorage.getItem("veilfile-faded-nav")) root.setAttribute("data-arriving", ""); } catch (error) {}', self.boot)
+        self.assertIn('try { if (motion !== "off" && Date.now() - performance.now() - sessionStorage.getItem("veilfile-faded-nav") < 1000) root.setAttribute("data-arriving", ""); }'
+                      ' catch (error) {}', self.boot)
         self.assertLess(self.boot.index('sessionStorage.getItem("veilfile-veil-off")'), self.boot.index("data-arriving"), "templates/shell.html: data-arriving is decided once Motion is")
         base = re.sub(r"/\*.*?\*/", "", (STATIC / "css/base.css").read_text(encoding="utf-8"), flags=re.S)
         self.assertRegex(base, r"\.shell-main\.is-leaving,\n\.js\[data-arriving\] \.shell-main \{\n  opacity: 0;\n\}",
@@ -672,14 +680,38 @@ class OrdinaryLoadFadeScriptTests(SimpleTestCase):
         self.assertLess(setup.index("arrive();"), setup.index("setUpChapterChanges();"))
 
     def test_a_page_kept_by_back_or_with_no_page_in_its_place_is_shown_at_once(self):
-        self.assertRegex(self.function("setUpChapterChanges"), r'window\.addEventListener\("pageshow", \(event\) => \{\s*if \(event\.persisted\) stay\(\);',
-                         "static/js/shell.js: a page the browser kept as it was left (Back, Forward) is shown at once, not left faded out")
-        self.assertIn("setTimeout(() => change === changes && stay(), FETCH_TIMEOUT_MS);", self.leave,
+        self.assertRegex(self.function("setUpChapterChanges"), r'window\.addEventListener\("pageshow", \(event\) => \{\s*if \(event\.persisted\) \{\s*stay\(\);\s*fadeNext\(false\);',
+                         "static/js/shell.js: a page the browser kept as it was left (Back, Forward) is shown at once, not left faded out, and clears the flag")
+        self.assertIn("setTimeout(() => went === changes && stay(), FETCH_TIMEOUT_MS);", self.leave,
                       "static/js/shell.js: a load that brings no page in this one's place (a download, a 204) gives it back")
         stay = self.function("stay")
         self.assertRegex(stay, r'main\.style\.transition = "none";\n\s*main\.classList\.remove\("is-leaving"\);\n\s*getComputedStyle\(main\)\.opacity;[^\n]*\n\s*main\.style\.transition = "";')
         self.assertIn("++changes;", stay, "static/js/shell.js: whatever was on its way when the page was kept goes no further")
-        self.assertIn("fadeNext(false);", stay)
+
+    def test_a_slow_page_still_fades_in_after_the_page_is_given_back(self):
+        # PR #18's follow-up (a): FETCH_TIMEOUT_MS after the page went it is given back, since no page may come (a 204, a download), but a page that is only
+        # slow comes later and must still fade in. So the flag is the time the page went and the fallback leaves it; the boot script fades in only a load
+        # that began as it was set. The slow page's did; a reload, a direct load or Back after a 204 began after the page was given back, so never fades.
+        self.assertIn("sessionStorage.setItem(FADED_KEY, Date.now());", self.function("fadeNext"), "static/js/shell.js: the flag is the time the page went")
+        self.assertIn("&& stay(), FETCH_TIMEOUT_MS);", self.leave)
+        self.assertNotIn("fadeNext(", self.function("stay"), "static/js/shell.js: a page given back because no page came leaves the flag for one that is only slow")
+        began = re.search(r'Date\.now\(\) - performance\.now\(\) - sessionStorage\.getItem\("veilfile-faded-nav"\) < (\d+)\)', self.boot)
+        self.assertTrue(began, "templates/shell.html: the page fades in only when its own load (which began at Date.now() - performance.now()) began as the flag was set")
+        timeout = int(re.search(r"const FETCH_TIMEOUT_MS = (\d+);", self.script).group(1))
+        self.assertLess(int(began.group(1)), timeout, "templates/shell.html: a load that began once the page was given back (a reload, a direct load) does not fade in")
+
+    def test_every_way_the_page_goes_is_flagged_and_given_back_if_no_page_comes(self):
+        # PR #18's follow-up (b): a newer link chosen while <main> fades out goes at once by the browser, and it too may bring no page (a 204, a download);
+        # with no fallback for it the page stayed faded out until a reload. Both ways the page goes, location.assign after the fade and the browser following
+        # a newer link, end in the one tail of leave(), which sets the flag and gives the page back if no page has come by FETCH_TIMEOUT_MS.
+        tail = re.search(r"\n  \}\n  const went = leaving = \+\+changes;[^\n]*\n  fadeNext\(page\);\n  if \(fades\) location\.assign\(url\.href\);\n"
+                         r"  setTimeout\(\(\) => went === changes && stay\(\), FETCH_TIMEOUT_MS\);\n\}\n", self.leave)
+        self.assertTrue(tail, "static/js/shell.js: leave() ends in one tail that flags the page, sends it if leave() held the click, and gives it back if none comes")
+        block = self.leave.index("  if (fades) {\n"), tail.start()
+        returns = [match.start() for match in re.finditer(r"\breturn\b", self.leave)]
+        self.assertTrue(returns and all(block[0] < at < block[1] for at in returns),
+                        "static/js/shell.js: only a link that fades returns early (Motion off, a plain file, overtaken); a newer link always reaches the tail")
+        self.assertEqual(self.leave.count("location.assign("), 1, "static/js/shell.js: the page is sent from the tail alone")
 
     def test_no_cross_document_view_transition_and_no_submit_is_held(self):
         # Out of scope here: a form's submit goes as it always has, and cross-document view transitions (@view-transition) are not used; the same-document
