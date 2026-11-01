@@ -428,7 +428,7 @@ class BlogLoaderResilienceTests(_ContentDirMixin, TestCase):
         with self.assertLogs("blog.loader", level="WARNING") as logs:
             slugs = [p.slug for p in self.loader.load_posts()]
         self.assertIn(name, "\n".join(logs.output))
-        self.assertEqual(slugs, ["introducing-veilfile"])
+        self.assertEqual(slugs, ["stop-pasting-screenshots-into-public-places", "introducing-veilfile"])
         for url in self.PAGES:
             with self.subTest(url=url), self.assertLogs("blog.loader", "WARNING"):
                 self.assertEqual(self.client.get(url).status_code, 200)
