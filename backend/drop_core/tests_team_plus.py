@@ -54,7 +54,7 @@ class TeamPlusOnThePagesTests(TestCase):
         html = self.client.get("/plans/").content.decode()
         card = html[html.index('<h2 class="plan__name">Team Plus</h2>'):]
         card = card[:card.index("</article>")]
-        for words in ("$6 a month", "4,000 uploads a month", "Links last up to 90 days", "40 GB of storage", "10 keys",
+        for words in ("$6 a month", "4,000 uploads a month", "New links last up to 90 days", "40 GB of storage", "10 keys",
                       'href="/accounts/signup/?plan=team_plus"', "Choose Team Plus"):
             self.assertIn(words, card)
         self.assertIn("switch between Team, Team Plus and Scale", html)

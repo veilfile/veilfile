@@ -21,7 +21,7 @@ def plan_cards():
             "price": "$0" if caps["price_usd"] == 0 else f"${caps['price_usd']} a month",
             "limits": [
                 f"{caps['uploads']:,} uploads a month",
-                f"Links last up to {caps['ttl_days']} days",
+                f"New links last up to {caps['ttl_days']} days",
                 f"{caps['storage_gb']} GB of storage",
                 keys,
             ],
