@@ -409,38 +409,35 @@ let leaving; // the change that is an ordinary load fading out, while it is the 
 
 function fadeNext(on) {
   try {
-    if (on) sessionStorage.setItem(FADED_KEY, "1");
+    if (on) sessionStorage.setItem(FADED_KEY, Date.now());
     else sessionStorage.removeItem(FADED_KEY);
   } catch (error) {
     // Storage is blocked: the next page comes in at once.
   }
 }
 
-function leave(event, url, link) {
+async function leave(event, url, link) {
   const page = !/\.\w+$/.test(url.pathname); // a plain file (llms.txt) is no page
-  if (leaving === changes) {
-    leaving = ++changes; // a newer link goes at once
-    fadeNext(page);
-    return;
-  }
-  if (!page || instant()) return;
-  event.preventDefault();
-  const change = leaving = ++changes;
-  const main = document.querySelector("main");
-  main.classList.add("is-leaving");
-  fadedOut(main, link.closest("#shell-menu") && closeSheet()).then(() => {
+  const fades = leaving !== changes; // else a newer link: it goes at once
+  if (fades) {
+    if (!page || instant()) return;
+    event.preventDefault();
+    const change = leaving = ++changes;
+    const main = document.querySelector("main");
+    main.classList.add("is-leaving");
+    await fadedOut(main, link.closest("#shell-menu") && closeSheet());
     if (change !== changes) return;
-    fadeNext(true);
-    location.assign(url.href);
-    setTimeout(() => change === changes && stay(), FETCH_TIMEOUT_MS); // no page came (a download)
-  });
+  }
+  const went = leaving = ++changes;
+  fadeNext(page);
+  if (fades) location.assign(url.href);
+  setTimeout(() => went === changes && stay(), FETCH_TIMEOUT_MS);
 }
 
 // Kept by Back as it was left, or no page came: shown at once.
 function stay() {
   const main = document.querySelector("main");
   ++changes;
-  fadeNext(false);
   main.style.transition = "none";
   main.classList.remove("is-leaving");
   getComputedStyle(main).opacity;
@@ -502,7 +499,10 @@ function setUpChapterChanges() {
     if (document.body.dataset.layout) changeTo(window.location.href, false, (history.state && history.state.scroll) || 0);
   });
   window.addEventListener("pageshow", (event) => {
-    if (event.persisted) stay();
+    if (event.persisted) {
+      stay();
+      fadeNext(false);
+    }
   });
 }
 
