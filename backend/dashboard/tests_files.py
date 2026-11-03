@@ -361,7 +361,7 @@ class FileListComponentTests(SimpleTestCase):
     def test_no_files_says_so_and_points_to_keys(self):
         html = render_list([])
         self.assertNotIn("<table", html, f"{self.FILE}: an empty list is words, not a table with no rows")
-        self.assertIn("You have no files yet. Create a key under Keys, point your agent at its variable name, and uploads will appear here.", html)
+        self.assertIn("No files yet. They appear here after your first upload.", html)
         self.assertEqual(href_of(html, "Go to Keys"), "/app/keys/")
 
     def test_a_page_past_the_oldest_file_says_so_and_offers_the_way_back(self):
@@ -447,7 +447,7 @@ class FilesPageTests(FilesCase):
 
     def test_a_workspace_with_no_files_says_so(self):
         html = self.client.get(LIST).content.decode()
-        self.assertIn("You have no files yet.", html)
+        self.assertIn("No files yet.", html)
         self.assertEqual(href_of(html, "Go to Keys"), "/app/keys/")
         self.assertEqual((href_of(html, "Older files"), href_of(html, "Newest")), (None, None))
 
@@ -457,7 +457,7 @@ class FilesPageTests(FilesCase):
         client.force_login(fresh)
         response = client.get(LIST)
         self.assertEqual(response.status_code, 200)
-        self.assertIn("You have no files yet.", response.content.decode())
+        self.assertIn("No files yet.", response.content.decode())
 
     def test_the_page_names_what_a_flag_and_a_closed_link_mean(self):
         html = main_of(self.client.get(LIST).content.decode())

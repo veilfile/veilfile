@@ -13,6 +13,17 @@
 {% include "dashboard/over_limits.html" with status=status usage=usage only %}
 {% if not status %}<p class="notice" role="status">Plan limits could not be checked just now. Reload the page to check again.</p>
 {% endif %}
+{% if usage and usage.keys_used == 0 %}<section aria-labelledby="overview-get-connected">
+<h2 id="overview-get-connected">Get connected</h2>
+<p>The recommended way to connect is the CLI. Install it with pip install veilfile, run veilfile login, open the page it prints, and enter the code there. The key is stored in a credentials file only you can read. It is never printed and never lands in your shell history. Then run veilfile push screenshot.png. Your upload appears under Files.</p>
+{% include "components/code_block.html" with id="onboarding-pip" label="Copy the pip install command" code="pip install veilfile" only %}
+{% include "components/code_block.html" with id="onboarding-login" label="Copy the veilfile login command" code="veilfile login" only %}
+{% include "components/code_block.html" with id="onboarding-push" label="Copy the veilfile push example" code="veilfile push screenshot.png" only %}
+<p class="notice">The code expires after ten minutes. Approving a login needs a verified email. If yours is not verified yet, verify it, then run veilfile login again.</p>
+<p>Headless machine, or a restricted shell where the browser flow cannot run? Create a key on the <a href="{% url 'app-keys' %}">Keys page</a>, copy the one-time value, and export it where your agent runs. Keep this path for headless machines and restricted shells only. A key you copy by hand can end up in shell history, which is why the recommended login above is the guide to follow.</p>
+<p class="notice">Each login mints one API key, and device-issued keys count toward your plan's key cap (one key on Free). The full three-step walkthrough is in the <a href="{% url 'docs-page' 'quickstart' %}">quickstart</a>.</p>
+</section>
+{% endif %}
 {% if plan %}<section aria-labelledby="overview-plan">
 <h2 id="overview-plan">Plan</h2>
 <p>You are on the <strong>{{ plan|plan_name }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a></p>

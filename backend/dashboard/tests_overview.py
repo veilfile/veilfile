@@ -119,7 +119,7 @@ class OverviewPageTests(OverviewTestCase):
         h1s = page.tree.all("h1")
         self.assertEqual([words(h) for h in h1s], ["Overview"], f"{PAGE}: one <h1>, Overview, inside <main>")
         self.assertTrue(in_main(h1s[0]))
-        self.assertEqual(list(page.sections()), ["Plan", "Usage", "Account"], f"{PAGE}: three sections, each a <section aria-labelledby> named by its <h2>, in this order")
+        self.assertEqual(list(page.sections()), ["Get connected", "Plan", "Usage", "Account"], f"{PAGE}: the zero-state panel first, then the plan, the usage and the account, each a <section aria-labelledby> named by its <h2>, in this order")
         for element in page.tree.elements:
             if element["tag"] in ("header", "footer"):
                 self.assertFalse(in_main(element), f"{PAGE}: no <{element['tag']}> inside <main> (spec 9)")
@@ -183,6 +183,36 @@ class OverviewPageTests(OverviewTestCase):
         self.assertTrue(all(i >= 0 for i in found), f"{PAGE}: all of {marks} are on this page; found at {found}")
         self.assertEqual(found, sorted(found), f"{PAGE}: the return notice, the verify prompt, what is over a limit, the plan, the meters and the account, in that order; found at {found}")
         self.assertLess(page.text.index("Overview"), found[0], f"{PAGE}: the h1 comes first")
+
+
+class GetConnectedPanelTests(OverviewTestCase):
+    def test_a_fresh_account_gets_the_panel_before_the_plan(self):
+        user, _ = make_user("ov-panel", "panel@example.com", verified=True)
+        page = self.open(user)
+        self.assertEqual(list(page.sections())[:1], ["Get connected"], f"{PAGE}: the zero-state panel comes before the Plan section")
+        panel = page.sections()["Get connected"]
+        self.assertIn("The recommended way to connect is the CLI.", panel, f"{PAGE}: the panel teaches the login path")
+        self.assertIn("The code expires after ten minutes.", panel, f"{PAGE}: the panel carries the code-expiry note")
+        self.assertIn("Each login mints one API key, and device-issued keys count toward your plan's key cap (one key on Free).", panel,
+                      f"{PAGE}: the panel carries the key-cap footnote")
+        self.assertIn(("quickstart", "/docs/quickstart/"), [(words(e), e["attrs"].get("href")) for e in page.tree.all("a") if in_main(e)],
+                      f"{PAGE}: the panel links the quickstart")
+        self.assertIn("pip install veilfile", page.html, f"{PAGE}: the panel shows the install command")
+        self.assertIn("veilfile login", page.html, f"{PAGE}: the panel shows the login command")
+
+    def test_an_account_with_an_active_key_gets_no_panel(self):
+        user, workspace = make_user("ov-panel-key", "panelkey@example.com", verified=True)
+        APIKey.create_key(workspace, "ci")
+        page = self.open(user)
+        self.assertNotIn("Get connected", page.sections(), f"{PAGE}: an active key hides the panel")
+
+    def test_an_account_with_only_revoked_keys_still_gets_the_panel(self):
+        user, workspace = make_user("ov-panel-revoked", "panelrevoked@example.com", verified=True)
+        key, _ = APIKey.create_key(workspace, "gone")
+        key.is_active = False
+        key.save()
+        page = self.open(user)
+        self.assertIn("Get connected", page.sections(), f"{PAGE}: a revoked-only account still has no usable key, so it gets the panel")
 
 
 class OverLimitTests(OverviewTestCase):
@@ -281,7 +311,8 @@ class BillingReturnTests(OverviewTestCase):
 
     def setUp(self):
         super().setUp()
-        self.user, _ = make_user("ov-return", "return@example.com", verified=True)
+        self.user, workspace = make_user("ov-return", "return@example.com", verified=True)
+        APIKey.create_key(workspace, "ci")  # an active key hides the zero-state panel, so the page's notices are only the billing return's
 
     def test_each_of_the_four_says_what_the_old_dashboard_said(self):
         cases = {
