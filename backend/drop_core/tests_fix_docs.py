@@ -65,6 +65,8 @@ YEARLY_ROW = re.compile(r"\s*\((?:yearly|annual)\)$")
 YEARLY = re.compile(r"(?:/yr|/year|\s+a\s+year|\s+per\s+year)\b")
 # The names as a regex alternation, "Team Plus" before "Team" so that the longer name wins.
 PLAN_NAMES = "Free|Team Plus|Team|Scale"
+# A TTL written before the plan it belongs to: "7 days after upload on Free, 90 days on Team" (the Privacy Policy, section 3).
+DAYS_ON_PLAN = re.compile(r"(\d+)[- ]days?(?: after upload)? on (" + PLAN_NAMES + r")\b")
 NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
 
 
@@ -132,7 +134,9 @@ def _segments(text):
 
 def _cap_facts(text):
     """(plan, what, value) tuples for caps stated next to a plan name."""
-    facts = []
+    facts = [(NAME_TO_PLAN[m.group(2)], "ttl_days", _num(m.group(1))) for m in DAYS_ON_PLAN.finditer(text)]
+    # Read, each such TTL leaves only its plan's name, so the clause of the plan before it does not take it as its own.
+    text = DAYS_ON_PLAN.sub(lambda m: m.group(2), text)
     for plan, clause in _segments(text):
         for m in re.finditer(r"(\d[\d,]*)\s*GB\b", clause):
             facts.append((plan, "storage_gb", _num(m.group(1))))
@@ -295,6 +299,13 @@ class PlanCopyMatchesPlansTests(SimpleTestCase):
         text = "| Plan | Price | Storage |\n| Team Plus | $6/mo | 40 GB |\nTeam Plus ($6/month)\n$6/mo Team Plus\nTeam $4"
         self.assertEqual(_price_facts(text), [("team_plus", 6.0), ("team_plus", 6.0), ("team", 4.0), ("team_plus", 6.0)])
         self.assertEqual(_table_facts(text), [("team_plus", "storage_gb", 40)])
+
+    def test_a_ttl_written_before_its_plan_is_that_plans(self):
+        # Read as "the plan before it", "90 days on Team" would be Free's and "365 days on Scale" Team's.
+        text = "New uploads are deleted 7 days after upload on Free, 90 days on Team, and 365 days on Scale. Team 90 days."
+        self.assertEqual(_cap_facts(text), [("free", "ttl_days", 7), ("team", "ttl_days", 90), ("scale", "ttl_days", 365),
+                                            ("team", "ttl_days", 90)])
+        self.assertEqual(_cap_facts("6 days on Team Plus"), [("team_plus", "ttl_days", 6)], "Team Plus is its own plan here too")
 
 
 class McpToolDocsTests(SimpleTestCase):
