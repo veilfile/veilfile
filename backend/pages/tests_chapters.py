@@ -122,7 +122,7 @@ class PlansTests(TestCase):
         for slug, caps in PLANS.items():
             with self.subTest(plan=slug):
                 self.assertIn(f"{caps['uploads']:,} uploads a month", self.text)
-                self.assertIn(f"Links last up to {caps['ttl_days']} days", self.text)
+                self.assertIn(f"New links last up to {caps['ttl_days']} days", self.text)
                 self.assertIn(f"{caps['storage_gb']} GB of storage", self.text)
                 self.assertIn("$0" if caps["price_usd"] == 0 else f"${caps['price_usd']} a month", self.text)
         self.assertIn("Unlimited keys", self.text)

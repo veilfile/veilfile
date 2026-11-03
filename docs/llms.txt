@@ -59,6 +59,7 @@ Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every fail
 
 - Omitting `ttl_days` gives the plan maximum, not something shorter.
 - Plan TTL maxima: Free 7 days, Team 90 days, Team Plus 90 days, Scale 365 days
+- A plan change never shortens a file's expiry. A file uploaded on Scale keeps its Scale expiry after a downgrade to Free. TTL maxima apply to new uploads. Deletion runs on a daily sweep: expect removal within 24 hours of expiry, 48 at most after a restart. Always read `expires_at` in the response.
 - A whole-number `ttl_days` above the plan maximum is clamped down, never rejected (and 0 or negative is raised to 1). The 201 response then includes `"ttl_adjusted": true`. A non-integer value (`0.5`, `abc`) is rejected with `400` `invalid_request`. Always read `expires_at` in the response; never trust the value you sent.
 
 ## secret_flags are advisory, not blocking

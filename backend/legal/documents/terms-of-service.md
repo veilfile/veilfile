@@ -1,6 +1,6 @@
 # Terms of Service
 
-Last updated: 2026-10-14
+Last updated: 2026-11-03
 
 ## 1. What Veilfile is
 
@@ -23,9 +23,11 @@ You agree not to:
 
 We scan uploads for secrets. We may remove content or restrict access when we believe it violates these terms, with or without notice.
 
+Uploads are capped at 25 MiB each. We accept images (png, jpg, jpeg, webp, gif), text files (txt, md, log), json and har files, and pdfs. We do not accept video, executables, or archives. We check a file's contents, not just its name: images and PDFs must carry the correct file signature, and text files must be valid UTF-8. Anything outside these limits is refused before it is stored.
+
 ## 4. Data retention and deletion
 
-Files are deleted when their TTL expires: Free 7 days, Team 90 days, Scale 365 days. We also delete account data and keys when you close your account. Deletion of expired files is automatic and irreversible.
+Files are deleted when their TTL expires. New uploads are deleted when their plan's TTL runs out: Free 7 days, Team 90 days, Scale 365 days. Files uploaded before a downgrade keep their original expiry (see section 6). Deletion runs on a daily sweep, so a file may linger up to a day past its expiry, and up to two days after a service restart. We also delete account data and keys when you close your account. Deletion of expired files is automatic and irreversible.
 
 ## 5. Service availability
 
@@ -33,14 +35,15 @@ Veilfile is provided **as-is, without warranty** of any kind. We aim for high av
 
 ## 6. Billing
 
-Paid plans are monthly subscriptions: Team **$4/month** (2,000 uploads, 90-day TTL, 25 GB storage, 5 API keys), Scale **$12/month** (10,000 uploads, 365-day TTL, 100 GB storage, unlimited API keys). Free is $0 (100 uploads/month, 7-day TTL, 1 GB storage, 1 API key).
+Paid plans are monthly or yearly subscriptions: Team **$4/month or $40/year** (2,000 uploads, 90-day TTL, 25 GB storage, 5 API keys), Team Plus **$6/month or $60/year** (4,000 uploads, 90-day TTL, 40 GB storage, 10 API keys), Scale **$12/month or $120/year** (10,000 uploads, 365-day TTL, 100 GB storage, unlimited API keys). Free is $0 (100 uploads/month, 7-day TTL, 1 GB storage, 1 API key). A yearly plan costs the price of ten months, so two months are free. Plan limits are the same whether you pay monthly or yearly.
 
 - **Merchant of record:** payments are processed through Stripe, and Stripe (via Link) is the merchant of record, the legal seller of your subscription. The price you see is the price you pay: all applicable taxes are included in the displayed price, everywhere.
-- **Plan changes:** you can switch between Team and Scale at any time. An upgrade charges the prorated difference immediately and takes effect once that payment succeeds. A downgrade credits the unused difference to your Stripe customer balance, applied to future invoices rather than refunded.
+- **Plan changes:** you can switch between Team, Team Plus and Scale at any time. An upgrade charges the prorated difference immediately and takes effect once that payment succeeds. A downgrade credits the unused difference to your Stripe customer balance, applied to future invoices rather than refunded.
+- **Billing interval changes:** you can switch between monthly and yearly billing at any time. An interval switch starts a new billing period on the day of the switch and is invoiced at once, less credit for the unused part of your current period. Switching to yearly billing charges the yearly price less that credit; switching to monthly billing credits the unused part of your yearly period to your Stripe customer balance, applied to future invoices rather than refunded.
 - **Failed payments:** if a renewal payment fails, your paid plan stays active while Stripe retries the charge. It ends, and your workspace moves to Free, once the subscription becomes unpaid, paused or canceled.
 - **After a downgrade or cancellation:** existing API keys, files and links keep working with their original expiry. While you are over the new plan's limits, new API keys and new uploads that would exceed the storage cap are refused. New uploads get the new plan's maximum TTL.
-- **Cancellation:** cancel anytime; your plan stays active until the end of the current billing period.
-- **Refunds:** if you cancel within 14 days of your first paid subscription, we'll refund that first payment in full. Just ask. After that, subscription fees are non-refundable, but you can cancel anytime and keep your plan until the end of the billing period. Refunds are executed by Stripe as the merchant of record.
+- **Cancellation:** cancel anytime; your plan stays active until the end of the current billing period. For a monthly plan that is up to a month of continued access; for a yearly plan, up to a year.
+- **Refunds:** if you cancel within 14 days of your first paid subscription, we'll refund that first payment in full, whether that payment was monthly or yearly. Just ask. After that, subscription fees are non-refundable, but you can cancel anytime and keep your plan until the end of the billing period. Refunds are executed by Stripe as the merchant of record.
 - We may change prices with 30 days' notice; continuing to use the service after the notice period means you accept the new price.
 
 ## 7. Limitation of liability
