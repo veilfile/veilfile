@@ -330,7 +330,7 @@ class KeysPageTests(SignedInCase):
         client.force_login(User.objects.create_user("fresh", email="fresh@example.com"))
         response = client.get(KEYS_URL)
         self.assertEqual(response.status_code, 200, f"{KEYS_VIEW}: a person's first visit to Keys makes the workspace (get_or_create_workspace), as the JSON endpoint does")
-        self.assertIn("You have no keys yet.", response.content.decode())
+        self.assertIn("No keys yet.", response.content.decode())
 
     def test_the_page_says_what_a_key_is_for(self):
         main = main_of(self.keys_page().content.decode())
@@ -339,7 +339,7 @@ class KeysPageTests(SignedInCase):
 
     def test_a_workspace_without_keys_is_told_so(self):
         main = main_of(self.keys_page().content.decode())
-        self.assertIn("You have no keys yet. Create one above to get started.", main, f"{KEYS_PAGE}: say there are no keys when there are none")
+        self.assertIn("No keys yet. The guide above creates one for you if the browser flow can run on your machine. Otherwise create one here for a headless machine or a restricted shell, then export it where your agent runs.", main, f"{KEYS_PAGE}: say there are no keys when there are none")
         self.assertNotIn("<table", main, f"{KEYS_PAGE}: no table without rows")
 
     def test_the_list_shows_every_key_with_its_state_and_times(self):
@@ -412,6 +412,31 @@ class KeysPageTests(SignedInCase):
             self.assertEqual(method(KEYS_URL).status_code, 405, f"{KEYS_VIEW}: Keys takes GET, HEAD and POST only")
         key.refresh_from_db()
         self.assertTrue(key.is_active)
+
+
+class GetConnectedPanelTests(SignedInCase):
+    def test_a_workspace_without_keys_gets_the_panel(self):
+        main = main_of(self.keys_page().content.decode())
+        self.assertIn('<h2 id="keys-get-connected">Get connected</h2>', main, f"{KEYS_PAGE}: the zero-state panel shows when there are no keys")
+        self.assertIn("The recommended way to connect is the CLI.", main, f"{KEYS_PAGE}: the panel teaches the login path")
+        self.assertIn("Create a key in the form below, copy the one-time value, and export it where your agent runs.", main,
+                      f"{KEYS_PAGE}: the Keys panel points at the form below, not the Keys page")
+        self.assertIn("pip install veilfile", main, f"{KEYS_PAGE}: the panel shows the install command")
+
+    def test_a_workspace_with_only_revoked_keys_still_gets_the_panel(self):
+        self.make_key("gone", active=False)
+        main = main_of(self.keys_page().content.decode())
+        self.assertIn("Get connected", main, f"{KEYS_PAGE}: a revoked-only account still has no usable key, so it gets the panel")
+
+    def test_a_workspace_with_an_active_key_gets_no_panel(self):
+        self.make_key("ci")
+        main = main_of(self.keys_page().content.decode())
+        self.assertNotIn("Get connected", main, f"{KEYS_PAGE}: an active key hides the panel")
+
+    def test_a_failed_usage_read_hides_the_panel_rather_than_guessing(self):
+        with mock.patch("dashboard.keys.account.usage", side_effect=Exception("usage down")):
+            main = main_of(self.keys_page().content.decode())
+        self.assertNotIn("Get connected", main, f"{KEYS_PAGE}: a failed usage read hides the panel, as a failed read hides it on Overview")
 
 
 class KeysTableShapeTests(SignedInCase):

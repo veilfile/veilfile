@@ -41,10 +41,23 @@ def _key_rows(user):
     ]
 
 
+def _active_key_count(user):
+    """The workspace's active key count from account.usage, or None when the read fails: a failed read hides the
+    zero-state panel rather than guessing, as a failed usage read hides it on Overview."""
+    try:
+        answer = account.usage(user)
+    except Exception:
+        return None
+    if answer.status != 200 or not isinstance(answer.body, dict):
+        return None
+    return answer.body.get("keys_used")
+
+
 def _keys_page(request, form, status=200, refusal=None):
     """The Keys page with a fresh form token. A page that is the answer to a refused POST has the refusal's status and says why; none of them
     holds a key."""
-    context = {"rows": _key_rows(request.user), "form": form, "token": issue_key_token(request.session), "refusal": refusal}
+    context = {"rows": _key_rows(request.user), "form": form, "token": issue_key_token(request.session), "refusal": refusal,
+               "active_key_count": _active_key_count(request.user)}
     response = render(request, "dashboard/keys.html", context, status=status)
     response["Cache-Control"] = "no-store"  # the form carries a one-time token, and Back must not show a spent one
     return response
