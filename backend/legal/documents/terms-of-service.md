@@ -1,6 +1,6 @@
 # Terms of Service
 
-Last updated: 2026-11-03
+Last updated: 2026-11-04
 
 ## 1. What Veilfile is
 
@@ -27,7 +27,7 @@ Uploads are capped at 25 MiB each. We accept images (png, jpg, jpeg, webp, gif),
 
 ## 4. Data retention and deletion
 
-Files are deleted when their TTL expires. New uploads are deleted when their plan's TTL runs out: Free 7 days, Team 90 days, Scale 365 days. Files uploaded before a downgrade keep their original expiry (see section 6). Deletion runs on a daily sweep, so a file may linger up to a day past its expiry, and up to two days after a service restart. We also delete account data and keys when you close your account. Deletion of expired files is automatic and irreversible.
+Files are deleted when their TTL expires. New uploads are deleted when their plan's TTL runs out: Free 7 days, Team 90 days, Team Plus 90 days, Scale 365 days. Files uploaded before a downgrade keep their original expiry (see section 6). Deletion runs on a daily sweep, so a file may linger up to a day past its expiry, and up to two days after a service restart. We also delete account data and keys when you close your account. Deletion of expired files is automatic and irreversible.
 
 ## 5. Service availability
 

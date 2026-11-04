@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-11-03
+Last updated: 2026-11-04
 
 ## 1. What we collect
 
@@ -19,7 +19,7 @@ To operate the service (storage and retrieval), bill you (paid plans), prevent a
 
 ## 3. How long we keep it
 
-Deletion is TTL-based. New uploads are deleted 7 days after upload on Free, 90 days on Team, and 365 days on Scale. A file uploaded under a longer plan keeps its original expiry after a downgrade, so a file uploaded on Scale is deleted when its Scale TTL runs out even if the account has since moved to Free. When a file's TTL expires, it is deleted automatically and irreversibly on the next daily sweep, normally within 24 hours of expiry and no later than 48. Account data and API keys are deleted when you close your account. If our storage provider is unavailable when a file is revoked or an account is closed, the link stops working immediately and the stored bytes are deleted on the next daily cleanup run, normally within 24 hours.
+Deletion is TTL-based. New uploads are deleted 7 days after upload on Free, 90 days on Team, 90 days on Team Plus, and 365 days on Scale. A file uploaded under a longer plan keeps its original expiry after a downgrade, so a file uploaded on Scale is deleted when its Scale TTL runs out even if the account has since moved to Free. When a file's TTL expires, it is deleted automatically and irreversibly on the next daily sweep, normally within 24 hours of expiry and no later than 48. Account data and API keys are deleted when you close your account. If our storage provider is unavailable when a file is revoked or an account is closed, the link stops working immediately and the stored bytes are deleted on the next daily cleanup run, normally within 24 hours.
 
 ## 4. Who we share data with (subprocessors)
 
