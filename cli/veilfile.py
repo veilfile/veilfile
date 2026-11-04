@@ -28,6 +28,7 @@ import sys
 import time
 import unicodedata
 import webbrowser
+from datetime import datetime, timezone
 from email.message import Message
 from email.utils import collapse_rfc2231_value
 from pathlib import Path
@@ -763,6 +764,33 @@ def _format_bytes(num: object) -> str:
     return f"{value:.1f} TB"
 
 
+def _format_expiry(value: object) -> Optional[str]:
+    """Human-readable expiry from an ISO 8601 timestamp, or None.
+
+    The API returns expires_at as isoformat() (an offset, usually UTC).
+    Anything unparseable yields None so a push never fails on display:
+    the URL above it is already printed.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith(("Z", "z")):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    utc = parsed.astimezone(timezone.utc)
+    hour = utc.hour % 12 or 12
+    ampm = "AM" if utc.hour < 12 else "PM"
+    return (
+        f"{utc.strftime('%B')} {utc.day}, {utc.year} at "
+        f"{hour}:{utc.minute:02d} {ampm} UTC"
+    )
+
+
 def cmd_status(args: argparse.Namespace) -> int:
     key, source = read_stored_key()
     if not key:
@@ -959,6 +987,18 @@ def cmd_push(args: argparse.Namespace) -> int:
 
     if status == 201 and payload.get("url"):
         print(payload["url"])
+        expiry = _format_expiry(payload.get("expires_at"))
+        if expiry:
+            print(f"Expires {expiry}.")
+        if payload.get("ttl_adjusted"):
+            print(
+                "Note: the lifetime was adjusted to fit your plan, "
+                "so this expiry is the one that applies."
+            )
+        print(
+            "Manage or delete this file under Files: "
+            f"{args.base_url.rstrip('/')}/app/files/"
+        )
         flags = payload.get("secret_flags") or []
         if flags:
             warning = payload.get("warning") or (
