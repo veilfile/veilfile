@@ -629,6 +629,13 @@ class OrdinaryLoadFadeScriptTests(SimpleTestCase):
                          "static/js/shell.js: the page goes, flagged to fade in, unless a newer change has overtaken it")
         self.assertIn("const change = leaving = ++changes;", fade, "static/js/shell.js: an ordinary load is a change, so a newer one (a change in place, Back) overtakes it")
 
+    def test_a_link_during_the_fade_in_fades_out_from_where_it_had_got_to(self):
+        # The driver holds <main> by its inline opacity, which would keep is-leaving from showing. It lets go in the same task, so that the transition starts
+        # from the opacity <main> last had, as a change in place does when it overtakes a change from the sheet.
+        fade = self.leave[self.leave.index("event.preventDefault();"):]
+        self.assertRegex(fade, r'fade\.go\(1, true\);[^\n]*\n\s*main\.classList\.add\("is-leaving"\);',
+                         "static/js/shell.js: leave() takes <main> from the driver just before is-leaving, so a link during the fade-in fades out and does not jump")
+
     def test_the_fade_out_waits_as_a_change_in_place_does(self):
         wait = self.script[self.script.index("const fadedOut"):self.script.index("async function changeTo")]
         self.assertIn("main.getAnimations().map((animation) => animation.finished.catch(() => {}))", wait)
@@ -671,9 +678,9 @@ class OrdinaryLoadFadeScriptTests(SimpleTestCase):
 
     def test_the_next_page_fades_in_from_hidden_and_the_flag_is_cleared_with_motion_off_too(self):
         arrive = self.function("arrive")
-        self.assertRegex(arrive, r'main\.classList\.add\("is-leaving"\);\n\s*root\.removeAttribute\("data-arriving"\);\n\s*getComputedStyle\(main\)\.opacity;[^\n]*\n'
-                                 r'\s*requestAnimationFrame\(\(\) => main\.classList\.remove\("is-leaving"\)\);',
-                         "static/js/shell.js: arrive() starts <main> at is-leaving, already hidden, and takes it away on the next frame, so its transition runs over --change-fade")
+        self.assertRegex(arrive, r'fade\.go\(0, true\);\n\s*root\.removeAttribute\("data-arriving"\);\n\s*fade\.go\(1\);\n',
+                         "static/js/shell.js: arrive() fades <main> in by its driver, already at 0 as data-arriving goes, so that no drawn frame can skip the fade")
+        self.assertNotIn("is-leaving", arrive, "static/js/shell.js: arrive() does not rely on a CSS transition, which Chromium sometimes never creates on a page that has just loaded")
         self.assertIn('if (root.hasAttribute("data-arriving")) {', arrive, "static/js/shell.js: only a page the boot script hid fades in: never with Motion off, a direct load, a reload or Back")
         self.assertRegex(arrive, r"\n  \}\n  fadeNext\(false\);$", "static/js/shell.js: the flag is cleared whether or not the page fades in, so a later load does not fade")
         setup = self.script[self.script.rindex("try {"):]

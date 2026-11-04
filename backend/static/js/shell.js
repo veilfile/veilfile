@@ -424,6 +424,7 @@ async function leave(event, url, link) {
     event.preventDefault();
     const change = leaving = ++changes;
     const main = document.querySelector("main");
+    fade.go(1, true); // (Leaving for another page)
     main.classList.add("is-leaving");
     await fadedOut(main, link.closest("#shell-menu") && closeSheet());
     if (change !== changes) return;
@@ -446,12 +447,10 @@ function stay() {
 
 // Come by an ordinary load that faded out: <main> fades in from hidden (data-arriving, shell.html).
 function arrive() {
-  const main = document.querySelector("main");
   if (root.hasAttribute("data-arriving")) {
-    main.classList.add("is-leaving");
+    fade.go(0, true);
     root.removeAttribute("data-arriving");
-    getComputedStyle(main).opacity;
-    requestAnimationFrame(() => main.classList.remove("is-leaving"));
+    fade.go(1);
   }
   fadeNext(false);
 }

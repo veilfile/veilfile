@@ -4744,10 +4744,12 @@ ORDINARY_PROBE = """(() => {
     probe.left = { ...read(), path: location.pathname, flag: flag(), now: Date.now(), expanded: toggle && toggle.getAttribute("aria-expanded") };
     try { sessionStorage.setItem("site-checks-left", JSON.stringify(probe)); } catch (error) {} });
 })();"""
-# The page at the address has come and settled: the probe is its own, <main> is at full strength with nothing fading, and data-arriving has gone.
-ORDINARY_SETTLED = """(path) => { const main = document.querySelector("main");
+# The page at the address has come and settled: the probe is its own and has seen <main> at full strength (the driver's last step can come after the probe read
+# that frame), with nothing fading and data-arriving gone.
+ORDINARY_SETTLED = """(path) => { const main = document.querySelector("main"), frames = window.__ordinary ? window.__ordinary.frames : [];
   return location.pathname === path && Boolean(window.__ordinary) && window.__ordinary.path === path && document.readyState === "complete" && Boolean(main)
-    && !main.classList.contains("is-leaving") && getComputedStyle(main).opacity === "1" && !document.documentElement.hasAttribute("data-arriving"); }"""
+    && !main.classList.contains("is-leaving") && getComputedStyle(main).opacity === "1" && !document.documentElement.hasAttribute("data-arriving")
+    && frames.length > 0 && (frames.length >= 900 || frames[frames.length - 1].opacity >= 0.99); }"""
 # What the page that went saw (its probe, kept as it went, then forgotten so the next trip reads its own), what this page sees, and the flag now.
 ORDINARY_READ = """() => { const left = JSON.parse(sessionStorage.getItem("site-checks-left")); sessionStorage.removeItem("site-checks-left");
   return [left, window.__ordinary, sessionStorage.getItem("veilfile-faded-nav")]; }"""
@@ -4853,7 +4855,8 @@ def ordinary_arrival_findings(label, now, flag, *, faded):
         return problems + [f"{label}: <main> never came to full strength"]
     span = frames[full]["at"] - frames[hidden]["at"]
     between = [frame for frame in frames[hidden:full] if 0.05 < frame["opacity"] < 0.95]
-    if len(between) < 2 or span < FADE_MS * 0.6:
+    # From 0.01 to 0.99 the driver's curve takes about 78% of the fade, and a long frame can shorten what is read here by one capped step, a quarter of the fade.
+    if len(between) < 2 or span < FADE_MS * 0.5:
         problems.append(f"{label}: <main> came in over {span:.0f} ms with {len(between)} frame(s) between hidden and full strength; "
                         f"it should fade in over --change-fade ({FADE_MS} ms)")
     falls = [(a["opacity"], b["opacity"]) for a, b in zip(frames[hidden:], frames[hidden + 1:]) if b["opacity"] < a["opacity"] - 0.02]
@@ -4868,7 +4871,7 @@ def ordinary_fade_problems(browser, base_url, session_key):
     in. Tried from a chapter to a form page by a link in the page, from a form page to the threshold by the mark, from a chapter to the Docs by the menu at
     1280 and from the phone's sheet at 375. A change in place does not fade like this as well. Motion off and reduced motion go at once with no flag; a
     modified click, a middle button, a link with a target or download, a #fragment, another site and a plain file (llms.txt) are the browser's. A newer link
-    while <main> fades out goes at once, and the load it overtook never goes (a change in place overtakes it too). A reload, a direct load and Back never
+    while <main> fades out goes at once, and the load it overtook never goes (a change in place overtakes it too). A link during the fade-in falls from where <main> had got to. A reload, a direct load and Back never
     fade, and a page the browser keeps for Back is shown at once. With the next page's shell.js late <main> stays hidden until it comes; with it failing
     <main> shows. A load that brings no page (a 204), a newer link's as well, gives the page back, and a reload after that does not fade in; a page that
     is only slow, coming after the page was given back, still fades in."""
@@ -5008,6 +5011,32 @@ def ordinary_fade_problems(browser, base_url, session_key):
             problems.extend(ordinary_arrival_findings(label, now, flag, faded=True))
             if any(url.rstrip("/") == base_url.rstrip("/") for url in navigations):
                 problems.append(f"{label}: the threshold, which Sign up overtook, was still asked for ({navigations})")
+        except PlaywrightError as error:
+            problems.append(f"{label}: {error.message.splitlines()[0]}")
+    problems += [f"{label}: console error: {error}" for error in errors]
+    context.close()
+
+    # A link while the page fades in: the transition takes <main> from the driver where it had got to, so it falls from there and never jumps, and the page
+    # the link asked for fades in.
+    context = context_for()
+    page, errors = open_page(context, base_url + "/accounts/login/")
+    label = "ordinary loads: Log in while sign up fades in"
+    mid_fade = "() => { const opacity = +getComputedStyle(document.querySelector('main')).opacity; return location.pathname === '/accounts/signup/' && opacity > 0.1 && opacity < 0.7; }"
+    if try_click(problems, page, '.form-links a[href="/accounts/signup/"]', label, no_wait_after=True):
+        try:
+            page.wait_for_function(mid_fade, timeout=5000)
+            at_click = page.evaluate("""() => { const opacity = +getComputedStyle(document.querySelector('main')).opacity;
+              document.querySelector('.form-links a[href="/accounts/login/"]').click(); return opacity; }""")   # no wait for the link to be still, which could outlast the fade
+            if not 0.05 < at_click < 0.95:
+                problems.append(f"{label}: the click came at opacity {at_click}, outside the fade-in, so this proves nothing")
+            page.wait_for_function(ORDINARY_SETTLED, arg="/accounts/login/", timeout=10000)
+            left, now, flag = page.evaluate(ORDINARY_READ)
+            clicks = (left or {}).get("clicks") or []
+            after = [frame["opacity"] for frame in (left or {}).get("frames") or [] if clicks and frame["at"] >= clicks[-1]["at"]]
+            rises = [(a, b) for a, b in zip(after, after[1:]) if b > a + 0.02]
+            if not clicks or not clicks[-1].get("taken") or len(after) < 3 or rises or after[-1] > after[0] - 0.05:
+                problems.append(f"{label}: <main> should fall from where it had got to, with no rise; it read the clicks {clicks} and the opacity {after[:12]}")
+            problems.extend(ordinary_arrival_findings(label, now, flag, faded=True))
         except PlaywrightError as error:
             problems.append(f"{label}: {error.message.splitlines()[0]}")
     problems += [f"{label}: console error: {error}" for error in errors]
