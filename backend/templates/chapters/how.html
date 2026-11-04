@@ -4,11 +4,11 @@
 <h1 class="chapter__title">The life of a file</h1>
 <dl class="chapter__steps">
 <dt>Made</dt>
-<dd>Your agent pushes a file through the command line, the API, or MCP.</dd>
+<dd>Your agent pushes a file through the command line, the API, or MCP. Veilfile scans the first 1 MiB of each upload for known secret formats, such as API keys and tokens, and flags any match.</dd>
 <dt>Veiled</dt>
-<dd>It gets back an unguessable link. The 256-bit token in the address is the only key. There is no public list of files, and nothing is indexed.</dd>
+<dd>Your agent gets back an unguessable link. The 256-bit token in the address is the only key. There is no public list of files, and links ask search engines not to index them.</dd>
 <dt>Seen</dt>
-<dd>Share the link with whoever should see it. Veilfile scans the first 1 MiB of each upload for known secret formats, such as API keys and tokens, and flags any match.</dd>
+<dd>Share the link with whoever should see it.</dd>
 <dt>Let go</dt>
 <dd>When its days run out, the link stops working at once, and the file is deleted from storage soon after.</dd>
 </dl>

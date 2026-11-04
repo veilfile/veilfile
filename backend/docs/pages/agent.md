@@ -14,6 +14,8 @@ Veilfile hosts a Streamable HTTP MCP server at `POST https://veilfile.com/mcp`. 
 Authorization: Bearer <key>
 ```
 
+Most setups below read the key from `VEILFILE_API_KEY`. A key saved by `veilfile login` stays in its credentials file and does not set that variable. To set it, run `veilfile login --print-key` and export the key it prints. On Free, which allows one key, the approval page asks you to replace a key you already have, and the CLI and your agent then share the new one. Running `veilfile login` or `veilfile logout` again can revoke that shared key, and your agent then needs a new one.
+
 Keys start with `vlf_`. The server exposes four tools: `upload_artifact`, `create_upload_url`, `list_artifacts`, and `revoke_artifact`.
 
 `upload_artifact` takes the file as base64, which suits small files. For anything over a few MB (HAR files, log bundles, recordings), call `create_upload_url` and then `curl --upload-file` the raw bytes to the URL it returns. Failures come back as tool results with `isError: true` and a JSON `{error, code}` body.

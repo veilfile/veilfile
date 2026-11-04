@@ -10,9 +10,9 @@ Sign up, verify your email, install the CLI, log in, and push your first file. Y
 
 Three steps take you from signup to your first unguessable link.
 
-## 1. Install the CLI
+## 1. Sign up and install the CLI
 
-Sign up at [veilfile.com](https://veilfile.com). We email you a verification link. Click it. You cannot create an API key until your email is verified.
+[Sign up for an account](/accounts/signup/). We email you a verification link. Click it. You cannot create an API key until your email is verified.
 
 Install the `veilfile` command with pip, which needs Python 3.9 or later:
 
@@ -50,7 +50,7 @@ If the browser does not open, open the printed address on any device and approve
 
 A login creates one API key, and keys made this way count toward your plan's key limit, the same as keys you create in the dashboard. Free allows one key, Team allows five keys, Team Plus allows ten keys, and Scale allows unlimited keys. At the limit, the approval page asks you to choose a key to replace, and anything still using that key stops working.
 
-The CLI saves the key in a credentials file that only you can read. By default that file is `~/.config/veilfile/credentials` on macOS and Linux, and `%APPDATA%\veilfile\credentials` on Windows. The CLI does not print the key unless you ask it to.
+The CLI saves the key in a credentials file that only you can read. By default that file is `~/.config/veilfile/credentials` on macOS and Linux, and `%APPDATA%\veilfile\credentials` on Windows. The CLI does not print the key unless you run `veilfile login --print-key`.
 
 ## 3. Push
 

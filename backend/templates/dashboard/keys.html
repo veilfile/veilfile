@@ -13,7 +13,7 @@
 {% endif %}
 {% if active_key_count == 0 %}<section aria-labelledby="keys-get-connected">
 <h2 id="keys-get-connected">Get connected</h2>
-<p>The recommended way to connect is the CLI. Install it with pip install veilfile, run veilfile login, open the page it prints, and enter the code there. The key is stored in a credentials file only you can read. It is never printed and never lands in your shell history. Then run veilfile push screenshot.png. Your upload appears under Files.</p>
+<p>The recommended way to connect is the CLI. Install it with pip install veilfile, run veilfile login, open the page it prints, and enter the code there. The key is stored in a credentials file only you can read. The CLI prints it only if you pass --print-key, and it does not write it to your shell history. Then run veilfile push screenshot.png. Your upload appears under Files.</p>
 {% include "components/code_block.html" with id="onboarding-pip" label="Copy the pip install command" code="pip install veilfile" only %}
 {% include "components/code_block.html" with id="onboarding-login" label="Copy the veilfile login command" code="veilfile login" only %}
 {% include "components/code_block.html" with id="onboarding-push" label="Copy the veilfile push example" code="veilfile push screenshot.png" only %}

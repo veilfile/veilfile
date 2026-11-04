@@ -55,8 +55,9 @@ their Veilfile dashboard, then stop. Never ask the user to paste a key into chat
 
    Note the `url` and `expires_at` in the response. If a tool returns an
    error (`isError`), read its `code`: `file_type_not_allowed`,
-   `file_too_large`, `secret_detected`, `monthly_cap_reached`,
-   `storage_cap_reached` and `rate_limited` are not fixed by retrying.
+   `file_too_large`, `secret_detected`, `monthly_cap_reached` and
+   `storage_cap_reached` are not fixed by retrying. `rate_limited` clears by
+   itself: wait the number of seconds in `retry_after`, then try once more.
 2. Check `secret_flags` in the response. If it is non-empty (possible only
    when `on_secret` was not `reject`), the file tripped the secret scanner: do
    NOT share the link. Tell the user the upload was

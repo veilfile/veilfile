@@ -429,6 +429,7 @@ html[data-motion="off"] {
 
 .chapter__steps dd {
   margin: 0 0 var(--space-4);
+  text-wrap: pretty;
 }
 
 /* Inline links in prose: a dotted underline that gives way to the flat fill (spec 3.4). A labelled

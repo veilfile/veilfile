@@ -2,8 +2,7 @@
 
 Veilfile is private, ephemeral artifact hosting for AI agents. An agent uploads
 a file (screenshot, log bundle, HAR, doc) and gets back an unguessable,
-expiring URL. Veilfile gives agents a sanctioned place to put artifacts, so they do not have to use a public repo or paste secrets into chat. Human developers create workspaces and issue API
-keys to their agents; agents call the API with a key, no human in the loop.
+expiring URL. Veilfile gives agents a sanctioned place to put artifacts, so they do not have to use a public repo or paste secrets into chat. Human developers sign up and issue API keys to their agents. After that, an agent uploads with its key and needs no human, except to decide what to do with a flagged file.
 
 Base URL: `https://YOUR-DEPLOY`
 If the base URL above still reads YOUR-DEPLOY, replace it with the address of your own deploy. Local development uses `http://localhost:8000`.
@@ -11,12 +10,14 @@ If the base URL above still reads YOUR-DEPLOY, replace it with the address of yo
 ## Quickstart
 
 1. A human signs up in the Veilfile dashboard (email address required),
-   clicks the verification link we email, then creates a workspace and
-   issues an API key (`POST /api/v1/keys` or the dashboard). Key issuance
-   is blocked until the email is verified. The key looks like
-   `vlf_...` and is shown once. Store it as an env var, never in chat.
+   clicks the verification link we email, then issues an API key
+   (`POST /api/v1/keys` or the dashboard). Key issuance is blocked until
+   the email is verified. Signing up provisions the workspace automatically.
+   The key looks like `vlf_...` and is shown once. Store it in the env var
+   `VEILFILE_API_KEY`, never in chat. An agent needs only the variable's
+   name, not its value.
 2. Upload via the REST API:
-   `curl -X POST https://YOUR-DEPLOY/api/v1/artifacts -H "Authorization: Bearer vlf_..." -F "file=@screenshot.png" -F "ttl_days=7"`
+   `curl -X POST https://YOUR-DEPLOY/api/v1/artifacts -H "Authorization: Bearer $VEILFILE_API_KEY" -F "file=@screenshot.png" -F "ttl_days=7"`
    → `{id, url, expires_at, size_bytes, secret_flags}`. The response adds `ttl_adjusted: true`
    whenever the applied TTL differs from what you sent: above-max values are
    clamped down and sub-1 values are clamped up to 1 day. A `ttl_days` that is
@@ -29,6 +30,14 @@ If the base URL above still reads YOUR-DEPLOY, replace it with the address of yo
    mints a one-time URL (valid 15 minutes, used up by the first successful
    upload) to PUT the raw bytes from your shell instead. A rejected PUT does
    not use the URL up, so you can fix the problem and retry.
+4. Or use the `veilfile` command. A human installs it with
+   `pip install veilfile` or `npm install -g veilfile`, then runs
+   `veilfile login` and approves it in a browser, or sets
+   `VEILFILE_API_KEY`. `veilfile push FILE` prints the share URL on standard
+   output. If the scan flagged the file, it also prints a warning, on
+   standard error from the pip command and on standard output from the npm
+   command, so ask the user before sharing the link. The command cannot list
+   or revoke files, so use the API or MCP for those.
 
 ## Endpoints
 
@@ -51,20 +60,20 @@ Monthly upload caps: Free 100/mo, Team $4 2,000/mo, Team Plus $6 4,000/mo, Scale
 Yearly prices: Team $40/yr, Team Plus $60/yr, Scale $120/yr
 Yearly billing costs ten months' price, so two months are free, and a yearly plan has the same caps as the monthly one.
 Hard storage caps: Free 1 GB, Team 25 GB, Team Plus 40 GB, Scale 100 GB
-Only successful uploads count toward the monthly cap, and rejected 4xx uploads never consume quota. Paid prices are tax-inclusive in every country. Over-cap uploads fail with 402.
+Only successful uploads count toward the monthly cap, and rejected 4xx uploads never consume quota. Paid prices are tax-inclusive in every country. An upload over the storage cap fails with `402` `storage_cap_reached`, and an upload over the monthly cap fails with `429` `monthly_cap_reached`. Retrying fixes neither, so tell the user to revoke files or upgrade for storage, or to wait for next month or upgrade for the monthly cap.
 
-Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every failure including auth and throttling (`unauthorized`, `forbidden`, `not_found`, `rate_limited`, `file_type_not_allowed`, `file_too_large`, `storage_cap_reached`, `monthly_cap_reached`, …); branch on `code`. HTTP statuses are standard and `429`s carry `Retry-After`. Over MCP, tool failures are results with `isError: true` and the same JSON in the text content.
+Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every failure including auth and throttling (`unauthorized`, `forbidden`, `not_found`, `rate_limited`, `file_type_not_allowed`, `file_too_large`, `storage_cap_reached`, `monthly_cap_reached`, …); branch on `code`. HTTP statuses are standard. A `429` carries `Retry-After` only when its code is `rate_limited`: wait that many seconds, then try again. Over MCP, tool failures are results with `isError: true` and the same JSON in the text content, and `rate_limited` gives the wait as `retry_after`.
 
 ## TTL behavior
 
 - Omitting `ttl_days` gives the plan maximum, not something shorter.
 - Plan TTL maxima: Free 7 days, Team 90 days, Team Plus 90 days, Scale 365 days
 - A plan change never shortens a file's expiry. A file uploaded on Scale keeps its Scale expiry after a downgrade to Free. TTL maxima apply to new uploads. Deletion runs on a daily sweep: expect removal within 24 hours of expiry, 48 at most after a restart. Always read `expires_at` in the response.
-- A whole-number `ttl_days` above the plan maximum is clamped down, never rejected (and 0 or negative is raised to 1). The 201 response then includes `"ttl_adjusted": true`. A non-integer value (`0.5`, `abc`) is rejected with `400` `invalid_request`. Always read `expires_at` in the response; never trust the value you sent.
+- A whole-number `ttl_days` above the plan maximum is clamped down, never rejected. The 201 response then includes `"ttl_adjusted": true`. Over REST, 0 or a negative number is raised to 1, and over MCP it is rejected, so send 1 or more. A non-integer value (`0.5`, `abc`) is rejected with `400` `invalid_request`. Always read `expires_at` in the response; never trust the value you sent.
 
 ## secret_flags are advisory, not blocking
 
-A flagged upload is stored, and its link works. Blocking on secret-shaped content would break legitimate uploads like test fixtures, so the scan only warns: when `secret_flags` is non-empty, the upload response also carries a `warning` string telling you to ask the user whether to keep or revoke the file before sharing its link. For never-host semantics, check `secret_flags` in the upload response and call `DELETE /api/v1/artifacts/<id>` (or the `revoke_artifact` MCP tool) when it is non-empty.
+A flagged upload is stored, and its link works. Blocking on secret-shaped content would break legitimate uploads like test fixtures, so by default the scan only warns: when `secret_flags` is non-empty, the upload response also carries a `warning` string telling you to ask the user whether to keep or revoke the file before sharing its link. Pass `on_secret=reject` unless you expect a match, such as a test fixture. For never-host semantics, check `secret_flags` in the upload response and call `DELETE /api/v1/artifacts/<id>` (or the `revoke_artifact` MCP tool) when it is non-empty.
 
 ## MCP upload encoding
 

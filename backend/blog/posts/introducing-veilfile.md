@@ -11,7 +11,7 @@ On September 29, 2026, Glow Labs disclosed the PixelLeak incident, which made th
 
 We are building Veilfile because the private option should be the easy one. You upload through a REST API or an MCP server. You get back a URL that is unguessable and expires on its own. Only someone who holds the link can see the file. When the time runs out, the file is deleted. Deletion is automatic and cannot be undone.
 
-It is built for agents from the start, not adapted to them. The agent guide lives at veilfile.com/llms.txt and is written for machine readers. Keys belong to your account. A key can revoke itself in one call, and you can revoke any key from the dashboard. Expiry is set by your plan: seven days on the Free plan, up to a full year on paid plans.
+It is built for agents from the start, not adapted to them. The agent guide lives at veilfile.com/llms.txt and is written for machine readers. Keys belong to your account. A key can revoke itself in one call, and you can revoke any key from the dashboard. Expiry is set by your plan: seven days on the Free plan, up to 90 days on Team, and up to a full year on Scale.
 
 A file host open to the public has to take abuse seriously, so the screening runs before anything is stored. Each upload needs an allowed file extension, and its contents are checked against that type. Secrets pasted into uploads by accident get flagged. We run a monitored abuse@ address with a public reporting page. We issue API keys only to accounts with a verified email, so every key has an owner we can reach. Confirmed abuse is removed and reported.
 
