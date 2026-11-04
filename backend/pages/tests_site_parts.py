@@ -5,6 +5,7 @@ CI without ever running, and one in two would run twice (the few that the pages,
 SHARED_PAGE_CHECKS in the harness). Every `site*` job in ci.yml is a part (a new one is one more part and one more name in the docs below).
 site-tests/run_site_checks.py needs Playwright, which the backend does not install, so it is read as source here."""
 import ast
+import json
 import os
 import re
 import shutil
@@ -12,6 +13,7 @@ import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
+from unittest import skipUnless
 
 from django.conf import settings
 from django.test import SimpleTestCase
@@ -506,6 +508,22 @@ class RunnerTests(SimpleTestCase):
         self.assertNotIn("\n    if:", body, ".github/workflows/ci.yml: the names job runs on every push and pull request")
         self.assertIn('-s "$RUNNER_TEMP/names"', body, ".github/workflows/ci.yml: the names job fails when the list holds no names, so an empty pattern file cannot pass")
         self.assertIn("|| status=$?", body, ".github/workflows/ci.yml: the names job captures git grep's exit status, so a git error is not read as no match")
+        self.assertIn("fetch-depth: 0", body, ".github/workflows/ci.yml: the names job fetches the history, or it cannot read the messages of the commits a push or pull request brings")
+        self.assertIn("tools/names_in_words.sh commits pull-request", body, ".github/workflows/ci.yml: the names job also reads new commit messages and the pull request's title and body")
+        self.assertIn("pull-requests: read", body, ".github/workflows/ci.yml: the names job reads the pull request as it is now, since a re-run reuses the event")
+
+    def test_an_edited_pull_request_is_read_again(self):
+        # Editing a pull request's title or body runs no job of ci.yml, and adding the edited event there would run every job again.
+        workflow = (ROOT / ".github/workflows/names-on-edit.yml").read_text()
+        self.assertIn("types: [edited]", workflow, ".github/workflows/names-on-edit.yml: it runs when a pull request's title or body is edited")
+        self.assertIn("secrets.FORBIDDEN_NAMES", workflow, ".github/workflows/names-on-edit.yml: it reads the owner's list from the FORBIDDEN_NAMES secret")
+        self.assertIn("tools/names_in_words.sh pull-request", workflow, ".github/workflows/names-on-edit.yml: it reads the title and the body only, since an edit brings no commit")
+        self.assertIn("pull-requests: read", workflow, ".github/workflows/names-on-edit.yml: it reads the pull request as it is now")
+
+    def test_each_push_to_main_runs_to_its_end(self):
+        # The names job reads only the commits a push brought, so a run cancelled by the next push would leave them unread.
+        self.assertIn("group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}", WORKFLOW.read_text(),
+                      ".github/workflows/ci.yml: a push to main has a concurrency group of its own, and a pull request's newer run still cancels its older one")
 
     def test_no_document_still_describes_the_vm(self):
         stale = re.compile(r"self-hosted runner|veilfile-vm|veilfile-ci|CI_RUNS_ON|limactl|one at a time", re.I)
@@ -585,3 +603,162 @@ class ChangesJobTests(SimpleTestCase):
         # a page's directory into a skipped one still counts as a change to the directory it left.
         self.assertEqual(args, f"diff --name-only --no-renames {'a' * 40}...{'b' * 40}",
                          ".github/workflows/ci.yml: the `changes` job runs git diff --name-only --no-renames \"$BASE_SHA...$HEAD_SHA\"")
+
+
+# CI's runners have these, so there a missing one fails and does not skip.
+@skipUnless(os.environ.get("CI") or (shutil.which("jq") and shutil.which("git") and shutil.which("bash")), "the names script needs jq, git and bash")
+class NamesInWordsScriptTests(SimpleTestCase):
+    """tools/names_in_words.sh, run for real in a throwaway repository with a stand-in for the owner's list. The run's log is public, so whatever it finds it
+    says where and never what."""
+
+    WORD = "zebrafish"
+    longMessage = False
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.folder = Path(folder.name)
+        self.repo = self.folder / "repo"
+        self.repo.mkdir()
+        self.git("init", "-q")
+        self.base = self.commit("The first commit is clean.")
+        # The script reads a pull request as it is now, from the API: a stand-in for gh, answering with live.json. It is told what --jq asks for, so jq reads it.
+        bin_folder = self.folder / "bin"
+        bin_folder.mkdir()
+        self.live = self.folder / "live.json"
+        gh = bin_folder / "gh"
+        gh.write_text('#!/usr/bin/env bash\n[ -f "$LIVE" ] || exit 1\nwhile [ "$1" != --jq ]; do shift; done\nexec jq -r "$2" "$LIVE"\n')
+        gh.chmod(0o755)
+        self.path = f"{bin_folder}{os.pathsep}{os.environ['PATH']}"
+
+    def git(self, *args, **env):
+        result = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=self.repo, capture_output=True, text=True, check=True,
+                                env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_SYSTEM": os.devnull, "GIT_AUTHOR_NAME": "Veilfile", "GIT_AUTHOR_EMAIL": "support@veilfile.com",
+                                     "GIT_COMMITTER_NAME": "Veilfile", "GIT_COMMITTER_EMAIL": "support@veilfile.com", **env})
+        return result.stdout.strip()
+
+    def commit(self, message, **env):
+        self.git("commit", "-q", "--allow-empty", "-m", message, **env)
+        return self.git("rev-parse", "HEAD")
+
+    def run_script(self, event_name, event, *modes, names=None):
+        path = self.folder / "event.json"
+        path.write_text(json.dumps(event))
+        return subprocess.run(["bash", str(ROOT / "tools/names_in_words.sh"), *modes], cwd=self.repo, capture_output=True, text=True,
+                              env={**os.environ, "PATH": self.path, "LIVE": str(self.live), "GITHUB_REPOSITORY": "veilfile/veilfile",
+                                   "FORBIDDEN_NAMES": f"{self.WORD}\n" if names is None else names, "GITHUB_EVENT_NAME": event_name, "GITHUB_EVENT_PATH": str(path)})
+
+    def pull(self, head, title="A clean title", body="A clean body.", ref="a-clean-branch", event_body=None):
+        """The event of a pull request, with the same words live, unless event_body says the event holds other words than the API now does."""
+        self.live.write_text(json.dumps({"title": title, "body": body, "head": {"ref": ref, "label": f"veilfile:{ref}"}}))
+        return {"pull_request": {"number": 7, "base": {"sha": self.base}, "head": {"sha": head}, "title": title, "body": body if event_body is None else event_body}}
+
+    def assertFound(self, result, *where):
+        self.assertEqual(result.returncode, 1, f"tools/names_in_words.sh should fail here: {result.stdout}{result.stderr}")
+        self.assertNotIn(self.WORD, (result.stdout + result.stderr).lower(), "tools/names_in_words.sh must never print what it found: the run's log is public")
+        for words in where:
+            self.assertIn(words, result.stdout, f"tools/names_in_words.sh should say where the name is ({words}): {result.stdout}")
+
+    def assertClean(self, result):
+        self.assertEqual(result.returncode, 0, f"tools/names_in_words.sh should pass here: {result.stdout}{result.stderr}")
+
+    def assertDidNotRun(self, result):
+        self.assertEqual(result.returncode, 1, f"tools/names_in_words.sh should fail when it cannot read something, or a check that did not run would pass: {result.stdout}{result.stderr}")
+
+    def test_a_clean_pull_request_passes(self):
+        self.assertClean(self.run_script("pull_request", self.pull(self.commit("A clean message.")), "commits", "pull-request"))
+
+    def test_a_name_in_a_new_commit_message_fails_and_gives_the_commit_only(self):
+        clean = self.commit("A clean message.")
+        head = self.commit(f"A message that holds {self.WORD.title()}'s word.")
+        result = self.run_script("pull_request", self.pull(head), "commits")
+        self.assertFound(result, head)
+        self.assertNotIn(clean, result.stdout, "tools/names_in_words.sh names only the commits that hold a name")
+
+    def test_a_name_in_a_commit_body_fails(self):
+        head = self.commit(f"A clean subject.\n\nThe body holds {self.WORD}.")
+        self.assertFound(self.run_script("pull_request", self.pull(head), "commits"), head)
+
+    def test_a_name_in_an_author_or_committer_fails(self):
+        clean = self.commit("A clean message.")
+        shas = [self.commit("A clean message.", **{field: value}) for field, value in (("GIT_AUTHOR_NAME", self.WORD), ("GIT_AUTHOR_EMAIL", f"{self.WORD}@example.com"),
+                                                                                       ("GIT_COMMITTER_NAME", self.WORD), ("GIT_COMMITTER_EMAIL", f"{self.WORD}@example.com"))]
+        result = self.run_script("pull_request", self.pull(shas[-1]), "commits")
+        self.assertFound(result, *shas)
+        self.assertNotIn(clean, result.stdout, "tools/names_in_words.sh names only the commits that hold a name")
+
+    def test_a_name_older_than_the_range_is_not_read(self):
+        # History already public cannot be changed by a pull request, so it must not fail every later one.
+        old = self.commit(f"An old message holds {self.WORD}.")
+        self.base = old
+        self.assertClean(self.run_script("pull_request", self.pull(self.commit("A clean message.")), "commits"))
+
+    def test_a_name_in_a_pull_requests_title_or_body_fails_and_gives_neither(self):
+        head = self.commit("A clean message.")
+        self.assertFound(self.run_script("pull_request", self.pull(head, title=f"A title with {self.WORD}"), "pull-request"), "title, body or branch")
+        self.assertFound(self.run_script("pull_request", self.pull(head, body=f"A body\nwith {self.WORD.upper()}."), "pull-request"), "title, body or branch")
+
+    def test_a_name_in_a_pull_requests_branch_fails(self):
+        # A merge commit's default message carries the branch's name into main.
+        self.assertFound(self.run_script("pull_request", self.pull(self.commit("A clean message."), ref=f"fix/{self.WORD}"), "pull-request"), "title, body or branch")
+
+    def test_an_edit_that_removed_a_name_passes_on_a_re_run(self):
+        # A re-run reuses the event, which still holds the old body: only what the pull request says now counts, or an edit could never turn the required job green.
+        self.assertClean(self.run_script("pull_request", self.pull(self.commit("A clean message."), event_body=f"The old body held {self.WORD}."), "pull-request"))
+
+    def test_a_pull_request_with_no_body_prints_no_stand_in_text(self):
+        # With no default for the body, jq would print the word null.
+        self.assertClean(self.run_script("pull_request", self.pull(self.commit("A clean message."), body=None), "commits", "pull-request", names="null\n"))
+
+    def test_a_pull_request_it_cannot_read_fails_rather_than_passes(self):
+        event = self.pull(self.commit("A clean message."))
+        self.live.unlink()
+        self.assertDidNotRun(self.run_script("pull_request", event, "pull-request"))
+
+    def test_a_pull_requests_words_are_only_ever_data(self):
+        marker = self.folder / "ran"
+        body = f"$(touch {marker}) `touch {marker}` ; touch {marker}"
+        self.assertClean(self.run_script("pull_request", self.pull(self.commit("A clean message."), body=body), "pull-request"))
+        self.assertFalse(marker.exists(), "tools/names_in_words.sh must never run what a pull request's words say")
+
+    def test_a_push_reads_its_commits_and_has_no_pull_request_to_read(self):
+        head = self.commit(f"A merge subject with {self.WORD}.")
+        self.assertFound(self.run_script("push", {"before": self.base, "after": head}, "commits", "pull-request"), head)
+        self.live.write_text(json.dumps({"title": self.WORD, "body": None, "head": {"ref": "x", "label": "x"}}))
+        self.assertClean(self.run_script("push", {"before": head, "after": self.commit("A clean message.")}, "commits", "pull-request"))
+
+    def test_a_push_with_no_earlier_commit_reads_only_its_own(self):
+        old = self.commit(f"An old message holds {self.WORD}.")
+        self.assertClean(self.run_script("push", {"before": "0" * 40, "after": self.commit("A clean message.")}, "commits"))
+        self.assertFound(self.run_script("push", {"before": "0" * 40, "after": old}, "commits"), old)
+
+    def test_an_empty_list_fails_rather_than_passes(self):
+        result = self.run_script("pull_request", self.pull(self.commit("A clean message.")), "commits", names=" \n\n")
+        self.assertEqual(result.returncode, 1, "tools/names_in_words.sh: an empty list must fail, or nothing would ever be found")
+        self.assertIn("no names", result.stdout)
+
+    def test_a_list_saved_with_windows_line_endings_still_finds_names(self):
+        head = self.commit(f"A message that holds {self.WORD}.")
+        self.assertFound(self.run_script("pull_request", self.pull(head), "commits", names=f"{self.WORD}\r\n"), head)
+
+    def test_a_commit_it_cannot_read_fails_rather_than_passes(self):
+        self.assertDidNotRun(self.run_script("pull_request", self.pull("f" * 40), "commits"))
+
+    def test_an_event_that_names_no_commits_fails_rather_than_passes(self):
+        marker = self.repo / "x..y"
+        self.assertDidNotRun(self.run_script("push", {"before": "--output=x", "after": "y"}, "commits"))
+        self.assertFalse(marker.exists(), "tools/names_in_words.sh must not pass an event's value to git as an option")
+
+    def test_an_event_it_does_not_know_fails_rather_than_passes(self):
+        self.assertDidNotRun(self.run_script("schedule", {}, "commits"))
+
+    def test_an_event_file_it_cannot_read_fails_rather_than_passes(self):
+        path = self.folder / "event.json"
+        result = self.run_script("pull_request", {}, "commits")
+        self.assertDidNotRun(result)
+        path.write_text("not json")
+        env = {**os.environ, "PATH": self.path, "LIVE": str(self.live), "GITHUB_REPOSITORY": "veilfile/veilfile", "FORBIDDEN_NAMES": self.WORD, "GITHUB_EVENT_NAME": "pull_request", "GITHUB_EVENT_PATH": str(path)}
+        self.assertDidNotRun(subprocess.run(["bash", str(ROOT / "tools/names_in_words.sh"), "commits", "pull-request"], cwd=self.repo, capture_output=True, text=True, env=env))
+
+    def test_a_mode_it_does_not_know_fails_rather_than_passes(self):
+        self.assertDidNotRun(self.run_script("pull_request", self.pull(self.commit("A clean message.")), "comits"))

@@ -45,8 +45,10 @@ on:
 permissions:
   contents: read
 
+# A newer push cancels a pull request's older run. Each push to main runs to its end, because the names job reads only the
+# commits that push brought: a cancelled run would leave them unread.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 jobs:
@@ -204,13 +206,19 @@ jobs:
     name: names
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # the title and body as they are now, since a re-run reuses the event
     steps:
       - uses: actions/checkout@v4.2.2
+        with:
+          fetch-depth: 0 # the messages of the commits this push or pull request brings
+          persist-credentials: false
       - name: No name from the owner's list in the tree
         env:
           FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
         run: |
-          printf '%s\n' "$FORBIDDEN_NAMES" | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/names"
+          printf '%s\n' "$FORBIDDEN_NAMES" | tr -d '\r' | sed '/^[[:space:]]*$/d' > "$RUNNER_TEMP/names"
           if [ ! -s "$RUNNER_TEMP/names" ]; then
             echo "::error::The FORBIDDEN_NAMES secret holds no names. The owner sets it (AGENTS.md, Where CI runs)."
             exit 1
@@ -224,6 +232,11 @@ jobs:
             echo "::error::git grep failed (exit $status), so the names check did not run."
             exit 1
           fi
+      - name: No name from the owner's list in new commit messages or this pull request's title and body
+        env:
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/names_in_words.sh commits pull-request
 
   site:
     name: site

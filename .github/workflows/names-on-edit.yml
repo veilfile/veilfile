@@ -1,0 +1,29 @@
+# Editing a pull request's title or body runs no job of ci.yml, whose names job read them when the pull request was opened or
+# pushed to. This reads them again after an edit (AGENTS.md, Where CI runs). It is not a required check, so it does not block a
+# merge: it shows the edit as a failed check, for someone to fix, and main takes merge commits only, which do not carry the body.
+name: Names on edit
+
+on:
+  pull_request:
+    branches: [main]
+    types: [edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  names-on-edit:
+    name: names on edit
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }} # a fork's pull request has no secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - name: No name from the owner's list in this pull request's title or body
+        env:
+          FORBIDDEN_NAMES: ${{ secrets.FORBIDDEN_NAMES }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash tools/names_in_words.sh pull-request
