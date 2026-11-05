@@ -19,6 +19,10 @@ PLANS = {
 # enforced from PLANS whichever way the plan is paid. The Stripe prices are separate objects (drop_billing/account.py).
 ANNUAL_PRICE_USD = {"team": 40, "team_plus": 60, "scale": 120}
 
+# Days after the first paid subscription in which a cancellation is refunded in full. It mirrors the refund clause in the
+# Terms of Service (legal/documents/terms-of-service.md); a change here needs the owner's change there.
+REFUND_DAYS = 14
+
 
 def plan_name(slug):
     """A plan as the pages name it: its slug capitalised, with an underscore read as a space ("team_plus" is "Team Plus")."""
