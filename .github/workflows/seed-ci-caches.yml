@@ -1,0 +1,143 @@
+# Fills, on main, the caches that ci.yml's browser jobs restore, so that a new pull request's jobs start with Playwright's browsers and the apt
+# packages already there. A pull request can read the caches of the default branch but not those of another pull request, and the browser jobs run
+# for pull requests only, so without this every pull request starts with empty caches and downloads everything from the Ubuntu mirror (see
+# AGENTS.md, "Where CI runs"). The cache keys here must be exactly those of ci.yml: pages.tests_site_parts compares them.
+#
+# Two jobs, one for each kind of cache ci.yml has: Chromium alone (the `site` jobs but `site-phone` and `site-dashboard`) and Chromium with WebKit.
+# They are not required checks and nothing depends on them. If one hits a slow mirror, a later run fills the cache.
+#
+# actions/cache never overwrites a key, so once a Playwright version has its caches, a run finds them and skips the install. A package update on
+# Ubuntu's side changes nothing here: the key holds the Playwright version only, so the cached .deb files stay until that version changes, and a
+# pull request's apt then downloads only the packages that changed.
+name: Seed CI caches
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, so that the caches are used within GitHub's 7 days and do not expire.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A run that is cancelled saves nothing, so a newer run waits for the one that is running.
+concurrency:
+  group: seed-ci-caches
+  cancel-in-progress: false
+
+jobs:
+  chromium:
+    name: chromium
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        id: browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        id: apt
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
+      # Both caches found under their exact keys: there is nothing to save, so the install is skipped.
+      - name: Install dependencies
+        if: steps.browsers.outputs.cache-hit != 'true' || steps.apt.outputs.cache-hit != 'true'
+        timeout-minutes: 12
+        run: |
+          # The same apt settings as ci.yml's jobs: the archive directory is the cached one.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
+          pip install -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
+
+  webkit:
+    name: webkit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: site-tests/requirements.txt
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright's browsers
+        id: browsers
+        uses: actions/cache@v4.2.3
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        id: apt
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-
+      # Both caches found under their exact keys: there is nothing to save, so the install is skipped.
+      - name: Install dependencies
+        if: steps.browsers.outputs.cache-hit != 'true' || steps.apt.outputs.cache-hit != 'true'
+        timeout-minutes: 12
+        run: |
+          # The same apt settings as ci.yml's jobs: the archive directory is the cached one.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
+          pip install -r site-tests/requirements.txt
+          python -m playwright install --with-deps chromium webkit
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"

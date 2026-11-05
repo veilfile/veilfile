@@ -535,6 +535,51 @@ class RunnerTests(SimpleTestCase):
         self.assertEqual({key for job, key in keys.items() if job in WEBKIT_JOBS}.isdisjoint({key for job, key in keys.items() if job not in WEBKIT_JOBS}), True,
                          "ci.yml: the jobs that install WebKit and the ones that do not have different apt cache keys")
 
+    def test_the_seed_workflow_fills_the_caches_the_site_jobs_read(self):
+        # A pull request reads the caches of main but not another pull request's, and the site jobs run for pull requests only. seed-ci-caches.yml fills the caches on main,
+        # and only under exactly the keys of ci.yml, or a pull request's exact-key lookup misses them (AGENTS.md, "Where CI runs").
+        seed_text = (ROOT / ".github" / "workflows" / "seed-ci-caches.yml").read_text(encoding="utf-8")
+        seed = workflow_jobs(seed_text)
+        self.assertEqual(sorted(seed), ["chromium", "webkit"], ".github/workflows/seed-ci-caches.yml: one job fills the Chromium caches and one the Chromium and WebKit caches")
+        self.assertRegex(seed_text, r"(?m)^on:\n  push:\n    branches: \[main\]\n", ".github/workflows/seed-ci-caches.yml: it runs on every push to main")
+        self.assertRegex(seed_text, r"(?m)^  schedule:\n    # .*\n    - cron: ", ".github/workflows/seed-ci-caches.yml: it runs weekly, so that the caches do not expire unused")
+        self.assertRegex(seed_text, r"(?m)^  workflow_dispatch:", ".github/workflows/seed-ci-caches.yml: it can be run by hand")
+        self.assertRegex(seed_text, r"(?m)^permissions:\n  contents: read\n", ".github/workflows/seed-ci-caches.yml: it only reads the repository")
+        self.assertNotIn("secrets.", seed_text, ".github/workflows/seed-ci-caches.yml: it uses no secrets")
+        self.assertRegex(seed_text, r"(?m)^concurrency:\n  group: .+\n  cancel-in-progress: false\n",
+                         ".github/workflows/seed-ci-caches.yml: a running seed is never cancelled, since a cancelled job saves nothing")
+        self.assertNotRegex(seed_text, r"(?m)^  pull_request", ".github/workflows/seed-ci-caches.yml: it runs on main, not for pull requests")
+        ci_apt = step_script(next(step for step in workflow_steps(self.jobs["site"]) if "name: Install dependencies\n" in step))
+
+        def apt_settings(script):
+            return script[script.index("sudo tee"):script.index("EOF\n", script.index("<<EOF")) + 4]
+
+        for name, body in seed.items():
+            self.assertEqual(job_field(body, "runs-on"), RUNS_ON, f".github/workflows/seed-ci-caches.yml: the `{name}` job runs on {RUNS_ON}")
+            self.assertIn("timeout-minutes: 20", body, f".github/workflows/seed-ci-caches.yml: the `{name}` job has 20 minutes")
+            self.assertIn("persist-credentials: false", body, f".github/workflows/seed-ci-caches.yml: the `{name}` job checks out without keeping the token")
+            for action in ("actions/checkout", "actions/setup-python", "actions/cache"):
+                self.assertEqual(set(re.findall(rf"uses: {action}@(\S+)\n", body)), set(re.findall(rf"uses: {action}@(\S+)\n", self.text)),
+                                 f".github/workflows/seed-ci-caches.yml: the `{name}` job uses {action} at the version ci.yml pins")
+            find = next(step for step in workflow_steps(body) if "id: playwright" in step)
+            self.assertIn("sed -n 's/^playwright==//p' site-tests/requirements.txt", find, f".github/workflows/seed-ci-caches.yml: the `{name}` job reads the Playwright version as ci.yml does")
+            script = step_script(next(step for step in workflow_steps(body) if "name: Install dependencies\n" in step))
+            self.assertEqual(apt_settings(script), apt_settings(ci_apt), f".github/workflows/seed-ci-caches.yml: the `{name}` job's apt settings are exactly those of ci.yml")
+            self.assertIn("chown", next(step for step in workflow_steps(body) if "if: always()" in step), f".github/workflows/seed-ci-caches.yml: the `{name}` job hands the .deb files to the runner user")
+
+        def keys(job_body):
+            """(the browser cache key, the apt cache key, the apt restore-keys line) of a job."""
+            steps = workflow_steps(job_body)
+            browsers = next(step for step in steps if "name: Cache Playwright's browsers" in step)
+            apt = next(step for step in steps if "name: Cache the apt packages" in step)
+            return (re.search(r"\n          key: (.*)", browsers).group(1), re.search(r"\n          key: (.*)", apt).group(1), re.search(r"restore-keys: \|\n\s+(.*)", apt).group(1))
+        for seed_job, ci_jobs, browsers in (("chromium", [job for job in SITE_JOBS if job not in WEBKIT_JOBS], "chromium"), ("webkit", list(WEBKIT_JOBS), "chromium webkit")):
+            for ci_job in ci_jobs:
+                self.assertEqual(keys(seed[seed_job]), keys(self.jobs[ci_job]),
+                                 f".github/workflows/seed-ci-caches.yml: the `{seed_job}` job's cache keys must be those of the `{ci_job}` job in ci.yml, byte for byte, or a pull request misses the caches")
+            self.assertIn(f"python -m playwright install --with-deps {browsers}\n", step_script(next(step for step in workflow_steps(seed[seed_job]) if "name: Install dependencies\n" in step)),
+                          f".github/workflows/seed-ci-caches.yml: the `{seed_job}` job installs {browsers}")
+
     def test_the_names_job_checks_every_file_against_the_owners_list(self):
         body = self.jobs["names"]
         self.assertIn("secrets.FORBIDDEN_NAMES", body, ".github/workflows/ci.yml: the names job reads the owner's list from the FORBIDDEN_NAMES secret")
