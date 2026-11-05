@@ -3,9 +3,11 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import shutil
 import tempfile
 from datetime import timedelta
+from pathlib import Path
 from unittest import mock
 
 import secrets
@@ -15,7 +17,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.utils import timezone
 from oauth2_provider.models import AccessToken, Application, RefreshToken
 
@@ -395,3 +397,49 @@ class UploaderTests(TestCase):
         response = self._put(pending.token)
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json(), unknown.json())
+
+
+BACKEND = Path(__file__).resolve().parent.parent
+ALLOWED = {"drop_core/models.py": 1, "drop_core/views.py": 2}
+
+
+class PersonReadsTests(TestCase):
+    def test_usage_reports_the_keys_person(self):
+        workspace = get_or_create_workspace(make_user("ada", email="ada@example.com"))
+        grace = second_member(workspace, "grace", email="grace@example.com")
+        _, raw = APIKey.create_key(workspace, "agent", member=grace)
+        body = self.client.get("/api/v1/usage", HTTP_AUTHORIZATION=f"Bearer {raw}").json()
+        self.assertEqual(body["email"], "grace@example.com")
+
+    def test_an_oauth_logout_revokes_only_the_callers_grants(self):
+        ada = make_user("ada")
+        workspace = get_or_create_workspace(ada)
+        grace = second_member(workspace, "grace")
+        app = _make_app()
+        _issue_token(ada, app)
+        raw = _issue_token(grace.user, app)[0]
+        response = self.client.post(
+            "/api/v1/oauth/revoke-grants", HTTP_AUTHORIZATION=f"Bearer {raw}"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(AccessToken.objects.filter(user=grace.user).exists())
+        self.assertTrue(AccessToken.objects.filter(user=ada).exists())
+
+
+class OwnerReadsTests(SimpleTestCase):
+    def test_only_the_fallbacks_read_the_workspace_owner(self):
+        pattern = re.compile(r"workspace__owner|\bworkspace\.owner\b")
+        found = {}
+        for path in BACKEND.rglob("*.py"):
+            rel = path.relative_to(BACKEND).as_posix()
+            if "/migrations/" in rel or path.name.startswith("tests"):
+                continue
+            count = len(pattern.findall(path.read_text()))
+            if count:
+                found[rel] = count
+        self.assertEqual(
+            found,
+            ALLOWED,
+            "A credential or file check reads workspace.owner. Use .acting_member or .person "
+            "(AGENTS.md, People inside an account), or, for a new NULL-member fallback, add it to ALLOWED.",
+        )

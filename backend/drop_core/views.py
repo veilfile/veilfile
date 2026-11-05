@@ -662,7 +662,7 @@ class OAuthGrantRevokeView(APIView):
                     "apps on the dashboard."
                 )
             revoked = revoke_user_oauth_grants(
-                request.auth.workspace.owner, application=application
+                request.auth.person, application=application
             )
         elif request.auth is not None:
             return _session_required_response(
@@ -701,7 +701,7 @@ class OAuthGrantDeleteView(APIView):
 class UsageView(APIView):
     """Usage for the calling account. API-key auth (agents) or session auth
     (dashboard). API-key callers see the key's workspace, including the
-    workspace owner's email — the same data the dashboard shows."""
+    email of the person behind the credential — the same data the dashboard shows."""
 
     authentication_classes = [APIKeyAuthentication, SessionAuthentication]
     permission_classes = [IsAPIKeyOrSessionAuthenticated]
@@ -710,7 +710,7 @@ class UsageView(APIView):
         workspace = _request_workspace(request)
         auth = request.auth
         if auth is not None and getattr(auth, "workspace", None) is not None:
-            account_user = workspace.owner
+            account_user = request.auth.person
         else:
             account_user = request.user
         return answer_response(account.usage(account_user, workspace=workspace))
