@@ -19,10 +19,10 @@ finds and removes such orphans.
 import logging
 
 from django.db import transaction
-from django.db.models.signals import post_delete
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
-from .models import Artifact
+from .models import Artifact, Workspace, administrator_of
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,13 @@ def delete_artifact_bytes(sender, instance, using, **kwargs):
         return
     # robust: a failure here must not stop other commit callbacks.
     transaction.on_commit(_PendingDeletes(item), using=using, robust=True)
+
+
+@receiver(post_save, sender=Workspace, dispatch_uid="drop_core.workspace_administrator")
+def workspace_administrator(sender, instance, created, **kwargs):
+    """Give a new workspace its owner as administrator, however it was made."""
+    if created:
+        administrator_of(instance)
 
 
 def _delete_bytes(items):

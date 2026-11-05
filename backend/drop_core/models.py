@@ -47,6 +47,77 @@ def get_or_create_workspace(user):
     return workspace
 
 
+VISIBILITY_ONLY_ME = "only_me"
+VISIBILITY_TEAM = "team"
+VISIBILITY_CHOICES = [
+    (VISIBILITY_ONLY_ME, "Only me"),
+    (VISIBILITY_TEAM, "Team"),
+]
+
+
+class Membership(models.Model):
+    """A person's place in a workspace. The workspace's owner is always its
+    one current administrator; other people are members. Rows are never
+    deleted by application code: removing a person sets ``removed_at``."""
+
+    ADMINISTRATOR = "administrator"
+    MEMBER = "member"
+    ROLE_CHOICES = [
+        (ADMINISTRATOR, "Administrator"),
+        (MEMBER, "Member"),
+    ]
+
+    workspace = models.ForeignKey(
+        Workspace, related_name="memberships", on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="memberships", on_delete=models.CASCADE
+    )
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=MEMBER)
+    created_at = models.DateTimeField(auto_now_add=True)
+    removed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "user"], name="membership_one_per_person"
+            ),
+            models.UniqueConstraint(
+                fields=["workspace"],
+                condition=models.Q(role="administrator", removed_at__isnull=True),
+                name="membership_one_administrator",
+            ),
+        ]
+
+    @property
+    def is_current(self):
+        return self.removed_at is None
+
+    def __str__(self):
+        return f"{self.user_id} in {self.workspace_id} ({self.role})"
+
+
+def administrator_of(workspace):
+    """The workspace's administrator membership, created if it is missing."""
+    membership, _ = Membership.objects.get_or_create(
+        workspace=workspace,
+        user_id=workspace.owner_id,
+        defaults={"role": Membership.ADMINISTRATOR},
+    )
+    return membership
+
+
+def current_member(workspace, user):
+    """The user's current membership of the workspace, or None."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None
+    if user.pk == workspace.owner_id:
+        return administrator_of(workspace)
+    return Membership.objects.filter(
+        workspace=workspace, user=user, removed_at__isnull=True
+    ).first()
+
+
 class APIKey(models.Model):
     """Agent credential. Only the sha256 hash is stored; the raw key
     (``vlf_...``) is shown exactly once at creation time."""
