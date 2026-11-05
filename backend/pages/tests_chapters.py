@@ -10,7 +10,8 @@ from django.template.loader import render_to_string
 from django.test import TestCase
 from django.urls import reverse
 
-from drop_core.plans import PLANS, plan_name
+from drop_core.plans import PLANS, REFUND_DAYS, plan_name
+from drop_core.services import MAX_FILE_SIZE
 from pages import registry
 
 CHAPTERS = Path(settings.BASE_DIR) / "templates" / "chapters"
@@ -171,6 +172,37 @@ class PlansTests(TestCase):
             phrase = "Unlimited keys" if keys is None else f"{keys} key" + ("" if keys == 1 else "s")
             with self.subTest(plan=slug, phrase=phrase):
                 self.assertIn(phrase, items)  # the whole item, not a substring: "1 keys" contains "1 key"
+
+    def test_the_closing_paragraphs_state_the_counting_rules_in_order(self):
+        file_mib = MAX_FILE_SIZE // (1024 * 1024)
+        paragraphs = [unescape(re.sub(r"<[^>]+>", "", p)) for p in
+                      re.findall(r'<p class="chapter__more">(.*?)</p>', self.html, re.DOTALL)]
+        self.assertEqual(paragraphs, [
+            "Prices include tax. The price you see is the price you pay.",
+            "An upload counts once it succeeds, and deleting the file later does not give it back. "
+            "The count starts again on the first of each month, in UTC. When the month’s uploads run out, "
+            "new uploads are refused until the next month or until you upgrade, and the links you already made "
+            "keep working until they expire.",
+            f"On every plan, a file can be up to {file_mib} MiB. Storage counts only files that have not expired "
+            "or been deleted, and while it is full, new uploads are refused.",
+            "Team, Team Plus and Scale can also be paid yearly at the price of ten months, so two months are free. "
+            "The limits are the same either way.",
+            f"If you cancel within {REFUND_DAYS} days of your first paid subscription, the first payment is refunded "
+            "in full, whether it was monthly or yearly. To ask, write to support@veilfile.com.",
+            "If you already subscribe, switch between Team, Team Plus and Scale, or between monthly and yearly "
+            "billing, in the billing section of your dashboard. The change is prorated.",
+        ])
+        self.assertIn('<a href="/app/">your dashboard</a>', self.html)
+
+    def test_the_file_limit_and_refund_days_are_filled_in_from_code(self):
+        self.assertEqual(MAX_FILE_SIZE, 25 * 1024 * 1024)
+        self.assertEqual(REFUND_DAYS, 14)
+        self.assertIn("a file can be up to 25 MiB", self.text)
+        self.assertIn("If you cancel within 14 days of your first paid subscription", self.text)
+
+    def test_the_refund_window_matches_the_terms_of_service(self):
+        terms = (Path(settings.BASE_DIR) / "legal" / "documents" / "terms-of-service.md").read_text(encoding="utf-8")
+        self.assertIn(f"within {REFUND_DAYS} days", terms)
 
     def test_the_template_states_no_figures(self):
         # Every chapter template, not only Plans: no price, upload count, link life, storage size or key count as

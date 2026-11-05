@@ -705,6 +705,8 @@ seven rules are the whole of it; the recipes below point here instead of repeati
    - Before: "revoke any of them". After: "revoke only the key in use", because a key
      approved on the device page can revoke only itself and not the workspace's others.
 
+On Plans, the refund days and the file limit come from `REFUND_DAYS` (`plans.py`) and `MAX_FILE_SIZE` (`drop_core/services.py`), and a change to the refund window also needs the owner's change to the Terms.
+
 A test holds rule 4 and the Markdown voice (`backend/pages/tests_voice.py`), and review
 holds the rest, since no test can judge grammar. Every team writes words, so this section
 names no single owner.

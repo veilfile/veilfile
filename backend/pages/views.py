@@ -9,7 +9,8 @@ from django.utils.safestring import mark_safe
 from blog import loader as blog_loader
 from docs import loader as docs_loader
 from drop_core import funnel
-from drop_core.plans import PLANS
+from drop_core.plans import PLANS, REFUND_DAYS
+from drop_core.services import MAX_FILE_SIZE
 from pages import catalog, registry
 from pages.install import INSTALL_TABS
 from pages.plan_cards import plan_cards
@@ -102,7 +103,10 @@ def plans(request):
             for card in cards
         ],
     }
-    return render(request, "chapters/plans.html", {"plans": cards, "structured_data": [product]})
+    return render(request, "chapters/plans.html", {
+        "plans": cards, "structured_data": [product],
+        "refund_days": REFUND_DAYS, "max_file_mib": MAX_FILE_SIZE // (1024 * 1024),
+    })
 
 
 @funnel.sets_funnel_cookie
