@@ -453,8 +453,8 @@ class RunnerTests(SimpleTestCase):
             self.assertLess(hosted[0], first, f"ci.yml: the `{name}` job runs setup-python before the first step that runs python or pip")
             self.assertNotIn("runner.environment", steps[hosted[0]], f"ci.yml: the `{name}` job's setup-python step runs on every run: no runner.environment condition")
             self.assertNotIn("uv venv", self.jobs[name], f"ci.yml: the `{name}` job makes no virtualenv: setup-python is its Python")
-            self.assertNotRegex("".join(step_script(step) for step in steps), r"--user|--break-system-packages|\bsudo\b",
-                                f"ci.yml: the `{name}` job installs with pip as it is: no --user, --break-system-packages or sudo")
+            self.assertNotRegex("".join(step_script(step) for step in steps), r"--user|--break-system-packages|\bsudo\b(?! (?:tee /etc/apt/apt\.conf\.d/|chown -R ))",
+                                f"ci.yml: the `{name}` job installs with pip as it is: no --user, --break-system-packages or sudo (apart from the apt settings and the cache's chown)")
         self.assertEqual(sorted(set(self.jobs) - found), ["changes", "names", "npm-cli"], "ci.yml: the jobs that run no python are `changes`, `names` and `npm-cli`")
 
     def test_every_site_job_starts_its_server_on_a_throwaway_sqlite_file(self):
@@ -500,6 +500,40 @@ class RunnerTests(SimpleTestCase):
             # A cache of Chromium alone must not stand in for Chromium and WebKit: the browsers installed are in the key.
             self.assertEqual("webkit" in cache.split("key:")[1].split("\n")[0], job in WEBKIT_JOBS, f"ci.yml: only the jobs in WEBKIT_JOBS install WebKit, and their cache key says so; no other job's does")
             self.assertLess(steps.index(find), steps.index(cache), f"ci.yml: the `{job}` job finds the version before it restores the cache")
+
+    def test_every_site_job_limits_its_install_and_gives_apt_timeouts_and_a_package_cache(self):
+        # The install step has stalled until the job's 20 minutes, inside the apt-get that `playwright install --with-deps` runs (a slow or silent Ubuntu mirror). The timeouts
+        # and retries may not catch every hang; the step's own limit ends what they do not, and the cached .deb files shorten a slow download. See AGENTS.md, "Where CI runs".
+        for job in SITE_JOBS:
+            steps = workflow_steps(self.jobs[job])
+            install = next((step for step in steps if "name: Install dependencies\n" in step), "")
+            self.assertRegex(install, r"(?m)^        timeout-minutes: 12$", f"ci.yml: the `{job}` job's `Install dependencies` step has its own 12 minutes, inside the job's 20")
+            script = step_script(install)
+            for setting in ('Acquire::Retries "3";', 'Acquire::http::Timeout "30";', 'Acquire::https::Timeout "30";',
+                            'Dir::Cache::Archives "$HOME/.cache/apt-archives/";', 'APT::Keep-Downloaded-Packages "true";'):
+                self.assertIn(setting, script, f"ci.yml: the `{job}` job writes {setting} to /etc/apt/apt.conf.d/99ci-apt before it installs")
+            self.assertIn("/etc/apt/apt.conf.d/99ci-apt", script, f"ci.yml: the `{job}` job writes its apt settings to /etc/apt/apt.conf.d/99ci-apt")
+            self.assertIn('mkdir -p "$HOME/.cache/apt-archives/partial"', script, f"ci.yml: the `{job}` job makes the apt archive directory and its partial/ before it installs")
+            self.assertLess(script.index("99ci-apt"), script.index("playwright install"), f"ci.yml: the `{job}` job writes the apt settings before the install runs")
+            self.assertNotIn("timeout ", script.replace("timeout-minutes", ""), f"ci.yml: the `{job}` job does not kill and retry the install: a kill during dpkg can leave a half-installed state")
+            caches = [step for step in steps if "actions/cache@" in step]
+            self.assertEqual(len(caches), 2, f"ci.yml: the `{job}` job caches Playwright's browsers and the apt packages, in that order")
+            apt = caches[1]
+            self.assertRegex(apt, r"uses: actions/cache@v\d+\.\d+\.\d+\n", f"ci.yml: the `{job}` job's apt cache is pinned to a version like the other actions")
+            self.assertIn("path: ~/.cache/apt-archives/*.deb\n", apt, f"ci.yml: the `{job}` job caches the .deb files only: apt's partial/ directory is root's and the cache cannot read it")
+            self.assertIn("${{ steps.playwright.outputs.version }}", apt, f"ci.yml: the `{job}` job's apt cache key includes the Playwright version")
+            self.assertIn("${{ runner.os }}", apt, f"ci.yml: the `{job}` job's apt cache key includes the runner's OS")
+            self.assertIn("restore-keys:", apt, f"ci.yml: the `{job}` job's apt cache falls back to a stale cache of the same kind")
+            self.assertEqual("webkit" in apt.replace("Cache the apt packages", ""), job in WEBKIT_JOBS,
+                             f"ci.yml: only the jobs in WEBKIT_JOBS install WebKit, and their apt cache key says so, so that no job restores the other kind")
+            self.assertEqual(steps.index(caches[0]) + 1, steps.index(apt), f"ci.yml: the `{job}` job's apt cache step follows the browser cache")
+            self.assertLess(steps.index(apt), steps.index(install), f"ci.yml: the `{job}` job restores the apt packages before it installs")
+            after = steps[steps.index(install) + 1]
+            self.assertIn("if: always()", after, f"ci.yml: the `{job}` job hands the .deb files to the runner user after the install, even when it failed, so that the cache can save them")
+            self.assertIn("chown", after, f"ci.yml: the `{job}` job hands the .deb files that root's apt wrote to the runner user")
+        keys = {job: re.search(r"key: (.*)", next(step for step in workflow_steps(self.jobs[job]) if "Cache the apt packages" in step)).group(1) for job in SITE_JOBS}
+        self.assertEqual({key for job, key in keys.items() if job in WEBKIT_JOBS}.isdisjoint({key for job, key in keys.items() if job not in WEBKIT_JOBS}), True,
+                         "ci.yml: the jobs that install WebKit and the ones that do not have different apt cache keys")
 
     def test_the_names_job_checks_every_file_against_the_owners_list(self):
         body = self.jobs["names"]

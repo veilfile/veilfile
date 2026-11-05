@@ -500,6 +500,24 @@ CI runs on GitHub-hosted runners: every job in `ci.yml` has `runs-on: ubuntu-24.
 - **Setup:** Python comes from `actions/setup-python` with its pip cache. The `site*` jobs run `playwright install --with-deps` and cache the browsers in
   `~/.cache/ms-playwright`, keyed on the Playwright version in `site-tests/requirements.txt` and on the browsers installed (`-webkit` for `site-phone` and
   `site-dashboard` only).
+- **The apt install:** `playwright install --with-deps` runs `apt-get update` and `apt-get install` on every run, whether or not the browser cache hit, and about 3 in 100 installs
+  (9 of 305, from 24 October to 5 November 2026) ran until the job's 20 minutes ran out inside that `apt-get`. Three were silent hangs in `apt-get update`, after
+  `azure.archive.ubuntu.com` answered `Ign` and apt fell back to `archive.ubuntu.com`; six were slow downloads of WebKit's packages, cut off while still arriving. So each `site*`
+  job's `Install dependencies` step does three things, and none of them is a retry of the install, because a kill during `dpkg` can leave a half-installed state:
+  1. It writes `/etc/apt/apt.conf.d/99ci-apt` before it installs, with `Acquire::Retries "3"` and a `Timeout` of 30 seconds for http and https. These may not stop every hang:
+     apt's own timeout is already 120 seconds, and the silent hangs lasted about 19 minutes, so a trickle that resets the timer would get past them.
+  2. It has `timeout-minutes: 12` of its own, inside the job's 20, so that a stalled install fails after 12 minutes and not 20. A failed job still needs a re-run by hand. Of the 305
+     past installs, 3 that succeeded (810, 830 and 979 seconds, all on 24 to 26 October) would have been cut off by this limit; since then the slowest success took 374 seconds.
+  3. It keeps the downloaded packages. The same file points `Dir::Cache::Archives` at `~/.cache/apt-archives/` and keeps the downloaded packages, and a second `actions/cache` step
+     (`Cache the apt packages`) restores and saves only the `.deb` files there (`~/.cache/apt-archives/*.deb`), never apt's root-only `partial/` directory. The key is
+     `apt-archives-chromium-` or, for `site-phone` and `site-dashboard` only, `apt-archives-webkit-`, then the runner's OS and architecture and the Playwright version; the
+     `restore-keys` entry falls back to the newest cache of the same kind, and a stale one does no harm, since apt downloads only the packages it lacks. Root's apt writes
+     the files, so a step after the install (`if: always()`) hands them to the runner user for the cache to save. Like the browser cache, a pull request's cache is read by
+     that pull request only, so it helps its re-runs and later pushes, not the first run of a new pull request. A cache failure never fails a job.
+  To tell from a job's log whether the cache hit, open the `Cache the apt packages` step: `Cache restored from key: apt-archives-...` is a hit (an exact key says so, and a
+  shorter key is the stale fallback), and `Cache not found for input keys` is a miss. In the `Install dependencies` step, packages that were cached are not fetched again, so the
+  `Fetched` line of `apt-get install` is short or absent. The two cache steps are separate: the browser cache does not avoid the apt install. None of this could be run on a Mac;
+  the first pull request that carries it is its test.
 - **What stays between jobs:** nothing. Each job starts on a fresh machine; only the pip, npm and browser caches are restored, and none of them can change a result.
 - **The environment:** the `site*` jobs blank `DATABASE_URL` in their `Start the app` step, because `migrate` runs before the fixture scripts check the database.
 - **Outside contributors:** the repository's Actions setting makes a workflow run from a pull request by an outside contributor wait for approval, and such a run never gets secrets or a write token. The repository takes no outside pull requests (README, "License and contributions").

@@ -268,11 +268,40 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       - name: Start the app
         working-directory: backend
         env:
@@ -340,11 +369,40 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       - name: Start the app
         working-directory: backend
         env:
@@ -413,11 +471,40 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       - name: Start the app
         working-directory: backend
         env:
@@ -487,11 +574,40 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       - name: Start the app
         working-directory: backend
         env:
@@ -561,13 +677,42 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-
       # WebKit as well as Chromium: the phone menu's sheet runs in both (the engine of every browser on an iPhone is WebKit), and a check that
       # skips itself where WebKit is missing would pass in CI by not running (pages.tests_site_parts holds the install).
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium webkit
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       - name: Start the app
         working-directory: backend
         env:
@@ -637,11 +782,40 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       # The fixture script draws the 404 and the 500 as production does (this server runs with DEBUG on) and makes the users, device codes and OAuth clients.
       - name: Start the app
         working-directory: backend
@@ -712,11 +886,40 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       # The catalog is a staff page: the staff session is all it needs (no form fixtures).
       - name: Start the app
         working-directory: backend
@@ -787,13 +990,42 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
+      - name: Cache the apt packages
+        uses: actions/cache@v4.2.3
+        continue-on-error: true
+        with:
+          path: ~/.cache/apt-archives/*.deb
+          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          restore-keys: |
+            apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-
       # WebKit as well as Chromium: the times (Date and Intl) and the Sign out button in the phone's sheet are checked in the engine of every browser on an iPhone, and a check that skips
       # itself where WebKit is missing would pass in CI by not running (pages.tests_site_parts holds the install).
       - name: Install dependencies
+        timeout-minutes: 12
         run: |
+          # Apt settings for the install below: the archive directory is the cached one. The retries and the 30 second limits may not stop every hang: the
+          # silent ones lasted 19 minutes and apt already gave up on a quiet connection after 120 seconds. The 12 minutes of this step end what they do not.
+          mkdir -p "$HOME/.cache/apt-archives/partial"
+          sudo tee /etc/apt/apt.conf.d/99ci-apt > /dev/null <<EOF
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          Dir::Cache::Archives "$HOME/.cache/apt-archives/";
+          APT::Keep-Downloaded-Packages "true";
+          EOF
           pip install -r backend/requirements.txt -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium webkit
           npm ci --prefix site-tests
+      # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
+      - name: Make the apt packages readable for the cache
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p "$HOME/.cache/apt-archives"
+          sudo chown -R "$(id -u):$(id -g)" "$HOME/.cache/apt-archives"
+          chmod -R u+rwX,go+rX "$HOME/.cache/apt-archives"
       # The fixture script makes the dashboard's users with their keys, files, connected apps and billing states, and their sessions. It refuses a server with a Stripe variable.
       - name: Start the app
         working-directory: backend
