@@ -19,7 +19,7 @@ from drop_core.models import APIKey, Artifact, EmailVerification, UsageCounter, 
 from drop_core.plans import GB, PLANS, plan_name
 from drop_core.tests import _month, _use_local_dir
 
-TEAM_PLUS = {"uploads": 4000, "ttl_days": 90, "keys": 10, "price_usd": 6, "storage_gb": 40}
+TEAM_PLUS = {"uploads": 4000, "ttl_days": 90, "keys": 10, "seats": 10, "price_usd": 6, "storage_gb": 40}
 
 
 class TeamPlusPlanTests(SimpleTestCase):
@@ -35,9 +35,15 @@ class TeamPlusPlanTests(SimpleTestCase):
         self.assertEqual(list(PLANS), ["free", "team", "team_plus", "scale"])
 
     def test_the_other_plans_are_unchanged(self):
-        self.assertEqual(PLANS["free"], {"uploads": 100, "ttl_days": 7, "keys": 1, "price_usd": 0, "storage_gb": 1})
-        self.assertEqual(PLANS["team"], {"uploads": 2000, "ttl_days": 90, "keys": 5, "price_usd": 4, "storage_gb": 25})
-        self.assertEqual(PLANS["scale"], {"uploads": 10000, "ttl_days": 365, "keys": None, "price_usd": 12, "storage_gb": 100})
+        self.assertEqual(PLANS["free"], {"uploads": 100, "ttl_days": 7, "keys": 1, "seats": 1, "price_usd": 0, "storage_gb": 1})
+        self.assertEqual(PLANS["team"], {"uploads": 2000, "ttl_days": 90, "keys": 5, "seats": 5, "price_usd": 4, "storage_gb": 25})
+        self.assertEqual(PLANS["scale"], {"uploads": 10000, "ttl_days": 365, "keys": None, "seats": None, "price_usd": 12, "storage_gb": 100})
+
+    def test_seats_match_the_key_counts(self):
+        self.assertEqual({slug: caps["seats"] for slug, caps in PLANS.items()},
+                         {"free": 1, "team": 5, "team_plus": 10, "scale": None})
+        for caps in PLANS.values():
+            self.assertEqual(caps["seats"], caps["keys"])
 
     def test_its_name_is_team_plus(self):
         self.assertEqual([plan_name(slug) for slug in PLANS], ["Free", "Team", "Team Plus", "Scale"])

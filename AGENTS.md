@@ -667,6 +667,8 @@ functions behind both the JSON endpoints and the dashboard),
 and `backend/pages/registry.py` (page descriptions). The dashboard's pages are
 under the templates glob above and take every figure from `plans.py`.
 
+Seats live in `PLANS` as `seats`, where None means unlimited, and they are not advertised until team seats launch.
+
 Checklist: edit `plans.py`; update every file above; ask the owner to update
 the Terms of Service wording and the Stripe prices; run the backend suite.
 
