@@ -137,6 +137,16 @@ class APIKey(models.Model):
     device_issued = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
+    # The person who made the key. A NULL member belongs to the workspace's
+    # administrator. RESTRICT: deleting a user still removes the whole
+    # account, but a membership row alone cannot be deleted under its keys.
+    member = models.ForeignKey(
+        Membership,
+        related_name="api_keys",
+        null=True,
+        blank=True,
+        on_delete=models.RESTRICT,
+    )
 
     def __str__(self):
         return f"{self.name} ({self.key_prefix}…)"
@@ -192,6 +202,22 @@ class Artifact(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     secret_flags = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
+    # The person who uploaded the file. A NULL member belongs to the
+    # workspace's administrator. RESTRICT, so a file never loses its uploader.
+    member = models.ForeignKey(
+        Membership,
+        related_name="artifacts",
+        null=True,
+        blank=True,
+        on_delete=models.RESTRICT,
+    )
+    # Files from before an account is a team are only for their uploader.
+    visibility = models.CharField(
+        max_length=8,
+        choices=VISIBILITY_CHOICES,
+        default=VISIBILITY_ONLY_ME,
+        db_default=VISIBILITY_ONLY_ME,
+    )
     # Content safety (Phase 0: schema + seam, enforcement behind
     # VEILFILE_SAFETY_MODE). safety_status: clear | pending | held.
     # Held artifacts are never served (serve_artifact 404s).
@@ -246,6 +272,15 @@ class PendingUpload(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     used = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # The person whose credential minted the URL. CASCADE, as for api_key:
+    # a URL dies with its minter.
+    member = models.ForeignKey(
+        Membership,
+        related_name="pending_uploads",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
 
     def __str__(self):
         return f"pending {self.filename} (used={self.used})"
@@ -315,6 +350,13 @@ class SafetyEvent(models.Model):
     )
     artifact = models.ForeignKey(
         Artifact,
+        related_name="safety_events",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    member = models.ForeignKey(
+        Membership,
         related_name="safety_events",
         null=True,
         blank=True,

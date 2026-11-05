@@ -11,16 +11,18 @@ class WorkspaceAdmin(admin.ModelAdmin):
 
 @admin.register(APIKey)
 class APIKeyAdmin(admin.ModelAdmin):
-    list_display = ("name", "workspace", "key_prefix", "is_active", "created_at", "last_used_at")
+    list_display = ("name", "workspace", "member", "key_prefix", "is_active", "created_at", "last_used_at")
     list_filter = ("is_active",)
     readonly_fields = ("key_hash", "key_prefix")
+    raw_id_fields = ("member",)
 
 
 @admin.register(Artifact)
 class ArtifactAdmin(admin.ModelAdmin):
-    list_display = ("filename", "workspace", "size_bytes", "expires_at", "created_at")
+    list_display = ("filename", "workspace", "member", "size_bytes", "expires_at", "created_at")
     list_filter = ("mime_type",)
     readonly_fields = ("token",)
+    raw_id_fields = ("member",)
 
 
 @admin.register(UsageCounter)
