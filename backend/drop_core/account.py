@@ -27,7 +27,13 @@ from oauth2_provider.models import get_application_model, get_grant_model
 from . import funnel
 from .email_verification import is_email_verified
 from .key_caps import KeyCapReached, active_key_count, create_key_within_cap
-from .models import APIKey, Artifact, UsageCounter, get_or_create_workspace
+from .models import (
+    APIKey,
+    Artifact,
+    UsageCounter,
+    current_member,
+    get_or_create_workspace,
+)
 from .oauth import list_user_oauth_connections, revoke_user_oauth_grants
 from .plans import PLANS
 from .services import (
@@ -175,7 +181,9 @@ def create_key(user, name, *, request=None, body_is_object=True):
     # Every active key counts against the plan cap, terminal
     # (device-issued) keys included.
     try:
-        key, raw = create_key_within_cap(workspace, name)
+        key, raw = create_key_within_cap(
+            workspace, name, member=current_member(workspace, user)
+        )
     except KeyCapReached:
         return Answer(
             402,

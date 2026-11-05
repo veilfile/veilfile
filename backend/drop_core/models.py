@@ -6,6 +6,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 
@@ -112,7 +113,8 @@ def current_member(workspace, user):
     if user is None or not getattr(user, "is_authenticated", False):
         return None
     if user.pk == workspace.owner_id:
-        return administrator_of(workspace)
+        membership = administrator_of(workspace)
+        return membership if membership.removed_at is None else None
     return Membership.objects.filter(
         workspace=workspace, user=user, removed_at__isnull=True
     ).first()
@@ -152,29 +154,46 @@ class APIKey(models.Model):
         return f"{self.name} ({self.key_prefix}…)"
 
     @classmethod
-    def create_key(cls, workspace, name):
-        """Create a key, returning ``(instance, raw_key)``. The raw key is
-        unrecoverable after this call — only its hash is persisted."""
+    def create_key(cls, workspace, name, member=None):
+        """Create a key, returning ``(instance, raw_key)``. The key belongs
+        to ``member``, or to the account's administrator when none is given.
+        The raw key is unrecoverable after this call; only its hash is
+        persisted."""
         raw = cls.KEY_PREFIX + stdlib_secrets.token_urlsafe(24)
         instance = cls.objects.create(
             workspace=workspace,
             name=name,
             key_prefix=raw[:12],
             key_hash=hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+            member=member or administrator_of(workspace),
         )
         return instance, raw
+
+    @property
+    def acting_member(self):
+        """The membership the key acts as: its own, else the administrator's."""
+        return self.member or administrator_of(self.workspace)
+
+    @property
+    def person(self):
+        """The user the key acts as."""
+        return self.acting_member.user
 
     @classmethod
     def verify(cls, raw):
         """Return the active APIKey for ``raw``, or None. Fast-path rejects
         anything that isn't a ``vlf_`` key without touching the database.
-        Keys of a deactivated (suspended) owner never verify."""
+        A key verifies while its person is active and still a member; a key
+        with no member follows the account's owner."""
         if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
             return None
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         try:
-            return cls.objects.get(
-                key_hash=digest, is_active=True, workspace__owner__is_active=True
+            return cls.objects.select_related("member__user").get(
+                Q(member__isnull=True, workspace__owner__is_active=True)
+                | Q(member__user__is_active=True, member__removed_at__isnull=True),
+                key_hash=digest,
+                is_active=True,
             )
         except cls.DoesNotExist:
             return None

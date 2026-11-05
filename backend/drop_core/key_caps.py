@@ -42,7 +42,7 @@ def needs_replacement(workspace):
     return cap is not None and active_key_count(workspace) >= cap
 
 
-def create_key_within_cap(workspace, name, device_issued=False, replacing=None):
+def create_key_within_cap(workspace, name, device_issued=False, replacing=None, member=None):
     """Mint a key for ``workspace`` unless that would exceed the plan cap.
 
     ``replacing`` (an APIKey) is deactivated in the same transaction when
@@ -63,7 +63,7 @@ def create_key_within_cap(workspace, name, device_issued=False, replacing=None):
             raise KeyCapReached()
         if replaced_pk is not None:
             APIKey.objects.filter(pk=replaced_pk).update(is_active=False)
-        key, raw = APIKey.create_key(locked, name)
+        key, raw = APIKey.create_key(locked, name, member=member)
         if device_issued:
             key.device_issued = True
             key.save(update_fields=["device_issued"])
