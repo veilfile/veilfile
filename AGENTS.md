@@ -20,7 +20,8 @@ backend/config/        settings, urls, /healthz, deploy checks, log redaction
 backend/drop_core/     models, plans.py, upload pipeline (services.py), storage,
                        secret scan, device login, OAuth glue, REST views, and
                        account.py: usage, keys, files and connected apps as plain
-                       functions, shared by the REST views and the dashboard
+                       functions, shared by the REST views and the dashboard;
+                       Membership joins people to a workspace ("People inside an account")
 backend/drop_billing/  Stripe checkout / switch / portal / status / webhook
                        (account.py holds the operations as plain functions)
 backend/drop_mcp/      MCP server (POST /mcp)
@@ -618,6 +619,19 @@ npm and PyPI each trust one publisher, release.yml in this repository. npm 0.4.1
    `plugin/.claude-plugin/plugin.json`, `SERVER_VERSION` in
    `drop_mcp/views.py`) except in a release the owner asked for.
 10. **The licenses are the owner's.** The root LICENSE (all rights reserved) and the CLIs' MIT licenses change only with the owner. Never add an open-source license to the server code.
+
+## People inside an account
+
+The design is `docs/superpowers/specs/2026-11-05-team-seats-design.md` and the first pull request's plan is `docs/superpowers/plans/2026-11-05-team-seats-pr-a-members.md`. Nothing here is visible yet.
+
+- A workspace is an account. `Membership` (in `backend/drop_core/models.py`) joins a person to it as an administrator or a member. A workspace has at most one current administrator and a person has at most one row per workspace; two constraints enforce both.
+- `Workspace.owner` stays the administrator and the payer. Billing, Stripe lookups and `get_or_create_workspace` are unchanged.
+- Every workspace gets its administrator row from the `post_save` receiver in `backend/drop_core/signals.py` and from the backfill in `backend/drop_core/migrations/0013_backfill_members.py`. `administrator_of(workspace)` returns it, creating it if it is missing, and `current_member(workspace, user)` returns a person's current membership or None.
+- Keys, upload URLs, files and safety events record `member`. A NULL `member` means the administrator, permanently, because the previous release writes rows without it during a deploy. Every reader treats NULL that way.
+- A credential exposes `.acting_member` and `.person`: `APIKey` has both, and `OAuthCredentialAdapter` in `backend/drop_core/oauth.py` has both. Each person's account state governs only their own credentials, so a check tests the person who made the key, token or upload URL, never the owner unless the row's member is NULL. No code reads `workspace.owner` for a credential or file check except the two NULL-member fallbacks that `OwnerReadsTests` in `backend/drop_core/tests_members.py` allows in its `ALLOWED` table. A new fallback needs an entry there.
+- Application code never deletes a membership row; removal sets `removed_at`. That is why keys and files point at it with `RESTRICT`. A safety event uses `SET_NULL`, and an upload URL dies with its minting key.
+- `Artifact.visibility` is stored (`only_me` for every file so far) and nothing reads it yet. `serve_artifact` makes no membership or visibility check.
+- The migrations are additive for a live Postgres table: `0011_members.py` creates the table, `0012_member_columns.py` adds nullable columns, and the backfill is idempotent with a no-op reverse.
 
 ## Pricing changes
 
