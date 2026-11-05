@@ -76,6 +76,10 @@ class Membership(models.Model):
     role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=MEMBER)
     created_at = models.DateTimeField(auto_now_add=True)
     removed_at = models.DateTimeField(null=True, blank=True)
+    # Per-member allowances; NULL means no allowance.
+    upload_allowance = models.PositiveIntegerField(null=True, blank=True)
+    storage_allowance_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    key_allowance = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -317,6 +321,23 @@ class UsageCounter(models.Model):
 
     def __str__(self):
         return f"{self.workspace_id} {self.year_month}: {self.uploads}"
+
+
+class MemberUsageCounter(models.Model):
+    """Per-member monthly upload counter for allowances. It has no foreign
+    key to the workspace, so inserting a row never touches the workspace row."""
+
+    member = models.ForeignKey(
+        Membership, related_name="usage_counters", on_delete=models.CASCADE
+    )
+    year_month = models.CharField(max_length=7)  # e.g. '2026-10'
+    uploads = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = [("member", "year_month")]
+
+    def __str__(self):
+        return f"{self.member_id} {self.year_month}: {self.uploads}"
 
 
 class BlockedHash(models.Model):

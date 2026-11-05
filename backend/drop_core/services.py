@@ -314,6 +314,16 @@ def workspace_storage_bytes(workspace):
     return total or 0
 
 
+def member_storage_bytes(member):
+    """Live (non-expired) artifact bytes uploaded by one member."""
+    from django.db.models import Sum
+
+    total = Artifact.objects.filter(
+        member=member, expires_at__gt=timezone.now()
+    ).aggregate(total=Sum("size_bytes"))["total"]
+    return total or 0
+
+
 def upload_artifact(
     workspace,
     api_key,
