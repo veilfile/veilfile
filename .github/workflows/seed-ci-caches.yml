@@ -39,8 +39,6 @@ jobs:
       - uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: site-tests/requirements.txt
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
@@ -96,8 +94,6 @@ jobs:
       - uses: actions/setup-python@v5.6.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: site-tests/requirements.txt
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"

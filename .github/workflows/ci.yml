@@ -268,7 +268,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
@@ -369,7 +369,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
@@ -471,7 +471,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
@@ -574,7 +574,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
@@ -677,7 +677,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium-webkit
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
@@ -782,7 +782,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
@@ -886,7 +886,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
@@ -990,7 +990,7 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium-webkit
-      # The .deb files that the install below downloads, kept for the next run of this job on the same pull request (see AGENTS.md, "Where CI runs").
+      # The .deb files that the install below downloads, kept for later runs and filled on main by seed-ci-caches.yml (see AGENTS.md, "Where CI runs").
       # Only the .deb files: apt's partial/ directory is root's. A stale cache does no harm, since apt downloads only what it lacks.
       - name: Cache the apt packages
         uses: actions/cache@v4.2.3
