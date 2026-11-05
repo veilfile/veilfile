@@ -22,6 +22,10 @@ class KeyCapReached(Exception):
     """Minting another key would exceed the workspace's plan key cap."""
 
 
+class MemberKeyCapReached(KeyCapReached):
+    """Minting another key would exceed the key allowance set for this member."""
+
+
 def key_cap(workspace):
     """The plan's API-key cap, or None for unlimited."""
     return PLANS[workspace.plan]["keys"]
@@ -48,7 +52,8 @@ def create_key_within_cap(workspace, name, device_issued=False, replacing=None, 
     ``replacing`` (an APIKey) is deactivated in the same transaction when
     it is still an active key of this workspace. The workspace row is
     locked (SELECT ... FOR UPDATE on Postgres) so concurrent mints cannot
-    both pass the check. Returns ``(key, raw_key)``; raises KeyCapReached.
+    both pass the check. Returns ``(key, raw_key)``; raises KeyCapReached, or
+    MemberKeyCapReached when only the member's own allowance is reached.
     The person is resolved first, because creating the administrator row
     under that lock can deadlock with another request doing the same.
     """
@@ -64,6 +69,11 @@ def create_key_within_cap(workspace, name, device_issued=False, replacing=None, 
         cap = key_cap(locked)
         if replaced_pk is None and cap is not None and active.count() >= cap:
             raise KeyCapReached()
+        if member.key_allowance is not None:
+            own = active.filter(member=member)
+            replaces_own = replaced_pk is not None and own.filter(pk=replaced_pk).exists()
+            if not replaces_own and own.count() >= member.key_allowance:
+                raise MemberKeyCapReached()
         if replaced_pk is not None:
             APIKey.objects.filter(pk=replaced_pk).update(is_active=False)
         key, raw = APIKey.create_key(locked, name, member=member)

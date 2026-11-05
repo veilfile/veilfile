@@ -11,9 +11,12 @@ from django.test import Client, RequestFactory, TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
+from .account import create_key as account_create_key
+from .key_caps import KeyCapReached, MemberKeyCapReached, create_key_within_cap
 from .models import (
     APIKey,
     Artifact,
+    DeviceCode,
     MemberUsageCounter,
     Membership,
     PendingUpload,
@@ -25,6 +28,7 @@ from .models import (
 from .plans import PLANS
 from .services import StorageError, _current_month, member_storage_bytes, mint_upload_url, upload_artifact
 from .views import ERROR_MESSAGES
+from .tests_fix_device import _DeviceTestBase
 from .tests_members import legacy_rows, make_user
 
 MODULE = importlib.import_module("drop_core.migrations.0014_backfill_members_again")
@@ -359,3 +363,103 @@ class UploadAllowanceTests(TestCase):
                 "code": "member_monthly_allowance_reached",
             },
         )
+
+
+class KeyAllowanceTests(TestCase):
+    def setUp(self):
+        self.workspace = get_or_create_workspace(make_user("ada"))
+        self.workspace.plan = "team"
+        self.workspace.save(update_fields=["plan"])
+        self.admin = administrator_of(self.workspace)
+        self.grace = second_member(self.workspace, "grace")
+
+    def test_a_member_at_their_key_allowance_gets_their_own_refusal(self):
+        set_allowance(self.grace, key_allowance=1)
+        create_key_within_cap(self.workspace, "one", member=self.grace)
+        with self.assertRaises(MemberKeyCapReached):
+            create_key_within_cap(self.workspace, "two", member=self.grace)
+        self.assertEqual(APIKey.objects.filter(member=self.grace, is_active=True).count(), 1)
+
+    def test_the_team_limit_wins_when_both_are_reached(self):
+        for i in range(PLANS["team"]["keys"]):
+            create_key_within_cap(self.workspace, f"k{i}", member=self.admin)
+        set_allowance(self.grace, key_allowance=0)
+        with self.assertRaises(KeyCapReached) as caught:
+            create_key_within_cap(self.workspace, "more", member=self.grace)
+        self.assertNotIsInstance(caught.exception, MemberKeyCapReached)
+
+    def test_a_member_over_their_allowance_can_still_replace_their_own_key(self):
+        old, _ = create_key_within_cap(self.workspace, "old", member=self.grace)
+        set_allowance(self.grace, key_allowance=0)
+        new, _ = create_key_within_cap(self.workspace, "new", replacing=old, member=self.grace)
+        old.refresh_from_db()
+        self.assertEqual((old.is_active, new.is_active, new.member), (False, True, self.grace))
+
+    def test_replacing_a_teammates_key_counts_as_a_new_key(self):
+        theirs, _ = create_key_within_cap(self.workspace, "theirs", member=self.admin)
+        set_allowance(self.grace, key_allowance=0)
+        with self.assertRaises(MemberKeyCapReached):
+            create_key_within_cap(self.workspace, "mine", replacing=theirs, member=self.grace)
+        theirs.refresh_from_db()
+        self.assertTrue(theirs.is_active)
+
+    def test_no_allowance_changes_nothing(self):
+        cap = PLANS["team"]["keys"]
+        for i in range(cap - 1):
+            create_key_within_cap(self.workspace, f"k{i}", member=self.grace)
+        last, _ = create_key_within_cap(self.workspace, "last", member=self.grace)
+        with self.assertRaises(KeyCapReached) as caught:
+            create_key_within_cap(self.workspace, "more", member=self.grace)
+        self.assertNotIsInstance(caught.exception, MemberKeyCapReached)
+        # An over-cap workspace can still rotate a key.
+        self.workspace.plan = "free"
+        self.workspace.save(update_fields=["plan"])
+        new, _ = create_key_within_cap(self.workspace, "rotated", replacing=last, member=self.grace)
+        self.assertTrue(new.is_active)
+
+    def test_the_create_key_answer(self):
+        user = make_user("zed")
+        workspace = get_or_create_workspace(user)
+        set_allowance(administrator_of(workspace), key_allowance=0)
+        answer = account_create_key(user, "mine")
+        self.assertEqual(answer.status, 400)
+        self.assertEqual(
+            answer.body,
+            {
+                "error": "You have reached the API key allowance your administrator set. "
+                "Revoke one of your keys, or ask your administrator to raise it.",
+                "code": "member_key_allowance_reached",
+            },
+        )
+        self.assertFalse(APIKey.objects.filter(workspace=workspace).exists())
+
+        other = make_user("yan")
+        other_workspace = get_or_create_workspace(other)
+        for i in range(PLANS["free"]["keys"]):
+            APIKey.create_key(other_workspace, f"k{i}")
+        answer = account_create_key(other, "more")
+        self.assertEqual(answer.status, 402)
+        self.assertEqual(
+            answer.body,
+            {
+                "error": "Your workspace has reached its plan's API key limit. Revoke a key or upgrade your plan.",
+                "code": "key_limit_reached",
+            },
+        )
+
+
+class DeviceKeyAllowanceTests(_DeviceTestBase):
+    def test_a_device_login_at_the_allowance_is_refused_with_the_members_sentence(self):
+        set_allowance(administrator_of(self.workspace), key_allowance=0)
+        grant = self._start()
+        self.assertEqual(self._approve(grant).status_code, 200)
+        response = self._poll(grant)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "access_denied")
+        self.assertEqual(
+            response.json()["error_description"],
+            "You have reached the API key allowance your administrator set. "
+            "Revoke one of your keys in the dashboard, or ask your administrator to raise it.",
+        )
+        self.assertEqual(self._row(grant).status, DeviceCode.STATUS_DENIED)
+        self.assertEqual(APIKey.objects.count(), 0)
