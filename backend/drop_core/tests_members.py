@@ -1,5 +1,9 @@
+import base64
+import hashlib
 import importlib
+import json
 import os
+import shutil
 import tempfile
 from datetime import timedelta
 from unittest import mock
@@ -8,6 +12,7 @@ import secrets
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.db.models import RestrictedError
 from django.test import TestCase
@@ -15,12 +20,15 @@ from django.utils import timezone
 from oauth2_provider.models import AccessToken, Application, RefreshToken
 
 from .oauth import OAUTH_SCOPE_MCP_USE, resolve_oauth_credential
+from .services import mint_upload_url
+from .tests import _use_local_dir
 from .tests_fix_device import _DeviceTestBase
 
 from .models import (
     VISIBILITY_ONLY_ME,
     APIKey,
     Artifact,
+    BlockedHash,
     DeviceCode,
     EmailVerification,
     Membership,
@@ -277,3 +285,113 @@ class DeviceCredentialPersonTests(_DeviceTestBase):
         )
         self.assertEqual(self._row(grant).status, DeviceCode.STATUS_DENIED)
         self.assertEqual(APIKey.objects.count(), 0)
+
+
+class UploaderTests(TestCase):
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp(prefix="veilfile-test-")
+        _use_local_dir(self, self.tmpdir)
+        self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
+        self.ada = make_user("ada")
+        self.workspace = get_or_create_workspace(self.ada)
+        self.grace = second_member(self.workspace, "grace")
+
+    def _post_file(self, **headers):
+        return self.client.post(
+            "/api/v1/artifacts/", {"file": SimpleUploadedFile("a.txt", b"hi")}, **headers
+        )
+
+    def _mcp(self, name, arguments, raw):
+        response = self.client.post(
+            "/mcp",
+            data=json.dumps({
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            }),
+            content_type="application/json",
+            HTTP_AUTHORIZATION=f"Bearer {raw}",
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertNotIn("error", data, data)
+        self.assertFalse(data["result"].get("isError"), data)
+        return json.loads(data["result"]["content"][0]["text"])
+
+    def _put(self, token):
+        return self.client.put(
+            f"/api/v1/uploads/{token}", b"hi", content_type="application/octet-stream"
+        )
+
+    def test_a_rest_upload_records_the_keys_member(self):
+        _, raw = APIKey.create_key(self.workspace, "agent", member=self.grace)
+        response = self._post_file(HTTP_AUTHORIZATION=f"Bearer {raw}")
+        self.assertEqual(response.status_code, 201)
+        artifact = Artifact.objects.get()
+        self.assertEqual((artifact.member, artifact.visibility), (self.grace, VISIBILITY_ONLY_ME))
+
+    def test_a_dashboard_upload_records_the_signed_in_person(self):
+        self.client.force_login(self.ada)
+        self.assertEqual(self._post_file().status_code, 201)
+        self.assertEqual(Artifact.objects.get().member, administrator_of(self.workspace))
+
+    def test_an_oauth_upload_records_the_token_person(self):
+        raw, _, _ = _issue_token(self.ada, _make_app())
+        self.assertEqual(self._post_file(HTTP_AUTHORIZATION=f"Bearer {raw}").status_code, 201)
+        self.assertEqual(Artifact.objects.get().member, current_member(self.workspace, self.ada))
+
+    def test_an_mcp_upload_records_the_keys_member(self):
+        _, raw = APIKey.create_key(self.workspace, "agent", member=self.grace)
+        self._mcp("upload_artifact", {
+            "filename": "a.txt", "content_base64": base64.b64encode(b"hi").decode(),
+        }, raw)
+        self.assertEqual(Artifact.objects.get().member, self.grace)
+
+    def test_an_upload_url_carries_its_minter_to_the_file(self):
+        _, raw = APIKey.create_key(self.workspace, "agent", member=self.grace)
+        result = self._mcp("create_upload_url", {"filename": "a.txt"}, raw)
+        pending = PendingUpload.objects.get()
+        self.assertEqual(pending.member, self.grace)
+        self.assertEqual(self._put(result["upload_url"].rsplit("/", 1)[1]).status_code, 201)
+        self.assertEqual(Artifact.objects.get().member, self.grace)
+
+    def test_a_blocked_upload_records_its_member(self):
+        BlockedHash.objects.create(sha256=hashlib.sha256(b"hi").hexdigest(), reason="test seed")
+        _, raw = APIKey.create_key(self.workspace, "agent", member=self.grace)
+        with mock.patch.dict(os.environ, {"VEILFILE_SAFETY_MODE": "log"}):
+            response = self._post_file(HTTP_AUTHORIZATION=f"Bearer {raw}")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(SafetyEvent.objects.get().member, self.grace)
+
+    def test_an_upload_url_with_no_member_tests_the_owner(self):
+        key, _ = APIKey.create_key(self.workspace, "agent")
+        pending = mint_upload_url(self.workspace, key, "a.txt")
+        PendingUpload.objects.filter(pk=pending.pk).update(member=None)
+        self.assertEqual(self._put(pending.token).status_code, 201)
+        self.assertEqual(Artifact.objects.get().member, administrator_of(self.workspace))
+        second = mint_upload_url(self.workspace, key, "b.txt")
+        PendingUpload.objects.filter(pk=second.pk).update(member=None)
+        User.objects.filter(pk=self.ada.pk).update(is_active=False)
+        self.assertEqual(self._put(second.token).status_code, 404)
+
+    def test_an_upload_url_follows_its_members_grant_not_the_owners(self):
+        app = _make_app()
+        pending = mint_upload_url(
+            self.workspace, None, "a.txt", oauth_application_id=app.pk, member=self.grace
+        )
+        _issue_token(self.ada, app)
+        self.assertEqual(self._put(pending.token).status_code, 404)
+        pending = mint_upload_url(
+            self.workspace, None, "a.txt", oauth_application_id=app.pk, member=self.grace
+        )
+        _issue_token(self.grace.user, app)
+        self.assertEqual(self._put(pending.token).status_code, 201)
+
+    def test_a_removed_members_upload_url_stops(self):
+        _, _raw = APIKey.create_key(self.workspace, "agent", member=self.grace)
+        key = APIKey.objects.get()
+        pending = mint_upload_url(self.workspace, key, "a.txt", member=self.grace)
+        unknown = self._put("no-such-token")
+        Membership.objects.filter(pk=self.grace.pk).update(removed_at=timezone.now())
+        response = self._put(pending.token)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), unknown.json())

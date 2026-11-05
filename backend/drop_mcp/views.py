@@ -594,6 +594,7 @@ def _tool_upload_artifact(key, args, request):
             uploader_ip=(client_ip(request) or '')[:64],
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
             on_secret=on_secret,
+            member=key.acting_member,
         )
     except (ValueError, StorageError) as exc:
         raise _service_failure(exc) from exc
@@ -660,6 +661,7 @@ def _tool_create_upload_url(key, args, request):
             ttl_days=ttl_days,
             on_secret=on_secret,
             oauth_application_id=getattr(key, 'application_id', None),
+            member=key.acting_member,
         )
     except ValueError as exc:
         # RejectedUpload: a tool error carrying its code and detail.

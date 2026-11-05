@@ -31,6 +31,7 @@ from rest_framework.views import APIView
 from pages.errors import artifact_miss
 
 from .auth import (
+    _has_credential,
     APIKeyAuthentication,
     IsAPIKeyAuthenticated,
     IsAPIKeyOrSessionAuthenticated,
@@ -59,6 +60,7 @@ from .models import (
     EmailSendLog,
     EmailVerification,
     PendingUpload,
+    current_member,
     get_or_create_workspace,
 )
 from .plans import ANNUAL_PRICE_USD, PLANS, plan_name
@@ -123,6 +125,14 @@ def _request_workspace(request):
     if auth is not None and getattr(auth, "workspace", None) is not None:
         return auth.workspace
     return get_or_create_workspace(request.user)
+
+
+def _request_member(request):
+    """The person behind the request: the credential's member, or the
+    signed-in user's membership."""
+    if _has_credential(request.auth):
+        return request.auth.acting_member
+    return current_member(_request_workspace(request), request.user)
 
 
 def _upload_failure_response(exc):
@@ -274,24 +284,30 @@ def _audit_ip(request):
 def _minting_credential_active(pending):
     """False once the credential that minted ``pending`` is revoked.
 
-    API-key URLs follow the key row. OAuth-minted URLs follow the owner's
-    grants for the minting application: any unexpired access token or
-    unrevoked refresh token keeps them alive (a routine token refresh does
-    not kill the URL; revoking the grants does). Rows with neither (minted
-    before this check existed) stay valid until they expire.
+    The URL follows the person who minted it, never the account's owner
+    unless the row has no member. API-key URLs follow the key row.
+    OAuth-minted URLs follow that person's grants for the minting
+    application: any unexpired access token or unrevoked refresh token
+    keeps them alive (a routine token refresh does not kill the URL;
+    revoking the grants does). Rows with neither (minted before this
+    check existed) stay valid until they expire.
     """
-    owner = pending.workspace.owner
-    if not owner.is_active:
+    member = pending.member
+    if member is not None and member.removed_at is not None:
+        return False
+    # A row with no member belongs to the account's owner.
+    person = member.user if member is not None else pending.workspace.owner
+    if not person.is_active:
         # Same rule as APIKey.verify / resolve_oauth_credential: a
-        # suspended owner's credentials, and the URLs they minted, are dead.
+        # suspended person's credentials, and the URLs they minted, are dead.
         return False
     if pending.api_key_id is not None:
         return pending.api_key.is_active
     if pending.oauth_application_id is not None:
-        if not is_email_verified(owner):
+        if not is_email_verified(person):
             return False
         grant = {
-            "user_id": owner.pk,
+            "user_id": person.pk,
             "application_id": pending.oauth_application_id,
         }
         return (
@@ -400,6 +416,7 @@ class ArtifactListCreateView(APIView):
                 uploader_ip=_audit_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 on_secret=on_secret,
+                member=_request_member(request),
             )
         except (ValueError, StorageError) as exc:
             return _upload_failure_response(exc)
@@ -456,7 +473,9 @@ class PendingUploadView(APIView):
             status=status.HTTP_404_NOT_FOUND,
         )
         pending = (
-            PendingUpload.objects.select_related("workspace__owner", "api_key")
+            PendingUpload.objects.select_related(
+                "workspace__owner", "api_key", "member__user"
+            )
             .filter(token=token, used=False, expires_at__gt=timezone.now())
             .first()
         )
@@ -509,6 +528,7 @@ class PendingUploadView(APIView):
                 uploader_ip=_audit_ip(request),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 on_secret=on_secret,
+                member=pending.member,
             )
         except (ValueError, StorageError) as exc:
             if str(exc) != "content_not_allowed":

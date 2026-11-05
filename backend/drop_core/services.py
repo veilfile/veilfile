@@ -19,6 +19,7 @@ from .models import (
     SafetyEvent,
     UsageCounter,
     Workspace,
+    administrator_of,
 )
 from .plans import PLANS
 from .safety import (
@@ -263,6 +264,7 @@ def mint_upload_url(
     ttl_days=None,
     on_secret="flag",
     oauth_application_id=None,
+    member=None,
 ):
     """Mint a one-time upload URL for ``workspace``.
 
@@ -271,7 +273,8 @@ def mint_upload_url(
     the ``PendingUpload``. Raises ``RejectedUpload`` for a disallowed
     extension or an invalid ``ttl_days`` / ``on_secret``. ``on_secret`` is
     stored and enforced by the PUT; ``oauth_application_id`` records the
-    OAuth client that minted the URL (None for API keys).
+    OAuth client that minted the URL (None for API keys). ``member`` is the
+    person behind the minting credential (default: the administrator).
     """
     filename = sanitize_filename(filename or "upload.bin")
     _check_extension(filename)
@@ -281,6 +284,7 @@ def mint_upload_url(
     return PendingUpload.objects.create(
         workspace=workspace,
         api_key=api_key,
+        member=member or administrator_of(workspace),
         filename=filename,
         ttl_days=ttl,
         ttl_adjusted=adjusted,
@@ -320,6 +324,7 @@ def upload_artifact(
     uploader_ip="",
     user_agent="",
     on_secret="flag",
+    member=None,
 ):
     """Validate, scan, store and record an artifact.
 
@@ -408,6 +413,7 @@ def upload_artifact(
                 uploader_ip=uploader_ip,
                 user_agent=user_agent,
                 enforce=(mode == MODE_ENFORCE),
+                member=member,
             )
             if mode == MODE_ENFORCE:
                 raise ValueError("content_not_allowed")
@@ -437,6 +443,7 @@ def upload_artifact(
         artifact = Artifact(
             workspace=workspace,
             api_key=api_key,
+            member=member or administrator_of(workspace),
             filename=filename,
             mime_type=mime_type,
             size_bytes=len(data),
@@ -508,7 +515,8 @@ def _save_may_have_stored(storage, exc):
 
 
 def _record_safety_block(
-    *, workspace, api_key, digest, verdict, uploader_ip, user_agent, enforce
+    *, workspace, api_key, digest, verdict, uploader_ip, user_agent, enforce,
+    member=None,
 ):
     """Record a block verdict and contain the uploader.
 
@@ -520,6 +528,7 @@ def _record_safety_block(
     SafetyEvent.objects.create(
         workspace=workspace,
         api_key=api_key,
+        member=member or administrator_of(workspace),
         artifact=None,  # refused bytes never persist; there is no artifact
         signal=verdict.signal,
         score=verdict.score,
