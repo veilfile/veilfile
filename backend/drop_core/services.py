@@ -15,6 +15,7 @@ from django.utils import timezone
 from .models import (
     Artifact,
     BlockedHash,
+    MemberUsageCounter,
     PendingUpload,
     SafetyEvent,
     UsageCounter,
@@ -340,7 +341,9 @@ def upload_artifact(
 
     Raises ``ValueError`` with one of: ``file_too_large``,
     ``file_type_not_allowed``, ``invalid_request``, ``monthly_cap_reached``,
-    ``storage_cap_reached``, ``content_not_allowed``, ``secret_detected``.
+    ``storage_cap_reached``, ``member_monthly_allowance_reached``,
+    ``member_storage_allowance_reached``, ``content_not_allowed``,
+    ``secret_detected``. The team's limits are tested before the member's.
     ``ttl_days`` is clamped to the plan maximum; a non-integer value raises
     ``invalid_request``. The returned artifact carries a non-persistent
     ``ttl_adjusted`` attribute: True when the requested ``ttl_days`` was not
@@ -391,6 +394,17 @@ def upload_artifact(
         raise ValueError("monthly_cap_reached")
     if workspace_storage_bytes(workspace) + len(data) > storage_cap_bytes:
         raise ValueError("storage_cap_reached")
+    # Early and not authoritative, like the team's checks above; the team's are tested first.
+    member_counter, _ = MemberUsageCounter.objects.get_or_create(
+        member=member, year_month=_current_month()
+    )
+    if member.upload_allowance is not None and member_counter.uploads >= member.upload_allowance:
+        raise ValueError("member_monthly_allowance_reached")
+    if (
+        member.storage_allowance_bytes is not None
+        and member_storage_bytes(member) + len(data) > member.storage_allowance_bytes
+    ):
+        raise ValueError("member_storage_allowance_reached")
 
     secret_flags = scan_bytes(data)
     if on_secret == "reject" and secret_flags:
@@ -452,6 +466,14 @@ def upload_artifact(
             UsageCounter.objects.get_or_create(workspace=workspace, year_month=month)
             if not reserve.update(uploads=F("uploads") + 1):
                 raise ValueError("monthly_cap_reached")
+        member_reserve = MemberUsageCounter.objects.filter(member=member, year_month=month)
+        if member.upload_allowance is not None:
+            member_reserve = member_reserve.filter(uploads__lt=member.upload_allowance)
+        if not member_reserve.update(uploads=F("uploads") + 1):
+            # The allowance is reached, or the month rolled over since the early check.
+            MemberUsageCounter.objects.get_or_create(member=member, year_month=month)
+            if not member_reserve.update(uploads=F("uploads") + 1):
+                raise ValueError("member_monthly_allowance_reached")
         Workspace.objects.select_for_update().only("id").get(pk=workspace.pk)
         artifact = Artifact(
             workspace=workspace,
@@ -468,6 +490,11 @@ def upload_artifact(
         artifact.save()
         if workspace_storage_bytes(workspace) > storage_cap_bytes:
             raise ValueError("storage_cap_reached")
+        if (
+            member.storage_allowance_bytes is not None
+            and member_storage_bytes(member) > member.storage_allowance_bytes
+        ):
+            raise ValueError("member_storage_allowance_reached")
 
     # Non-persistent signal for callers: True only when the requested
     # ttl_days was not the TTL that got applied. Views surface it as
@@ -513,10 +540,15 @@ def upload_artifact(
         # Otherwise (e.g. a timeout after R2 stored the object) the
         # post_delete cleanup deletes whatever may have been stored.
         artifact.delete()
-        # Give back the reserved upload: nothing was stored.
-        UsageCounter.objects.filter(
-            workspace=workspace, year_month=month, uploads__gt=0
-        ).update(uploads=F("uploads") - 1)
+        # Give back the reserved upload: nothing was stored. The team's
+        # counter first, then the member's, the order the reservation took.
+        with transaction.atomic():
+            UsageCounter.objects.filter(
+                workspace=workspace, year_month=month, uploads__gt=0
+            ).update(uploads=F("uploads") - 1)
+            MemberUsageCounter.objects.filter(
+                member=member, year_month=month, uploads__gt=0
+            ).update(uploads=F("uploads") - 1)
         raise StorageError("storage_unavailable")
 
     return artifact

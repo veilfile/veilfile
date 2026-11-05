@@ -696,6 +696,7 @@ extension, and the allowed list.
 | 400 | `file_type_not_allowed` | The extension is not in the allowed list, or the content does not match it. |
 | 400 | `content_not_allowed` | The file's content is not allowed. Do not retry the same bytes. |
 | 400 | `file_missing` | The multipart body has no `file` part. |
+| 400 | `member_storage_allowance_reached` | You have reached the storage allowance your administrator set. Revoke files you no longer need, or ask your administrator to raise it. |
 | 401 | `unauthorized` | The credentials are missing or not valid. MCP answers with JSON-RPC `-32001`. |
 | 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
 | 402 | `key_limit_reached` | The workspace has reached its plan's API key limit (`POST /api/v1/keys`). |
@@ -706,6 +707,7 @@ extension, and the allowed list.
 | 405 | `method_not_allowed` | The HTTP method is not allowed for this URL. The `Allow` header lists the ones that are. |
 | 413 | `file_too_large` | The file, or the decoded base64, is larger than 25 MiB. |
 | 429 | `monthly_cap_reached` | The workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade. |
+| 429 | `member_monthly_allowance_reached` | You have reached the monthly upload allowance your administrator set. Uploads work again next month, or your administrator can raise it. |
 | 429 | `rate_limited` | There were too many requests. Wait the number of seconds in `Retry-After`, then try again. |
 | 502 | `storage_unavailable` | Storage failed during an upload, so nothing was stored or counted. Try again in a minute. |
 

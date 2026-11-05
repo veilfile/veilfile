@@ -7,8 +7,9 @@ from unittest import mock
 from django.apps import apps
 from django.contrib import admin as django_admin
 from django.db import IntegrityError, transaction
-from django.test import RequestFactory, TestCase
+from django.test import Client, RequestFactory, TestCase
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from .models import (
     APIKey,
@@ -21,7 +22,9 @@ from .models import (
     administrator_of,
     get_or_create_workspace,
 )
-from .services import _current_month, member_storage_bytes
+from .plans import PLANS
+from .services import StorageError, _current_month, member_storage_bytes, mint_upload_url, upload_artifact
+from .views import ERROR_MESSAGES
 from .tests_members import legacy_rows, make_user
 
 MODULE = importlib.import_module("drop_core.migrations.0014_backfill_members_again")
@@ -148,3 +151,211 @@ class AllowanceModelTests(TestCase):
         MemberUsageCounter.objects.create(member=admin, year_month="2026-11", uploads=3)
         ada.delete()
         self.assertFalse(MemberUsageCounter.objects.exists())
+
+
+class UploadAllowanceTests(TestCase):
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ, {"DROP_LOCAL_DIR": tempfile.mkdtemp(prefix="veilfile-test-")})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.workspace = get_or_create_workspace(make_user("ada"))
+        self.workspace.plan = "team"
+        self.workspace.save(update_fields=["plan"])
+        self.admin = administrator_of(self.workspace)
+        self.grace = second_member(self.workspace, "grace")
+        self.cap = PLANS["team"]["uploads"]
+
+    def upload(self, member, data=b"hi"):
+        return upload_artifact(self.workspace, None, "a.txt", data, None, member=member)
+
+    def fill_team_counter(self, uploads):
+        UsageCounter.objects.create(workspace=self.workspace, year_month=_current_month(), uploads=uploads)
+
+    def graces_key(self):
+        _, raw = APIKey.create_key(self.workspace, "grace-key", member=self.grace)
+        return {"HTTP_AUTHORIZATION": f"Bearer {raw}"}
+
+    def post_file(self, auth, data=b"hi"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return APIClient().post("/api/v1/artifacts/", {"file": SimpleUploadedFile("a.txt", data)}, **auth)
+
+    def test_every_upload_is_counted_for_its_member(self):
+        self.upload(self.grace)
+        self.assertEqual((team_count(self.workspace), member_count(self.grace)), (1, 1))
+
+    def test_a_member_at_their_monthly_allowance_gets_their_own_code(self):
+        set_allowance(self.grace, upload_allowance=2)
+        self.upload(self.grace)
+        self.upload(self.grace)
+        with self.assertRaisesMessage(ValueError, "member_monthly_allowance_reached"):
+            self.upload(self.grace)
+        self.assertEqual(
+            (team_count(self.workspace), member_count(self.grace), Artifact.objects.count()), (2, 2, 2)
+        )
+
+    def test_a_member_with_no_allowance_can_use_the_whole_pool(self):
+        self.fill_team_counter(self.cap - 1)
+        self.upload(self.grace)
+        with self.assertRaisesMessage(ValueError, "monthly_cap_reached"):
+            self.upload(self.grace)
+
+    def test_the_team_limit_wins_when_both_are_reached(self):
+        set_allowance(self.grace, upload_allowance=0, storage_allowance_bytes=0)
+        self.fill_team_counter(self.cap)
+        with self.assertRaises(ValueError) as caught:
+            self.upload(self.grace)
+        self.assertEqual(str(caught.exception), "monthly_cap_reached")
+
+    def test_an_allowance_above_the_plan_is_capped_by_the_plan(self):
+        set_allowance(self.grace, upload_allowance=self.cap * 10)
+        self.fill_team_counter(self.cap)
+        with self.assertRaises(ValueError) as caught:
+            self.upload(self.grace)
+        self.assertEqual(str(caught.exception), "monthly_cap_reached")
+
+    def test_a_teammate_using_the_pool_stops_a_member_under_their_allowance(self):
+        # The administrator holds a live file as large as the team's whole cap, so grace's large
+        # allowance does not help: she gets the team's code.
+        team_bytes = PLANS["team"]["storage_gb"] * 1024**3
+        set_allowance(self.grace, storage_allowance_bytes=team_bytes * 2)
+        live_file(self.workspace, self.admin, team_bytes)
+        with self.assertRaises(ValueError) as caught:
+            self.upload(self.grace)
+        self.assertEqual(str(caught.exception), "storage_cap_reached")
+
+    def test_a_refusal_after_the_reservation_rolls_back_both_counters(self):
+        set_allowance(self.grace, storage_allowance_bytes=1000)
+        with mock.patch("drop_core.services.member_storage_bytes", side_effect=[0, 1001]):
+            with self.assertRaisesMessage(ValueError, "member_storage_allowance_reached"):
+                self.upload(self.grace)
+        self.assertEqual(
+            (team_count(self.workspace), member_count(self.grace), Artifact.objects.count()), (0, 0, 0)
+        )
+
+    def test_a_storage_failure_gives_back_both_counters(self):
+        with mock.patch("drop_core.services.get_storage") as get_storage:
+            get_storage.return_value.save.side_effect = OSError("down")
+            with self.assertRaises(StorageError):
+                self.upload(self.grace)
+        self.assertEqual(
+            (team_count(self.workspace), member_count(self.grace), Artifact.objects.count()), (0, 0, 0)
+        )
+
+    def test_an_allowance_below_current_use_refuses_new_uploads_only(self):
+        first = self.upload(self.grace)
+        self.upload(self.grace)
+        set_allowance(self.grace, upload_allowance=1)
+        with self.assertRaisesMessage(ValueError, "member_monthly_allowance_reached"):
+            self.upload(self.grace)
+        self.assertEqual(self.client.get(f"/a/{first.token}").status_code, 200)
+
+    def test_the_count_starts_again_next_month(self):
+        set_allowance(self.grace, upload_allowance=1)
+        with mock.patch("drop_core.services._current_month", return_value="2026-11"):
+            self.upload(self.grace)
+            with self.assertRaisesMessage(ValueError, "member_monthly_allowance_reached"):
+                self.upload(self.grace)
+        with mock.patch("drop_core.services._current_month", return_value="2026-12"):
+            self.upload(self.grace)
+        self.assertEqual(
+            set(MemberUsageCounter.objects.filter(member=self.grace).values_list("year_month", "uploads")),
+            {("2026-11", 1), ("2026-12", 1)},
+        )
+
+    def test_a_one_person_account_gets_the_teams_codes_at_every_limit(self):
+        _, raw = APIKey.create_key(self.workspace, "admin-key")
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {raw}"}
+        self.fill_team_counter(self.cap)
+        response = self.post_file(auth)
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(
+            response.json(),
+            {"error": ERROR_MESSAGES["monthly_cap_reached"], "code": "monthly_cap_reached"},
+        )
+        UsageCounter.objects.all().delete()
+        live_file(self.workspace, self.admin, PLANS["team"]["storage_gb"] * 1024**3)
+        response = self.post_file(auth)
+        self.assertEqual(response.status_code, 402)
+        self.assertEqual(
+            response.json(),
+            {"error": ERROR_MESSAGES["storage_cap_reached"], "code": "storage_cap_reached"},
+        )
+
+    def test_the_rest_answers(self):
+        auth = self.graces_key()
+        set_allowance(self.grace, upload_allowance=1)
+        self.assertEqual(self.post_file(auth).status_code, 201)
+        response = self.post_file(auth)
+        self.assertEqual(response.status_code, 429)
+        self.assertNotIn("Retry-After", response)
+        self.assertEqual(
+            response.json(),
+            {
+                "error": ERROR_MESSAGES["member_monthly_allowance_reached"],
+                "code": "member_monthly_allowance_reached",
+            },
+        )
+        set_allowance(self.grace, upload_allowance=None, storage_allowance_bytes=1)
+        response = self.post_file(auth, b"too big for one byte")
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {
+                "error": ERROR_MESSAGES["member_storage_allowance_reached"],
+                "code": "member_storage_allowance_reached",
+            },
+        )
+
+    def test_the_messages_are_the_approved_sentences(self):
+        self.assertEqual(
+            ERROR_MESSAGES["member_monthly_allowance_reached"],
+            "You have reached the monthly upload allowance your administrator set. "
+            "Uploads work again next month, or your administrator can raise it.",
+        )
+        self.assertEqual(
+            ERROR_MESSAGES["member_storage_allowance_reached"],
+            "You have reached the storage allowance your administrator set. "
+            "Revoke files you no longer need, or ask your administrator to raise it.",
+        )
+
+    def test_a_refused_upload_url_can_be_retried(self):
+        set_allowance(self.grace, upload_allowance=0)
+        pending = mint_upload_url(self.workspace, None, "a.txt", member=self.grace)
+        response = Client().put(f"/api/v1/uploads/{pending.token}", data=b"hello", content_type="text/plain")
+        self.assertEqual(response.json()["code"], "member_monthly_allowance_reached")
+        pending.refresh_from_db()
+        self.assertFalse(pending.used)
+        Membership.objects.filter(pk=self.grace.pk).update(upload_allowance=5)
+        response = Client().put(f"/api/v1/uploads/{pending.token}", data=b"hello", content_type="text/plain")
+        self.assertEqual(response.status_code, 201)
+
+    def test_the_mcp_tool_reports_the_code(self):
+        import base64
+        import json
+
+        from drop_mcp.views import mcp_endpoint
+
+        set_allowance(self.grace, upload_allowance=0)
+        auth = self.graces_key()
+        body = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "upload_artifact",
+                "arguments": {"filename": "a.txt", "content_base64": base64.b64encode(b"hi").decode()},
+            },
+        }
+        request = RequestFactory().post(
+            "/mcp", data=json.dumps(body).encode(), content_type="application/json", **auth
+        )
+        result = json.loads(mcp_endpoint(request).content.decode())["result"]
+        self.assertIs(result["isError"], True)
+        self.assertEqual(
+            json.loads(result["content"][0]["text"]),
+            {
+                "error": ERROR_MESSAGES["member_monthly_allowance_reached"],
+                "code": "member_monthly_allowance_reached",
+            },
+        )

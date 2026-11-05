@@ -89,6 +89,8 @@ ERROR_STATUS = {
     "secret_detected": status.HTTP_400_BAD_REQUEST,
     "monthly_cap_reached": status.HTTP_429_TOO_MANY_REQUESTS,
     "storage_cap_reached": status.HTTP_402_PAYMENT_REQUIRED,
+    "member_monthly_allowance_reached": status.HTTP_429_TOO_MANY_REQUESTS,
+    "member_storage_allowance_reached": status.HTTP_400_BAD_REQUEST,
 }
 
 ERROR_MESSAGES = {
@@ -112,6 +114,16 @@ ERROR_MESSAGES = {
     "storage_cap_reached": (
         "Your workspace has reached its plan's storage cap. Revoke files "
         "you no longer need, or upgrade your plan."
+    ),
+    "member_monthly_allowance_reached": (
+        "You have reached the monthly upload allowance your administrator "
+        "set. Uploads work again next month, or your administrator can "
+        "raise it."
+    ),
+    "member_storage_allowance_reached": (
+        "You have reached the storage allowance your administrator set. "
+        "Revoke files you no longer need, or ask your administrator to "
+        "raise it."
     ),
     "invalid_request": (
         "The upload has an invalid parameter. Check on_secret and ttl_days."
