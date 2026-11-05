@@ -6,6 +6,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 
 
@@ -47,6 +48,78 @@ def get_or_create_workspace(user):
     return workspace
 
 
+VISIBILITY_ONLY_ME = "only_me"
+VISIBILITY_TEAM = "team"
+VISIBILITY_CHOICES = [
+    (VISIBILITY_ONLY_ME, "Only me"),
+    (VISIBILITY_TEAM, "Team"),
+]
+
+
+class Membership(models.Model):
+    """A person's place in a workspace. The workspace's owner is always its
+    one current administrator; other people are members. Rows are never
+    deleted by application code: removing a person sets ``removed_at``."""
+
+    ADMINISTRATOR = "administrator"
+    MEMBER = "member"
+    ROLE_CHOICES = [
+        (ADMINISTRATOR, "Administrator"),
+        (MEMBER, "Member"),
+    ]
+
+    workspace = models.ForeignKey(
+        Workspace, related_name="memberships", on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="memberships", on_delete=models.CASCADE
+    )
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=MEMBER)
+    created_at = models.DateTimeField(auto_now_add=True)
+    removed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "user"], name="membership_one_per_person"
+            ),
+            models.UniqueConstraint(
+                fields=["workspace"],
+                condition=models.Q(role="administrator", removed_at__isnull=True),
+                name="membership_one_administrator",
+            ),
+        ]
+
+    @property
+    def is_current(self):
+        return self.removed_at is None
+
+    def __str__(self):
+        return f"{self.user_id} in {self.workspace_id} ({self.role})"
+
+
+def administrator_of(workspace):
+    """The workspace's administrator membership, created if it is missing."""
+    membership, _ = Membership.objects.get_or_create(
+        workspace=workspace,
+        user_id=workspace.owner_id,
+        defaults={"role": Membership.ADMINISTRATOR},
+    )
+    return membership
+
+
+def current_member(workspace, user):
+    """The user's current membership of the workspace, or None."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        return None
+    if user.pk == workspace.owner_id:
+        membership = administrator_of(workspace)
+        return membership if membership.removed_at is None else None
+    return Membership.objects.filter(
+        workspace=workspace, user=user, removed_at__isnull=True
+    ).first()
+
+
 class APIKey(models.Model):
     """Agent credential. Only the sha256 hash is stored; the raw key
     (``vlf_...``) is shown exactly once at creation time."""
@@ -66,34 +139,61 @@ class APIKey(models.Model):
     device_issued = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
+    # The person who made the key. A NULL member belongs to the workspace's
+    # administrator. RESTRICT: deleting a user still removes the whole
+    # account, but a membership row alone cannot be deleted under its keys.
+    member = models.ForeignKey(
+        Membership,
+        related_name="api_keys",
+        null=True,
+        blank=True,
+        on_delete=models.RESTRICT,
+    )
 
     def __str__(self):
         return f"{self.name} ({self.key_prefix}…)"
 
     @classmethod
-    def create_key(cls, workspace, name):
-        """Create a key, returning ``(instance, raw_key)``. The raw key is
-        unrecoverable after this call — only its hash is persisted."""
+    def create_key(cls, workspace, name, member=None):
+        """Create a key, returning ``(instance, raw_key)``. The key belongs
+        to ``member``, or to the account's administrator when none is given.
+        The raw key is unrecoverable after this call; only its hash is
+        persisted."""
         raw = cls.KEY_PREFIX + stdlib_secrets.token_urlsafe(24)
         instance = cls.objects.create(
             workspace=workspace,
             name=name,
             key_prefix=raw[:12],
             key_hash=hashlib.sha256(raw.encode("utf-8")).hexdigest(),
+            member=member or administrator_of(workspace),
         )
         return instance, raw
+
+    @property
+    def acting_member(self):
+        """The membership the key acts as: its own, else the administrator's."""
+        return self.member or administrator_of(self.workspace)
+
+    @property
+    def person(self):
+        """The user the key acts as."""
+        return self.acting_member.user
 
     @classmethod
     def verify(cls, raw):
         """Return the active APIKey for ``raw``, or None. Fast-path rejects
         anything that isn't a ``vlf_`` key without touching the database.
-        Keys of a deactivated (suspended) owner never verify."""
+        A key verifies while its person is active and still a member; a key
+        with no member follows the account's owner."""
         if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
             return None
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         try:
-            return cls.objects.get(
-                key_hash=digest, is_active=True, workspace__owner__is_active=True
+            return cls.objects.select_related("member__user").get(
+                Q(member__isnull=True, workspace__owner__is_active=True)
+                | Q(member__user__is_active=True, member__removed_at__isnull=True),
+                key_hash=digest,
+                is_active=True,
             )
         except cls.DoesNotExist:
             return None
@@ -121,6 +221,22 @@ class Artifact(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     secret_flags = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
+    # The person who uploaded the file. A NULL member belongs to the
+    # workspace's administrator. RESTRICT, so a file never loses its uploader.
+    member = models.ForeignKey(
+        Membership,
+        related_name="artifacts",
+        null=True,
+        blank=True,
+        on_delete=models.RESTRICT,
+    )
+    # Files from before an account is a team are only for their uploader.
+    visibility = models.CharField(
+        max_length=8,
+        choices=VISIBILITY_CHOICES,
+        default=VISIBILITY_ONLY_ME,
+        db_default=VISIBILITY_ONLY_ME,
+    )
     # Content safety (Phase 0: schema + seam, enforcement behind
     # VEILFILE_SAFETY_MODE). safety_status: clear | pending | held.
     # Held artifacts are never served (serve_artifact 404s).
@@ -175,6 +291,15 @@ class PendingUpload(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     used = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # The person whose credential minted the URL. CASCADE, as for api_key:
+    # a URL dies with its minter.
+    member = models.ForeignKey(
+        Membership,
+        related_name="pending_uploads",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+    )
 
     def __str__(self):
         return f"pending {self.filename} (used={self.used})"
@@ -244,6 +369,13 @@ class SafetyEvent(models.Model):
     )
     artifact = models.ForeignKey(
         Artifact,
+        related_name="safety_events",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    member = models.ForeignKey(
+        Membership,
         related_name="safety_events",
         null=True,
         blank=True,

@@ -53,7 +53,7 @@ from oauth2_provider.views.dynamic_client_registration import (
 )
 
 from .email_verification import client_ip, is_email_verified, throttle_ip
-from .models import APIKey, get_or_create_workspace
+from .models import APIKey, current_member, get_or_create_workspace
 
 # Single OAuth scope: the agent surface of a vlf_ API key (MCP tools, the
 # artifact API, usage). Key management stays dashboard/API-key only.
@@ -138,9 +138,18 @@ class OAuthCredentialAdapter:
 
     is_oauth = True
 
-    def __init__(self, access_token, workspace):
+    def __init__(self, access_token, workspace, member):
         self._token = access_token
         self.workspace = workspace
+        self._member = member
+
+    @property
+    def acting_member(self):
+        return self._member
+
+    @property
+    def person(self):
+        return self._member.user
 
     @property
     def pk(self):
@@ -199,7 +208,10 @@ def resolve_oauth_credential(raw_token):
     if not token.user.is_active or not is_email_verified(token.user):
         return None
     workspace = get_or_create_workspace(token.user)
-    return OAuthCredentialAdapter(token, workspace)
+    member = current_member(workspace, token.user)
+    if member is None:
+        return None
+    return OAuthCredentialAdapter(token, workspace, member)
 
 
 class VeilfileOAuth2Validator(OAuth2Validator):

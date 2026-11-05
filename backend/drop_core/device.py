@@ -55,7 +55,7 @@ from .key_caps import (
     key_cap,
     needs_replacement,
 )
-from .models import APIKey, DeviceCode, get_or_create_workspace
+from .models import APIKey, DeviceCode, current_member, get_or_create_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -438,7 +438,12 @@ def _redeem(device_code):
         if legacy_key_id is not None:
             APIKey.objects.filter(pk=legacy_key_id).update(is_active=False)
         approver = device_code.approved_by
-        if approver is None or not approver.is_active:
+        member = (
+            current_member(device_code.workspace, approver)
+            if approver is not None and approver.is_active
+            else None
+        )
+        if member is None:
             refused = (
                 "The account that approved this login is no longer active. "
                 "Run veilfile login again and approve it from an active "
@@ -451,6 +456,7 @@ def _redeem(device_code):
                     _KEY_NAME,
                     device_issued=True,
                     replacing=device_code.replace_key,
+                    member=member,
                 )
             except KeyCapReached:
                 # The plan's cap changed (or another key was created) after
