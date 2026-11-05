@@ -178,6 +178,50 @@ class BackfillTests(TestCase):
         with self.assertRaises(RestrictedError):
             administrator_of(workspace).delete()
 
+    def every_kind_of_row(self):
+        """An owner's workspace with a key, file, upload URL and safety event of the administrator, and a key and
+        file of a second member. Returns the owner, the second member's user and the workspace."""
+        owner = make_user("ada")
+        workspace = get_or_create_workspace(owner)
+        admin = administrator_of(workspace)
+        grace = second_member(workspace, "grace")
+        expires = timezone.now() + timedelta(days=1)
+        key, _ = APIKey.create_key(workspace, "agent")
+        APIKey.objects.filter(pk=key.pk).update(member=admin)
+        Artifact.objects.create(workspace=workspace, member=admin, filename="a.txt", size_bytes=1, expires_at=expires)
+        PendingUpload.objects.create(
+            workspace=workspace, member=admin, api_key=key, filename="a.txt", ttl_days=1, token="t1", expires_at=expires
+        )
+        SafetyEvent.objects.create(
+            workspace=workspace, member=admin, api_key=key, signal="blocked_hash_match", action_taken="logged"
+        )
+        other_key, _ = APIKey.create_key(workspace, "other")
+        APIKey.objects.filter(pk=other_key.pk).update(member=grace)
+        Artifact.objects.create(workspace=workspace, member=grace, filename="b.txt", size_bytes=1, expires_at=expires)
+        for model in (APIKey, Artifact, PendingUpload, SafetyEvent):
+            self.assertFalse(model.objects.filter(member__isnull=True).exists(), model.__name__)
+            self.assertIn(admin.pk, set(model.objects.values_list("member", flat=True)), model.__name__)
+        for model in (APIKey, Artifact):
+            self.assertIn(grace.pk, set(model.objects.values_list("member", flat=True)), model.__name__)
+        return owner, grace.user, workspace
+
+    def assertNoRowsOfAnyKind(self):
+        for model in (Workspace, Membership, APIKey, Artifact, PendingUpload, SafetyEvent):
+            self.assertFalse(model.objects.exists(), model.__name__)
+
+    def test_deleting_a_user_with_every_kind_of_row_still_deletes_their_account(self):
+        owner, grace_user, _ = self.every_kind_of_row()
+        owner.delete()
+        self.assertNoRowsOfAnyKind()
+        self.assertTrue(User.objects.filter(pk=grace_user.pk).exists())
+
+    def test_deleting_a_workspace_with_every_kind_of_row_deletes_its_rows(self):
+        owner, grace_user, workspace = self.every_kind_of_row()
+        workspace.delete()
+        self.assertNoRowsOfAnyKind()
+        self.assertTrue(User.objects.filter(pk=owner.pk).exists())
+        self.assertTrue(User.objects.filter(pk=grace_user.pk).exists())
+
 
 def _make_app(name="Test app"):
     return Application.objects.create(
