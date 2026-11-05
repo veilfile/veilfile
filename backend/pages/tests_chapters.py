@@ -184,7 +184,7 @@ class PlansTests(TestCase):
             "new uploads are refused until the next month or until you upgrade, and the links you already made "
             "keep working until they expire.",
             f"On every plan, a file can be up to {file_mib} MiB. Storage counts only files that have not expired "
-            "or been deleted, and while it is full, new uploads are refused.",
+            "or been deleted, and an upload that would go past it is refused.",
             "Team, Team Plus and Scale can also be paid yearly at the price of ten months, so two months are free. "
             "The limits are the same either way.",
             f"If you cancel within {REFUND_DAYS} days of your first paid subscription, the first payment is refunded "
