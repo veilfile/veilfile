@@ -632,6 +632,9 @@ The design is `docs/superpowers/specs/2026-11-05-team-seats-design.md` and the f
 - Application code never deletes a membership row; removal sets `removed_at`. That is why keys and files point at it with `RESTRICT`. A safety event uses `SET_NULL`, and an upload URL dies with its minting key.
 - `Artifact.visibility` is stored (`only_me` for every file so far) and nothing reads it yet. `serve_artifact` makes no membership or visibility check.
 - The migrations are additive for a live Postgres table: `0011_members.py` creates the table, `0012_member_columns.py` adds nullable columns, and the backfill is idempotent with a no-op reverse.
+- The backfill is non-atomic and commits in batches of `BATCH_SIZE` rows, so it holds no long row locks while the previous release serves requests, and it can resume after being killed because a NULL `member` already means the administrator.
+- Code resolves a member with `administrator_of` before it takes a workspace row lock, never under it, because creating the administrator row under that lock can deadlock with a concurrent request that does the same. `upload_artifact` and `create_key_within_cap` follow this rule, and a test in `backend/drop_core/tests_members.py` checks that neither calls `administrator_of` inside a transaction.
+- A release older than this section cannot delete a user or a workspace once membership rows exist, because the foreign keys from those rows raise an `IntegrityError`. After a code-only rollback, account deletions must wait until the code rolls forward again or `migrate drop_core 0010` has run.
 
 ## Pricing changes
 

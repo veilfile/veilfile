@@ -14,7 +14,7 @@ from a bigger plan) can still rotate keys but never add one.
 
 from django.db import transaction
 
-from .models import APIKey, Workspace
+from .models import APIKey, Workspace, administrator_of
 from .plans import PLANS
 
 
@@ -49,7 +49,10 @@ def create_key_within_cap(workspace, name, device_issued=False, replacing=None, 
     it is still an active key of this workspace. The workspace row is
     locked (SELECT ... FOR UPDATE on Postgres) so concurrent mints cannot
     both pass the check. Returns ``(key, raw_key)``; raises KeyCapReached.
+    The person is resolved first, because creating the administrator row
+    under that lock can deadlock with another request doing the same.
     """
+    member = member or administrator_of(workspace)
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=workspace.pk)
         active = active_keys(locked)

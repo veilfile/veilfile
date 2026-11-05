@@ -354,6 +354,9 @@ def upload_artifact(
     # Fail closed on bad parameters before any work is done.
     on_secret = normalize_on_secret(on_secret)
     ttl, ttl_adjusted = _clamp_ttl(plan, ttl_days)
+    # Resolve the person now: creating the administrator row must not happen
+    # under the workspace row lock taken below.
+    member = member or administrator_of(workspace)
 
     filename = sanitize_filename(filename or "upload.bin")
     ext = _check_extension(filename)
@@ -443,7 +446,7 @@ def upload_artifact(
         artifact = Artifact(
             workspace=workspace,
             api_key=api_key,
-            member=member or administrator_of(workspace),
+            member=member,
             filename=filename,
             mime_type=mime_type,
             size_bytes=len(data),
@@ -516,7 +519,7 @@ def _save_may_have_stored(storage, exc):
 
 def _record_safety_block(
     *, workspace, api_key, digest, verdict, uploader_ip, user_agent, enforce,
-    member=None,
+    member,
 ):
     """Record a block verdict and contain the uploader.
 
@@ -528,7 +531,7 @@ def _record_safety_block(
     SafetyEvent.objects.create(
         workspace=workspace,
         api_key=api_key,
-        member=member or administrator_of(workspace),
+        member=member,
         artifact=None,  # refused bytes never persist; there is no artifact
         signal=verdict.signal,
         score=verdict.score,

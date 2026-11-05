@@ -1,4 +1,5 @@
 import base64
+import contextlib
 import hashlib
 import importlib
 import json
@@ -15,14 +16,15 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models import RestrictedError
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.utils import timezone
 from oauth2_provider.models import AccessToken, Application, RefreshToken
 
+from .key_caps import create_key_within_cap
 from .oauth import OAUTH_SCOPE_MCP_USE, resolve_oauth_credential
-from .services import mint_upload_url
+from .services import mint_upload_url, upload_artifact
 from .tests import _use_local_dir
 from .tests_fix_device import _DeviceTestBase
 
@@ -149,6 +151,42 @@ class BackfillTests(TestCase):
         backfill(apps, None)
         self.assertEqual(Membership.objects.filter(user=ada, role=Membership.ADMINISTRATOR).count(), 2)
         self.assertEqual(get_or_create_workspace(ada), first)
+
+    def test_every_row_is_filled_when_there_are_more_rows_than_one_batch(self):
+        workspace = get_or_create_workspace(make_user("ada"))
+        legacy_rows(workspace)
+        expires = timezone.now() + timedelta(days=1)
+        for number in range(6):
+            Artifact.objects.create(workspace=workspace, filename=f"f{number}.txt", size_bytes=1, expires_at=expires)
+            APIKey.create_key(workspace, f"key{number}")
+        for model in (APIKey, Artifact):
+            model.objects.filter(workspace=workspace).update(member=None)
+        self.assertGreater(Artifact.objects.count(), 5)
+        module = importlib.import_module("drop_core.migrations.0013_backfill_members")
+        with mock.patch.object(module, "BATCH_SIZE", 2, create=True):
+            backfill(apps, None)
+        admin = administrator_of(workspace)
+        for model in (APIKey, Artifact, PendingUpload, SafetyEvent):
+            self.assertFalse(model.objects.filter(member__isnull=True).exists(), model.__name__)
+            self.assertEqual(model.objects.filter(member=admin).count(), model.objects.count(), model.__name__)
+
+    def test_the_backfill_ends_and_leaves_a_row_null_when_no_administrator_is_current(self):
+        workspace = get_or_create_workspace(make_user("ada"))
+        legacy_rows(workspace)
+        other = get_or_create_workspace(make_user("grace"))
+        APIKey.create_key(other, "other")
+        APIKey.objects.filter(workspace=other).update(member=None)
+        Membership.objects.filter(workspace=workspace).update(removed_at=timezone.now())
+        module = importlib.import_module("drop_core.migrations.0013_backfill_members")
+        with mock.patch.object(module, "BATCH_SIZE", 1, create=True):
+            backfill(apps, None)
+        for model in (APIKey, Artifact, PendingUpload, SafetyEvent):
+            self.assertFalse(model.objects.filter(workspace=workspace, member__isnull=False).exists(), model.__name__)
+        self.assertFalse(APIKey.objects.filter(workspace=other, member__isnull=True).exists())
+
+    def test_the_migration_is_not_one_transaction(self):
+        module = importlib.import_module("drop_core.migrations.0013_backfill_members")
+        self.assertIs(module.Migration.atomic, False)
 
     def test_new_files_are_only_me(self):
         workspace = get_or_create_workspace(make_user("ada"))
@@ -487,3 +525,38 @@ class OwnerReadsTests(SimpleTestCase):
             "A credential or file check reads workspace.owner. Use .acting_member or .person "
             "(AGENTS.md, People inside an account), or, for a new NULL-member fallback, add it to ALLOWED.",
         )
+
+
+class ResolveMemberBeforeLockTests(TransactionTestCase):
+    """administrator_of creates a row, so it must never run while the workspace row is locked."""
+
+    def setUp(self):
+        patcher = mock.patch.dict(os.environ, {"DROP_LOCAL_DIR": tempfile.mkdtemp(prefix="veilfile-test-")})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.workspace = get_or_create_workspace(make_user("ada"))
+        self.calls = []
+
+    def _recording(self, *modules):
+        def wrapper(workspace):
+            self.calls.append(connection.in_atomic_block)
+            return administrator_of(workspace)
+
+        stack = contextlib.ExitStack()
+        for module in modules:
+            stack.enter_context(mock.patch(f"drop_core.{module}.administrator_of", wrapper, create=True))
+        return stack
+
+    def test_upload_artifact_resolves_the_administrator_outside_a_transaction(self):
+        Membership.objects.filter(workspace=self.workspace).delete()
+        with self._recording("services"):
+            upload_artifact(self.workspace, None, "a.txt", b"hello", "text/plain")
+        self.assertTrue(self.calls)
+        self.assertEqual(set(self.calls), {False})
+
+    def test_create_key_within_cap_resolves_the_administrator_outside_a_transaction(self):
+        Membership.objects.filter(workspace=self.workspace).delete()
+        with self._recording("models", "key_caps"):
+            create_key_within_cap(self.workspace, "agent")
+        self.assertTrue(self.calls)
+        self.assertEqual(set(self.calls), {False})
