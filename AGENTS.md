@@ -635,6 +635,13 @@ The design is `docs/superpowers/specs/2026-11-05-team-seats-design.md` and the f
 - The backfill is non-atomic and commits in batches of `BATCH_SIZE` rows, so it holds no long row locks while the previous release serves requests, and it can resume after being killed because a second run fills whatever the first did not reach.
 - Code resolves a member with `administrator_of` before it takes a workspace row lock, never under it, because creating the administrator row under that lock can deadlock with a concurrent request that does the same. `upload_artifact` and `create_key_within_cap` follow this rule, and a test in `backend/drop_core/tests_members.py` checks that neither calls `administrator_of` inside a transaction.
 - A release older than this section cannot delete a user or a workspace once membership rows exist, because the foreign keys from those rows raise an `IntegrityError`. After a code-only rollback, account deletions must wait until the code rolls forward again or `migrate drop_core 0010` has run.
+- A member's allowances are nullable columns on `Membership`, NULL means no allowance, and only staff can set them until PR C.
+- `MemberUsageCounter` counts every upload per member per month, from this deploy on.
+- The team's limits are tested first, so the team's code wins, apart from a race in which the pool still holds.
+- The lock order is the team counter, the member counter, then the workspace row, with the give-back in the same order.
+- The member counter's insert takes a key-share lock on `Membership`, so code that later locks a `Membership` row must use `select_for_update(no_key=True)` or take the counters first.
+- A request in flight honours the allowance it loaded when it started.
+- A release older than this one cannot delete a user, workspace or membership once member counters exist, because it does not know the table. This affects staff in the admin only, during the deploy or after a code-only rollback.
 
 ## Pricing changes
 
