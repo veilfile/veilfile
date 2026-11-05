@@ -573,4 +573,5 @@ SQLite hides every lock-order bug here, so this task decides whether the branch 
 - `dashboard/keys.py::_refusal` needs a branch for `member_key_allowance_reached`, because the cap text it builds from the plan would show the wrong number.
 - `tests_fix_docs._cap_facts` needs a `seats` pattern before any page states a seat count.
 - Removal, transfer and anything else that locks a `Membership` row must use `select_for_update(no_key=True)` or take the counters first.
+- The device approval page decides whether to ask for a replacement from the team's cap only, so a member at their own key allowance is walked through approval and refused only at the CLI's poll.
 - Everything listed under "What the later pull requests must carry" for PR C in the description of pull request #28.

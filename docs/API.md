@@ -635,6 +635,7 @@ the URL is already dead and the file is deleted by the next expiry sweep.
 `{"error": "...", "code": "...", "detail"?: "..."}`. The codes match REST:
 `file_too_large`, `file_type_not_allowed`, `content_not_allowed`,
 `secret_detected`, `monthly_cap_reached`, `storage_cap_reached`,
+`member_monthly_allowance_reached`, `member_storage_allowance_reached`,
 `storage_unavailable` and `rate_limited` (with `retry_after` seconds).
 Successful results have no `isError` key. `upload_artifact` and
 `create_upload_url` share the 100 uploads/hour/credential limit with REST.

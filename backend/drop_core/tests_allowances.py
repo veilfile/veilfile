@@ -89,6 +89,24 @@ class SecondBackfillTests(TestCase):
             backfill(apps, None)
         self.assertFalse(APIKey.objects.filter(member__isnull=True).exists())
 
+    def test_it_fills_more_uuid_keyed_rows_than_a_batch(self):
+        workspace = get_or_create_workspace(make_user("ada"))
+        key, _ = APIKey.create_key(workspace, "agent")
+        expires = timezone.now() + timedelta(days=1)
+        for number in range(5):
+            Artifact.objects.create(workspace=workspace, filename=f"a{number}.txt", size_bytes=1, expires_at=expires)
+            PendingUpload.objects.create(
+                workspace=workspace, api_key=key, filename="a.txt", ttl_days=1, token=f"token{number}", expires_at=expires
+            )
+        Artifact.objects.update(member=None)
+        PendingUpload.objects.update(member=None)
+        with mock.patch.object(MODULE, "BATCH_SIZE", 2):
+            backfill(apps, None)
+        self.assertEqual(Artifact.objects.filter(member__isnull=True).count(), 0)
+        self.assertEqual(PendingUpload.objects.filter(member__isnull=True).count(), 0)
+        self.assertEqual(Artifact.objects.count(), 5)
+        self.assertEqual(PendingUpload.objects.count(), 5)
+
     def test_the_migration_is_not_atomic(self):
         self.assertFalse(MODULE.Migration.atomic)
 
@@ -327,6 +345,7 @@ class UploadAllowanceTests(TestCase):
         set_allowance(self.grace, upload_allowance=0)
         pending = mint_upload_url(self.workspace, None, "a.txt", member=self.grace)
         response = Client().put(f"/api/v1/uploads/{pending.token}", data=b"hello", content_type="text/plain")
+        self.assertEqual(response.status_code, 429)
         self.assertEqual(response.json()["code"], "member_monthly_allowance_reached")
         pending.refresh_from_db()
         self.assertFalse(pending.used)

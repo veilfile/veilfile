@@ -142,9 +142,11 @@ class APIKey(models.Model):
     device_issued = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
-    # The person who made the key. A NULL member belongs to the workspace's
-    # administrator. RESTRICT: deleting a user still removes the whole
-    # account, but a membership row alone cannot be deleted under its keys.
+    # The person who made the key. After migration 0014 no key names no
+    # member, and a stray key with none is refused. The field stays
+    # blank=True only so that existing rows and admin forms load. RESTRICT:
+    # deleting a user still removes the whole account, but a membership row
+    # alone cannot be deleted under its keys.
     member = models.ForeignKey(
         Membership,
         related_name="api_keys",
@@ -223,8 +225,9 @@ class Artifact(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     secret_flags = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
-    # The person who uploaded the file. A NULL member belongs to the
-    # workspace's administrator. RESTRICT, so a file never loses its uploader.
+    # The person who uploaded the file. After migration 0014 no file names no
+    # member. The field stays blank=True only so that existing rows and admin
+    # forms load. RESTRICT, so a file never loses its uploader.
     member = models.ForeignKey(
         Membership,
         related_name="artifacts",
@@ -293,8 +296,10 @@ class PendingUpload(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     used = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    # The person whose credential minted the URL. CASCADE, as for api_key:
-    # a URL dies with its minter.
+    # The person whose credential minted the URL. After migration 0014 no
+    # upload URL names no member, and a stray URL with none is refused. The
+    # field stays blank=True only so that existing rows and admin forms load.
+    # CASCADE, as for api_key: a URL dies with its minter.
     member = models.ForeignKey(
         Membership,
         related_name="pending_uploads",

@@ -637,7 +637,7 @@ The design is `docs/superpowers/specs/2026-11-05-team-seats-design.md` and the f
 - A release older than this section cannot delete a user or a workspace once membership rows exist, because the foreign keys from those rows raise an `IntegrityError`. After a code-only rollback, account deletions must wait until the code rolls forward again or `migrate drop_core 0010` has run.
 - A member's allowances are nullable columns on `Membership`, NULL means no allowance, and only staff can set them until PR C.
 - `MemberUsageCounter` counts every upload per member per month, from this deploy on.
-- The team's limits are tested first, so the team's code wins, apart from a race in which the pool still holds.
+- When both limits are reached, the team's code is returned, because the team's limits are tested first. In a race the member's code can appear while the team's storage has just filled, and the team's limit is still enforced.
 - The lock order is the team counter, the member counter, then the workspace row, with the give-back in the same order.
 - The member counter's insert takes a key-share lock on `Membership`, so code that later locks a `Membership` row must use `select_for_update(no_key=True)` or take the counters first.
 - A request in flight honours the allowance it loaded when it started.

@@ -162,7 +162,8 @@ def create_key(user, name, *, request=None, body_is_object=True):
     (only its hash is), so the caller must show it once and keep it nowhere. Refusals, in this order: the email is not
     verified (403 ``email_verification_required``), the name is not acceptable (400 ``invalid_request``; the JSON API
     passes ``body_is_object=False`` when its body was not a JSON object), the plan's key cap is reached (402
-    ``key_limit_reached``, and no key is made). ``name`` may be None or empty: the key is then called "Untitled key".
+    ``key_limit_reached``, and no key is made), the member's own key allowance is reached (400
+    ``member_key_allowance_reached``). ``name`` may be None or empty: the key is then called "Untitled key".
 
     ``request`` is the HTTP request, for the funnel's anonymous id (a cookie): pass it from a view.
     """
