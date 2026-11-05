@@ -6,7 +6,6 @@ import uuid
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
 from django.utils import timezone
 
 
@@ -171,8 +170,8 @@ class APIKey(models.Model):
 
     @property
     def acting_member(self):
-        """The membership the key acts as: its own, else the administrator's."""
-        return self.member or administrator_of(self.workspace)
+        """The membership the key acts as."""
+        return self.member
 
     @property
     def person(self):
@@ -183,17 +182,16 @@ class APIKey(models.Model):
     def verify(cls, raw):
         """Return the active APIKey for ``raw``, or None. Fast-path rejects
         anything that isn't a ``vlf_`` key without touching the database.
-        A key verifies while its person is active and still a member; a key
-        with no member follows the account's owner."""
+        A key verifies while its person is active and still a member."""
         if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
             return None
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         try:
             return cls.objects.select_related("member__user").get(
-                Q(member__isnull=True, workspace__owner__is_active=True)
-                | Q(member__user__is_active=True, member__removed_at__isnull=True),
                 key_hash=digest,
                 is_active=True,
+                member__user__is_active=True,
+                member__removed_at__isnull=True,
             )
         except cls.DoesNotExist:
             return None

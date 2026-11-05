@@ -16,6 +16,11 @@ class APIKeyAdmin(admin.ModelAdmin):
     readonly_fields = ("key_hash", "key_prefix")
     raw_id_fields = ("member",)
 
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields["member"].required = True
+        return form
+
 
 @admin.register(Artifact)
 class ArtifactAdmin(admin.ModelAdmin):
@@ -23,6 +28,11 @@ class ArtifactAdmin(admin.ModelAdmin):
     list_filter = ("mime_type",)
     readonly_fields = ("token",)
     raw_id_fields = ("member",)
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields["member"].required = True
+        return form
 
 
 @admin.register(UsageCounter)
