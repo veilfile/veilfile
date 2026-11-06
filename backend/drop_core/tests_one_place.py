@@ -31,7 +31,7 @@ from .models import (
 )
 from .oauth import resolve_oauth_credential
 from .plans import PLANS
-from .services import upload_artifact
+from .services import mint_upload_url, upload_artifact
 from .storage import LocalStorage
 from .tests import _use_local_dir
 from .tests_fix_device import _DeviceTestBase
@@ -79,6 +79,16 @@ class CurrentMembershipTests(TestCase):
         self.assertIsNone(APIKey.verify(raw))
         key.refresh_from_db()
         self.assertFalse(key.is_active)
+
+    def test_reopening_a_row_stops_its_upload_urls(self):
+        ada = make_user("ada")
+        workspace = get_or_create_workspace(ada)
+        row = administrator_of(workspace)
+        pending = mint_upload_url(workspace, None, "a.txt", oauth_application_id=1, member=row)
+        Membership.objects.filter(pk=row.pk).update(removed_at=timezone.now())
+        current_membership(ada)
+        pending.refresh_from_db()
+        self.assertTrue(pending.used)
 
     def test_a_credential_lookup_does_not_reopen_a_row(self):
         ada = make_user("ada")
@@ -218,6 +228,17 @@ class LookupTests(TestCase):
 
 
 class DeviceLookupTests(_DeviceTestBase):
+
+    def test_reopening_a_row_stops_a_login_approved_before_it_closed(self):
+        grant = self._start()
+        self._approve(grant)
+        Membership.objects.filter(user=self.user).update(removed_at=timezone.now())
+        current_membership(self.user)
+        response = self._poll(grant)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "access_denied")
+        self.assertEqual(APIKey.objects.filter(member__user=self.user, device_issued=True).count(), 0)
+
     def test_device_approval_stores_the_team(self):
         team = get_or_create_workspace(self._user("ada"))
         grace = second_member(team, "grace")

@@ -651,8 +651,8 @@ def revoke_artifact(workspace, artifact_id):
     the row is kept, already expired, so the link 404s and the sweeper (or
     another revoke) retries the delete; the bytes are never lost track of.
 
-    A suspended team's files stay, so a report's evidence does: this returns
-    False for them, whatever route called it.
+    A suspended team's files stay until they expire, so a report's evidence
+    does: this returns False for them, whatever route called it.
     """
     try:
         artifact = Artifact.objects.select_related("workspace").get(
@@ -661,7 +661,7 @@ def revoke_artifact(workspace, artifact_id):
     except Artifact.DoesNotExist:
         return False
     if artifact.workspace.suspended_at is not None:
-        # A suspended team's files stay, so a report's evidence does.
+        # A suspended team's files stay until they expire, so a report's evidence does.
         return False
     # Kill the link first, so it is dead even while storage is slow or down.
     now = timezone.now()

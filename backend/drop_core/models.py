@@ -143,7 +143,8 @@ def current_membership(user, *, reopen=True):
     A person with no current row gets their own workspace back, so that leaving
     or being removed strands nobody. Reopening a closed row is for a signed-in
     person. A credential passes reopen=False and gets None for a closed row, so
-    that a token cannot undo a closure. Reopening stops the row's keys first.
+    that a token cannot undo a closure. Reopening first stops the row's keys, and
+    the device logins and upload URLs still waiting from before it closed.
     A person with no rows at all still gets a first workspace, with either value.
     It can write, so call it before any transaction, as with administrator_of.
     """
@@ -162,9 +163,13 @@ def current_membership(user, *, reopen=True):
     if row.removed_at is not None:
         if not reopen:
             return None
-        # Stop the keys first, so nothing made before the row closed comes back with it.
+        # Stop these first, so nothing made before the row closed comes back with it.
         with transaction.atomic():
             APIKey.objects.filter(member=row, is_active=True).update(is_active=False)
+            PendingUpload.objects.filter(member=row, used=False).update(used=True)
+            DeviceCode.objects.filter(
+                workspace=workspace, approved_by=user, status=DeviceCode.STATUS_APPROVED
+            ).update(status=DeviceCode.STATUS_DENIED)
             Membership.objects.filter(pk=row.pk).update(removed_at=None)
         row.removed_at = None
     row.workspace = workspace

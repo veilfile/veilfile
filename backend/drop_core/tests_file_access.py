@@ -332,6 +332,7 @@ class OnlyFileAccessReadsFilesTests(SimpleTestCase):
         "drop_billing/account.py": 1,  # an exists, for the allowance check
         "drop_core/management/commands/funnel_report.py": 1,  # a count of workspaces that have a file
         "drop_core/management/commands/reconcile_storage.py": 2,  # a token lookup and an exists, for the storage sweep
+        "drop_core/models.py": 1,  # reopening a row marks its unused upload URLs used, and returns nothing
         "drop_core/services.py": 5,  # the pending upload create, two storage sums, and revoke_artifact's lookup and expiry update
         "drop_core/signals.py": 1,  # prose in a docstring, no read
         "drop_core/sweep.py": 2,  # the expiry sweep and the pending upload cleanup, no person involved

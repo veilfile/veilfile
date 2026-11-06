@@ -348,7 +348,7 @@ def revoke_artifact(user, artifact_id, *, member=None):
     try:
         artifact = file_to_revoke(member, artifact_id)
         if artifact is not None and artifact.workspace.suspended_at is not None:
-            # A suspended team's files stay, so a report's evidence does.
+            # A suspended team's files stay until they expire, so a report's evidence does.
             return Answer(
                 403,
                 {
