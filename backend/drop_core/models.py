@@ -38,7 +38,9 @@ class Workspace(models.Model):
 
 
 def get_or_create_workspace(user):
-    """Return the user's workspace, creating it on first use."""
+    """Return the user's workspace, creating it on first use.
+
+    Only signup and current_membership call it."""
     workspace = Workspace.objects.filter(owner=user).order_by("created_at").first()
     if workspace is None:
         workspace = Workspace.objects.create(
@@ -56,8 +58,9 @@ VISIBILITY_CHOICES = [
 
 
 class Membership(models.Model):
-    """A person's place in a workspace. The workspace's owner is always its
-    one current administrator; other people are members. Rows are never
+    """A person's place in a workspace. The workspace's owner is its one
+    current administrator, unless they have moved to another place; other
+    people are members. Rows are never
     deleted by application code: removing a person sets ``removed_at``."""
 
     ADMINISTRATOR = "administrator"
@@ -91,18 +94,30 @@ class Membership(models.Model):
                 condition=models.Q(role="administrator", removed_at__isnull=True),
                 name="membership_one_administrator",
             ),
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=models.Q(role="member", removed_at__isnull=True),
+                name="membership_one_team",
+            ),
         ]
 
     @property
     def is_current(self):
         return self.removed_at is None
 
+    @property
+    def is_administrator(self):
+        return self.role == self.ADMINISTRATOR
+
     def __str__(self):
         return f"{self.user_id} in {self.workspace_id} ({self.role})"
 
 
-def administrator_of(workspace):
-    """The workspace's administrator membership, created if it is missing."""
+class NoCurrentAdministrator(Exception):
+    """The workspace's administrator row is closed, so nothing may be written for it."""
+
+
+def _administrator_row(workspace):
     membership, _ = Membership.objects.get_or_create(
         workspace=workspace,
         user_id=workspace.owner_id,
@@ -111,12 +126,51 @@ def administrator_of(workspace):
     return membership
 
 
+def administrator_of(workspace):
+    """The workspace's current administrator, created if the row is missing."""
+    membership = _administrator_row(workspace)
+    if membership.removed_at is not None:
+        raise NoCurrentAdministrator(workspace.pk)
+    return membership
+
+
+def current_membership(user):
+    """The one place this person is now: a team beats an own workspace, then the oldest first.
+
+    A person with no current row gets their own workspace back, so that leaving
+    or being removed strands nobody. It can write, so call it before any
+    transaction, as with administrator_of.
+    """
+    rows = list(
+        Membership.objects.filter(user=user, removed_at__isnull=True)
+        .select_related("workspace")
+        .order_by("workspace__created_at", "pk")
+    )
+    for row in rows:
+        if row.role == Membership.MEMBER:
+            return row
+    if rows:
+        return rows[0]
+    workspace = get_or_create_workspace(user)
+    row = _administrator_row(workspace)
+    if row.removed_at is not None:
+        Membership.objects.filter(pk=row.pk).update(removed_at=None)
+        row.removed_at = None
+    row.workspace = workspace
+    return row
+
+
+def has_other_members(workspace):
+    """Whether more than one person is currently in the workspace."""
+    return Membership.objects.filter(workspace=workspace, removed_at__isnull=True).count() > 1
+
+
 def current_member(workspace, user):
     """The user's current membership of the workspace, or None."""
     if user is None or not getattr(user, "is_authenticated", False):
         return None
     if user.pk == workspace.owner_id:
-        membership = administrator_of(workspace)
+        membership = _administrator_row(workspace)
         return membership if membership.removed_at is None else None
     return Membership.objects.filter(
         workspace=workspace, user=user, removed_at__isnull=True
