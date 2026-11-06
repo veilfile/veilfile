@@ -440,6 +440,13 @@ class RunnerTests(SimpleTestCase):
             self.assertRegex(last, r"(?m)^        if: always\(\)$", f"ci.yml: the last step of the `{job}` job stops the server and runs `if: always()`, or a failed run leaves it holding the port")
             self.assertIn('kill "$SERVER_PID"', step_script(last), f'ci.yml: the last step of the `{job}` job must run kill "$SERVER_PID"')
 
+    def test_the_dashboard_and_forms_jobs_start_their_server_with_team_seats_on(self):
+        # The Members page and the invitation page answer the shell's 404 while the switch is off, so the jobs that look at them turn it on (AGENTS.md, "People inside an account").
+        for job in ("site-dashboard", "site-forms"):
+            start = next((step for step in workflow_steps(self.jobs[job]) if "Start the app" in step), "")
+            self.assertRegex(start, r'(?m)^          VEILFILE_TEAM_SEATS: "on"$',
+                             f'.github/workflows/ci.yml: the `{job}` job\'s `Start the app` step needs VEILFILE_TEAM_SEATS: "on" in its env, or the team pages it checks are 404s')
+
     def test_every_job_that_uses_python_gets_it_from_setup_python(self):
         uses_python = re.compile(r"(?m)(?:^|[\s;|&(])(?:python|pip)\s")
         found = {name for name, body in self.jobs.items() if any(uses_python.search(step_script(step)) for step in workflow_steps(body))}

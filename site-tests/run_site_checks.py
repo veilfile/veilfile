@@ -9265,6 +9265,11 @@ FORM_STATES = (
     FormState("oauth-unknown-client", "{oauth[unknown]}", who="verified", status=400),
     FormState("device-consent-long", "/device?user_code={device[long]}", who="long"),   # the longest username, address, key name and user agent
     FormState("oauth-consent-long", "{oauth[long]}", who="long"),
+    FormState("invitation-signed-out", "/accounts/invitations/{invite[token]}/"),   # needs the switch for team seats; a visitor is told nothing of whether the address has an account
+    FormState("invitation-join", "/accounts/invitations/{invite[token]}/", who="invitee"),
+    FormState("invitation-wrong-person", "/accounts/invitations/{invite[token]}/", who="verified"),
+    FormState("invitation-unverified", "/accounts/invitations/{invite[unverified_token]}/", who="invitee_unverified"),
+    FormState("invitation-not-valid", "/accounts/invitations/{invite[missing]}/", status=404),
     FormState("login-throttled", "/accounts/login/", how="login_throttled", status=429, separated=True, spends=True),
     FormState("signup-throttled", "/accounts/signup/", how="signup_throttled", status=429, separated=True, spends=True),
     FormState("reset-throttled", "/accounts/password_reset/", how="reset_throttled", status=429, separated=True, spends=True),
@@ -10540,6 +10545,76 @@ def dashboard_webkit_problems(playwright, base_url, fixtures):
     return problems
 
 
+# The element that has focus, in words, and whether a key press has given it the site's focus ring.
+MEMBERS_FOCUS = """() => { const e = document.activeElement; return { name: e.getAttribute('name') || '', words: e.textContent.replace(/\\s+/g, ' ').trim(), inMain: Boolean(e.closest('main')),
+  ring: e.matches(':focus-visible') }; }"""
+
+
+def dash_members_walk_findings(page, label):
+    """The invite form by keyboard: Tab reaches the address field (the tab stops on the way are counted, never waited for) and then Send invitation, each with the focus ring, and
+    Shift+Tab goes back to the field. The form is not sent: the server mails an invitation. A helper of dashboard_members_problems."""
+    problems, stops = [], []
+    page.evaluate("() => { if (document.activeElement) document.activeElement.blur(); window.scrollTo(0, 0); }")
+    for _ in range(40):
+        page.keyboard.press("Tab")
+        now = page.evaluate(MEMBERS_FOCUS)
+        stops.append(now)
+        if now["name"] == "email":
+            break
+    else:
+        return [f"{label}: Tab never reached the address field in 40 presses; it should come after the table's Set allowance links (templates/dashboard/members.html)"]
+    if not now["ring"]:
+        problems.append(f"{label}: the address field has focus after Tab but no focus ring (:focus-visible does not match; static/css/components/field.css)")
+    page.keyboard.press("Tab")
+    button = page.evaluate(MEMBERS_FOCUS)
+    if button["words"] != "Send invitation" or not button["ring"]:
+        problems.append(f"{label}: Tab from the address field reaches {button['words']!r}{'' if button['ring'] else ' with no focus ring'}; it reaches Send invitation, with the ring")
+    page.keyboard.press("Shift+Tab")
+    if page.evaluate(MEMBERS_FOCUS)["name"] != "email":
+        problems.append(f"{label}: Shift+Tab from Send invitation does not go back to the address field")
+    for stop in stops:
+        if stop["inMain"] and not stop["ring"]:
+            problems.append(f"{label}: a stop in <main> ({stop['words'][:40]!r}) shows no focus ring after Tab")
+    return problems
+
+
+def dashboard_members_problems(browser, base_url, session_key, fixtures):
+    """The team pages as the pages part looks at a page: the Members page and the allowance page as the team's administrator, and a member's Overview, each at 375 and 1280 px, in Paper and
+    in Ink, with Motion on and off. Each answers 200, has no sideways scroll, no accessibility violation (axe), no console error and no file that failed to load, and on a phone every
+    field's text is 16 px or more. The Members page lists the waiting invitation's address, and the invite form is walked by keyboard (dash_members_walk_findings). Nothing is sent."""
+    problems, team = [], fixtures["team"]
+    admin, member = fixtures["sessions"]["admin"], fixtures["sessions"]["member"]
+    for name, key, path, words in (("members", admin, "/app/members/", team["invitee"]), ("allowance", admin, f"/app/members/{team['member_id']}/allowance/", "Set an allowance"),
+                                   ("member-overview", member, "/app/", "Your use")):
+        site_page = SitePage(path, f"dashboard-{name}", signed_in=True)
+        for width in WIDTHS:
+            for appearance in APPEARANCES:
+                for motion in MOTIONS:
+                    label = f"{path} at {width}px, {appearance}, motion {motion}"
+                    context = new_context(browser, base_url, key, site_page, width=width, theme=appearance, motion=motion)
+                    context.set_default_timeout(FORM_NAV_MS)
+                    page, errors = fresh_page(context)
+                    try:
+                        reply = dash_open(page, base_url, path)
+                        if reply.status != 200:
+                            problems.append(f"{label}: answers {reply.status}, not 200; the team pages answer only while the switch for team seats is on in the server (ci.yml sets VEILFILE_TEAM_SEATS) and for the fixtures' team ({FIXTURES_STALE})")
+                            continue
+                        if words.lower() not in page.locator("main").inner_text().lower():   # a heading may be set in capitals: inner_text reads what is drawn
+                            problems.append(f"{label}: <main> does not say {words!r} ({FIXTURES_STALE})")
+                        problems += page_problems(page, label)
+                        if width == 375:
+                            problems += [f"{label}: the {f['name']} field's text is {f['size']:g}px; under 16px a phone zooms in when it takes focus (static/css/components/field.css)"
+                                         for f in page.evaluate(FORM_PAGE)["fields"] if f["shown"] and f["textual"] and f["size"] < 16]
+                        if path == "/app/members/" and (appearance, motion) == ("light", "on"):
+                            problems += dash_members_walk_findings(page, f"{label}, the invite form by keyboard")
+                    except PlaywrightError as error:
+                        problems.append(f"{label}: could not finish looking at the page: {error.message.splitlines()[0]}")
+                    finally:
+                        context.close()
+                    problems += [f"{label}: console error: {error}" for error in errors]
+    return problems
+
+
 def run_dashboard(browser, base_url, session_key, out, device, fixtures, playwright):
     """The dashboard part: the five sections as the pages part checks a page (the owner fixture's session, not the staff login), then what only the dashboard has, each timed. The checks that
     use up sessions or change what the fixtures made (Sign out, the key flow, the revokes) come last, the revokes after every check that counts rows and keys (the slow-frames walk counts the
@@ -10549,7 +10624,7 @@ def run_dashboard(browser, base_url, session_key, out, device, fixtures, playwri
     for site_page in DASHBOARD_PAGES:
         problems += page_states(browser, base_url, fixtures["sessions"]["owner"], out, device, first, site_page, "dashboard")
         problems += timed("dashboard", page_edge_problems, browser, base_url, fixtures["sessions"]["owner"], site_page, out)
-    for check in (dashboard_section_problems, dashboard_change_problems, dashboard_rows_problems, dashboard_time_problems, dashboard_billing_problems, dashboard_error_page_problems,
+    for check in (dashboard_section_problems, dashboard_change_problems, dashboard_members_problems, dashboard_rows_problems, dashboard_time_problems, dashboard_billing_problems, dashboard_error_page_problems,
                   dashboard_sign_out_problems, dashboard_slow_frames_problems, dashboard_key_problems, dashboard_revoke_problems):
         problems += timed("dashboard", check, browser, base_url, session_key, fixtures)
     problems += timed("dashboard", dashboard_webkit_problems, playwright, base_url, fixtures)
