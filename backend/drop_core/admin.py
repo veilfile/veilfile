@@ -9,7 +9,7 @@ class WorkspaceAdmin(admin.ModelAdmin):
     list_display = ("name", "owner", "plan", "suspended_at", "created_at")
     list_filter = ("plan",)
     # Changed only by the actions below. A full form save would write back a stale plan and stale Stripe values.
-    readonly_fields = ("suspended_at",)
+    readonly_fields = ("suspended_at", "file_visibility")
     actions = ("suspend_workspaces", "lift_suspensions")
 
     @admin.action(description="Suspend the selected workspaces", permissions=["change"])

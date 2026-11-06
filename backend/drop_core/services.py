@@ -13,6 +13,9 @@ from django.db.models import F
 from django.utils import timezone
 
 from .models import (
+    FILE_VISIBILITY_ALWAYS_TEAM,
+    VISIBILITY_ONLY_ME,
+    VISIBILITY_TEAM,
     Artifact,
     BlockedHash,
     MemberUsageCounter,
@@ -476,7 +479,7 @@ def upload_artifact(
             MemberUsageCounter.objects.get_or_create(member=member, year_month=month)
             if not member_reserve.update(uploads=F("uploads") + 1):
                 raise ValueError("member_monthly_allowance_reached")
-        locked = Workspace.objects.select_for_update().only("id", "suspended_at").get(pk=workspace.pk)
+        locked = Workspace.objects.select_for_update().only("id", "suspended_at", "file_visibility").get(pk=workspace.pk)
         # Read after the lock, so a removal or a suspension that committed first is seen. Raising rolls back the
         # reservations above. The test is positive, so a row that has gone or belongs elsewhere refuses too.
         if locked.suspended_at is not None:
@@ -494,6 +497,7 @@ def upload_artifact(
             secret_flags=secret_flags,
             safety_status=safety_status,
             content_sha256=digest,
+            visibility=VISIBILITY_TEAM if locked.file_visibility == FILE_VISIBILITY_ALWAYS_TEAM else VISIBILITY_ONLY_ME,
         )
         artifact.save()
         if workspace_storage_bytes(workspace) > storage_cap_bytes:

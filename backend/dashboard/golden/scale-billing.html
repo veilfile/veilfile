@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script id="veilfile-shell-boot">
+(function () {
+  var root = document.documentElement, theme = null, motion = null;
+  try { theme = localStorage.getItem("veilfile-theme"); motion = localStorage.getItem("veilfile-motion"); } catch (error) {}
+  if (theme !== "light" && theme !== "dark") theme = "system";
+  if (motion !== "on" && motion !== "off") motion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "off" : "on";
+  try { if (sessionStorage.getItem("veilfile-veil-off") === "slow") { motion = "off"; root.setAttribute("data-veil-off", "slow"); } } catch (error) {}
+  try { if (motion !== "off" && Date.now() - performance.now() - sessionStorage.getItem("veilfile-faded-nav") < 1000) root.setAttribute("data-arriving", ""); } catch (error) {}
+  root.setAttribute("data-theme", theme);
+  root.setAttribute("data-motion", motion);
+  if ("noModule" in HTMLScriptElement.prototype) root.classList.add("js");
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Billing | Veilfile</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="icon" href="/static/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/static/img/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+
+<link rel="preload" href="/static/fonts/newsreader/normal-400-500-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/ibm-plex-mono/normal-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+
+<link rel="preload" href="/static/fonts/cormorant-garamond/italic-300-latin.woff2" as="font" type="font/woff2" crossorigin>
+
+
+<link rel="stylesheet" href="/static/css/fonts.css">
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/components/mark.css">
+<link rel="stylesheet" href="/static/css/components/lockup.css">
+<link rel="stylesheet" href="/static/css/components/menu.css">
+<link rel="stylesheet" href="/static/css/components/controls.css">
+<link rel="stylesheet" href="/static/css/components/plan.css">
+<link rel="stylesheet" href="/static/css/components/install_line.css">
+<link rel="stylesheet" href="/static/css/components/code_block.css">
+<link rel="stylesheet" href="/static/css/components/sections.css">
+<link rel="stylesheet" href="/static/css/components/pager.css">
+<link rel="stylesheet" href="/static/css/components/entries.css">
+<link rel="stylesheet" href="/static/css/components/field.css">
+<link rel="stylesheet" href="/static/css/components/form_errors.css">
+<link rel="stylesheet" href="/static/css/components/file_list.css">
+<link rel="stylesheet" href="/static/css/components/meter.css">
+
+
+<script type="module" src="/static/js/shell.js" onerror="document.documentElement.classList.remove('js')"></script>
+<script type="module" src="/static/js/behaviors/tabs.js"></script>
+<script type="module" src="/static/js/behaviors/copy.js"></script>
+<script type="module" src="/static/js/behaviors/come-in.js"></script>
+<script type="module" src="/static/js/behaviors/local-time.js"></script>
+</head>
+<body class="layout-app" data-veil-src="/static/js/veil.js" data-layout="app" data-layout-paths="/app/ /app/files/ /app/keys/ /app/apps/ /app/billing/" data-faces="italic 300 1em Cormorant Garamond|1em Newsreader">
+<a class="skip-link label" href="#main">Skip to content</a>
+<header>
+<div class="shell-corner shell-corner--top-left">
+
+<a class="lockup label interactive" href="/">
+
+<svg class="mark" viewBox="0 0 560 560" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path fill="currentColor" d="M0 0H560V140H420V280H280V420H140V560H0Z M420 280H560V420H420Z M280 420H420V560H280Z"/></svg>
+<span class="visually-hidden">Veilfile</span></a>
+</div>
+<div class="shell-corner shell-corner--top-right">
+
+<nav class="menu" aria-label="Site" data-menu>
+<button class="menu__toggle label interactive" type="button" aria-expanded="false" aria-controls="shell-menu" data-menu-toggle>Menu</button>
+<div class="menu__list" id="shell-menu" data-menu-list>
+<ul class="menu__group">
+<li><a class="label interactive" href="/app/">Overview</a></li>
+<li><a class="label interactive" href="/app/files/">Files</a></li>
+<li><a class="label interactive" href="/app/keys/">Keys</a></li>
+<li><a class="label interactive" href="/app/apps/">Connected apps</a></li>
+<li><a class="label interactive" href="/app/billing/" aria-current="page">Billing</a></li>
+</ul>
+<ul class="menu__group">
+<li><a class="label interactive" href="/docs/">Docs</a></li>
+<li><a class="label interactive" href="/blog/">Journal</a></li>
+<li><a class="label interactive" href="/">Site</a></li>
+<li><form method="post" action="/accounts/logout/"><input type="hidden" name="csrfmiddlewaretoken" value="CSRF"><button class="label interactive" type="submit">Sign out</button></form></li>
+</ul>
+<ul class="menu__group">
+<li><a class="label interactive" href="/terms/">Terms</a></li>
+<li><a class="label interactive" href="/privacy/">Privacy</a></li>
+<li><a class="label interactive" href="/report-abuse/">Report abuse</a></li>
+<li><a class="label interactive" href="/llms.txt">llms.txt</a></li>
+</ul>
+</div>
+</nav>
+</div>
+</header>
+<main id="main" class="shell-main"><div class="app">
+<h1>Billing</h1>
+<p>Current plan: <strong>Scale</strong></p>
+
+
+
+
+
+
+
+<div class="form-actions">
+<form method="post" action="/app/billing/checkout/">
+<input type="hidden" name="csrfmiddlewaretoken" value="CSRF">
+<input type="hidden" name="plan" value="team">
+<button class="action interactive" type="submit">Upgrade to Team ($4/mo)</button>
+</form>
+<form method="post" action="/app/billing/checkout/">
+<input type="hidden" name="csrfmiddlewaretoken" value="CSRF">
+<input type="hidden" name="plan" value="team_plus">
+<button class="action interactive" type="submit">Upgrade to Team Plus ($6/mo)</button>
+</form>
+</div>
+
+
+<p>Yearly billing costs the price of ten months, so two months are free.</p>
+<div class="form-actions">
+<form method="post" action="/app/billing/checkout/">
+<input type="hidden" name="csrfmiddlewaretoken" value="CSRF">
+<input type="hidden" name="plan" value="team">
+<input type="hidden" name="interval" value="year">
+<button class="action interactive" type="submit">Upgrade to Team ($40/yr)</button>
+</form>
+<form method="post" action="/app/billing/checkout/">
+<input type="hidden" name="csrfmiddlewaretoken" value="CSRF">
+<input type="hidden" name="plan" value="team_plus">
+<input type="hidden" name="interval" value="year">
+<button class="action interactive" type="submit">Upgrade to Team Plus ($60/yr)</button>
+</form>
+<form method="post" action="/app/billing/checkout/">
+<input type="hidden" name="csrfmiddlewaretoken" value="CSRF">
+<input type="hidden" name="plan" value="scale">
+<input type="hidden" name="interval" value="year">
+<button class="action interactive" type="submit">Upgrade to Scale ($120/yr)</button>
+</form>
+</div>
+
+
+<p>Upgrades go through Stripe Checkout. Once subscribed, you switch plans here and manage payment details and cancellation in the customer portal.</p>
+</div></main>
+<footer>
+<div class="shell-corner shell-corner--bottom-left">
+
+<div class="controls">
+<button class="label interactive" type="button" aria-label="Appearance: Auto" data-appearance-toggle>Auto</button>
+</div>
+</div>
+<div class="shell-corner shell-corner--bottom-right">
+
+<div class="controls">
+<button class="label interactive" type="button" aria-pressed="true" aria-label="FX: motion" data-motion-toggle>FX <span aria-hidden="true" data-motion-state>· on</span></button>
+</div>
+</div>
+</footer>
+</body>
+</html>

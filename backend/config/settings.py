@@ -334,6 +334,16 @@ OAUTH2_PROVIDER = {
 VEILFILE_CLIENT_IP_HEADER = os.environ.get("VEILFILE_CLIENT_IP_HEADER", "CF-Connecting-IP")
 VEILFILE_TRUSTED_PROXY_HOPS = int(os.environ.get("VEILFILE_TRUSTED_PROXY_HOPS", "2"))
 
+
+
+def team_seats_from(value):
+    """The switch for team seats: on only for the exact value "on"."""
+    return value == "on"
+
+
+# Team seats (invitations and the Members page) stay off until they launch. Read once at start-up, so turning them on takes a restart.
+TEAM_SEATS = team_seats_from(os.environ.get("VEILFILE_TEAM_SEATS", ""))
+
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/app/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"

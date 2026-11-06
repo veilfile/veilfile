@@ -102,6 +102,7 @@ Stripe sandbox/test key only on a local or staging copy.
 | `DEFAULT_FROM_EMAIL` | prod | — | From address, e.g. `support@veilfile.com` |
 | `EMAIL_TIMEOUT` | no | `10` | SMTP timeout (seconds) |
 | `VEILFILE_SAFETY_MODE` | no | `off` | `off`, `log` or `enforce`: SHA-256 blocklist screening of uploads. Unset is reported as `veilfile.W002` |
+| `VEILFILE_TEAM_SEATS` | no | unset (off) | Turns on team seats: invitations and the Members page. Leave it unset until they launch |
 | `VEILFILE_CLIENT_IP_HEADER` | no | `CF-Connecting-IP` | Header carrying the visitor IP, set (and overwritten) by Cloudflare. Used for rate limits when it holds a valid IP and the request came from a Cloudflare edge address; otherwise the `X-Forwarded-For` hop logic below applies. Empty disables it |
 | `VEILFILE_TRUSTED_PROXY_HOPS` | no | `2` | Trusted public proxy hops in front of the app. The client IP used for rate limits is the `X-Forwarded-For` entry that many positions from the right, after trailing private-network hops are skipped, when the last of them is a Cloudflare edge address. A request without one did not come through Cloudflare, and the last entry (the one the platform's proxy appended) is used. Confirm against real traffic before changing |
 | `DJANGO_SECURE_HSTS_SECONDS` | no | `31536000` | HSTS max-age on HTTPS responses |

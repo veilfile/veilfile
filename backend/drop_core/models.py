@@ -9,6 +9,11 @@ from django.db import models, transaction
 from django.utils import timezone
 
 
+FILE_VISIBILITY_MEMBERS_CHOOSE = "members_choose"
+FILE_VISIBILITY_ALWAYS_TEAM = "always_team"
+FILE_VISIBILITY_ALWAYS_ONLY_ME = "always_only_me"
+
+
 class Workspace(models.Model):
     """A billing/ownership boundary. One user owns one workspace in MVP."""
 
@@ -35,6 +40,11 @@ class Workspace(models.Model):
     # Set by a staff action. While set, every key, token, upload URL and device login of the team is refused, and
     # every link of the team answers as a missing file does.
     suspended_at = models.DateTimeField(null=True, blank=True)
+    # Whether a new file starts shared with the team or only with its uploader. Read under the workspace lock at upload, and
+    # changing it never relabels a file already stored.
+    file_visibility = models.CharField(
+        max_length=16, default=FILE_VISIBILITY_MEMBERS_CHOOSE, db_default=FILE_VISIBILITY_MEMBERS_CHOOSE
+    )
 
     def __str__(self):
         return f"{self.name} ({self.plan})"
