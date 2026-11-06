@@ -17,7 +17,8 @@ from django.utils import timezone
 from pages.errors import not_found
 
 from .email_verification import is_email_verified
-from .models import Invitation, Membership, Workspace
+from .models import APIKey, Invitation, Membership, PendingUpload, Workspace, current_membership, has_other_members
+from .oauth import revoke_user_oauth_grants
 from .plans import PLANS
 
 logger = logging.getLogger(__name__)
@@ -81,11 +82,15 @@ def seats_in_use(workspace):
     return people + _open(workspace).filter(expires_at__gt=timezone.now()).count()
 
 
+def _digest(raw_token):
+    return hashlib.sha256(raw_token.encode()).hexdigest()
+
+
 def find_invitation(raw_token):
     """The waiting, unexpired invitation behind a link's token, or None."""
     if not settings.TEAM_SEATS:
         return None
-    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    token_hash = _digest(raw_token)
     return Invitation.objects.filter(
         token_hash=token_hash,
         accepted_at__isnull=True,
@@ -201,4 +206,128 @@ def cancel_invitation(member, invitation_id):
                 declined_at__isnull=True,
                 revoked_at__isnull=True,
             ).update(revoked_at=timezone.now())
+        )
+
+
+class JoinRefused(Exception):
+    """A person was not joined. `code` is one of why_not_join's, or not_valid for a link that no longer works."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _current_workspace_ids(user):
+    """The workspaces where the person has a current row."""
+    return list(Membership.objects.filter(user=user, removed_at__isnull=True).values_list("workspace_id", flat=True))
+
+
+def why_not_join(user, invitation):
+    """The code that would refuse `user` joining the invitation's team, or None. It writes nothing.
+
+    The codes are checked in this order: wrong_person, email_verification_required, on_this_team, on_another_team,
+    administers_people, account_suspended, has_paid_plan, no_free_seat."""
+    if not settings.TEAM_SEATS:
+        return None
+    if not same_address(user.email, invitation.email):
+        return "wrong_person"
+    if not is_email_verified(user) or not same_address(user.email_verification.email, invitation.email):
+        return "email_verification_required"
+    rows = list(Membership.objects.filter(user=user, removed_at__isnull=True).select_related("workspace"))
+    if any(row.workspace_id == invitation.workspace_id for row in rows):
+        return "on_this_team"
+    if any(row.role == Membership.MEMBER for row in rows):
+        return "on_another_team"
+    administered = [row.workspace for row in rows]
+    if any(has_other_members(workspace) for workspace in administered):
+        return "administers_people"
+    if any(workspace.suspended_at is not None for workspace in administered):
+        return "account_suspended"
+    if any(workspace.plan != Workspace.PLAN_FREE or workspace.stripe_subscription_id for workspace in administered):
+        return "has_paid_plan"
+    limit = seat_limit(invitation.workspace)
+    # The invitation's own hold becomes this person's seat, so only the people count.
+    if limit is not None and Membership.objects.filter(workspace=invitation.workspace, removed_at__isnull=True).count() >= limit:
+        return "no_free_seat"
+    return None
+
+
+def _close_administrator_row(row, now):
+    """Stop what a workspace of the person's own made, then close the row. Call it under that workspace's lock."""
+    APIKey.objects.filter(member=row, is_active=True).update(is_active=False)
+    PendingUpload.objects.filter(member=row, used=False).update(used=True)
+    _open(row.workspace).update(revoked_at=now)
+    Membership.objects.filter(pk=row.pk).update(removed_at=now)
+
+
+def _join_once(user, digest, team_id):
+    """One attempt at the join. Returns the person's row, or None when the person's rows changed before the locks were taken."""
+    now = timezone.now()
+    with transaction.atomic():
+        ids = sorted({team_id, *_current_workspace_ids(user)})
+        locked = {w.pk: w for w in Workspace.objects.select_for_update().filter(pk__in=ids).order_by("pk")}
+        if not set(_current_workspace_ids(user)) <= set(locked):
+            return None
+        team = locked[team_id]
+        invitation = _open(team).select_for_update().filter(token_hash=digest, expires_at__gt=now).first()
+        if invitation is None or team.suspended_at is not None:
+            raise JoinRefused("not_valid")
+        invitation.workspace = team
+        code = why_not_join(user, invitation)
+        if code is not None:
+            raise JoinRefused(code)
+        for row in Membership.objects.filter(user=user, removed_at__isnull=True, role=Membership.ADMINISTRATOR).select_related("workspace"):
+            row.workspace = locked[row.workspace_id]
+            _close_administrator_row(row, now)
+        row = Membership.objects.filter(workspace=team, user=user).first()
+        if row is None:
+            row = Membership.objects.create(workspace=team, user=user, role=Membership.MEMBER)
+        else:
+            APIKey.objects.filter(member=row, is_active=True).update(is_active=False)
+            Membership.objects.filter(pk=row.pk).update(
+                role=Membership.MEMBER, removed_at=None, upload_allowance=None, storage_allowance_bytes=None, key_allowance=None
+            )
+            row.refresh_from_db()
+        Invitation.objects.filter(pk=invitation.pk).update(accepted_at=now)
+        revoke_user_oauth_grants(user)
+        return row
+
+
+def accept_invitation(user, raw_token):
+    """Move `user` onto the invitation's team, and stop what their own account made. Returns the new Membership.
+
+    Raises JoinRefused. The workspace rows of the team and of the person's own places are locked in primary-key order, and
+    the person's rows are read again under the locks."""
+    if not settings.TEAM_SEATS:
+        raise JoinRefused("not_valid")
+    current_membership(user)  # before any lock: it can write
+    digest = _digest(raw_token)
+    team_id = Invitation.objects.filter(token_hash=digest).values_list("workspace_id", flat=True).first()
+    if team_id is None:
+        raise JoinRefused("not_valid")
+    try:
+        for _ in range(3):
+            row = _join_once(user, digest, team_id)
+            if row is not None:
+                return row
+    except IntegrityError:
+        # membership_one_team: the person joined somewhere else in the meantime.
+        raise JoinRefused("on_another_team") from None
+    raise JoinRefused("on_another_team")
+
+
+def decline_invitation(raw_token):
+    """Close a waiting invitation as declined, on the strength of the link alone. True when one was closed."""
+    if not settings.TEAM_SEATS:
+        return False
+    digest = _digest(raw_token)
+    team_id = Invitation.objects.filter(token_hash=digest).values_list("workspace_id", flat=True).first()
+    if team_id is None:
+        return False
+    with transaction.atomic():
+        Workspace.objects.select_for_update().get(pk=team_id)
+        return bool(
+            Invitation.objects.filter(
+                token_hash=digest, accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True
+            ).update(declined_at=timezone.now())
         )
