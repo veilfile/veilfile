@@ -96,10 +96,13 @@ def usage(user, *, workspace=None):
 # ---------------------------------------------------------------------------
 
 
-def list_keys(user, *, workspace=None):
-    """GET /api/v1/keys/: every key of the workspace, newest first, revoked ones included. Never the key itself."""
-    workspace = _workspace_of(user, workspace)
-    keys = workspace.api_keys.order_by("-created_at").all()
+def list_keys(user, *, member=None, everyone=False):
+    """GET /api/v1/keys/: the person's own keys, newest first, revoked ones included. Never the key itself.
+
+    ``everyone`` lists the whole team's keys and is honoured only for an administrator."""
+    member = member if member is not None else current_membership(user)
+    keys = member.workspace.api_keys if everyone and member.is_administrator else member.api_keys
+    keys = keys.order_by("-created_at").all()
     return Answer(
         200,
         [
@@ -212,15 +215,16 @@ def create_key(user, name, *, request=None, body_is_object=True):
     )
 
 
-def revoke_key(user, key_id, *, workspace=None, only_key_id=None):
-    """DELETE /api/v1/keys/<id>/: revoke one key of the workspace (204), or 404 for a key that is not its own.
+def revoke_key(user, key_id, *, member=None, only_key_id=None):
+    """DELETE /api/v1/keys/<id>/: revoke one key (204), or 404 for a key the caller may not reach: a member reaches
+    their own keys, an administrator every key of the team.
 
     The row is kept with ``is_active`` False. A caller that is itself an API key passes its own id as ``only_key_id``
     and may revoke only that key (403 ``session_required`` for a sibling): a leaked CI key must not be able to lock
     out the workspace's other agents."""
-    workspace = _workspace_of(user, workspace)
-    key = APIKey.objects.filter(id=key_id, workspace=workspace).first()
-    if key is None:
+    member = member if member is not None else current_membership(user)
+    key = APIKey.objects.filter(id=key_id, workspace=member.workspace).first()
+    if key is None or (not member.is_administrator and key.member_id != member.pk):
         return Answer(
             404, {"error": "No API key with that id exists in this workspace. Check the id.", "code": "not_found"}
         )

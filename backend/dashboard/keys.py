@@ -37,7 +37,7 @@ def _when(value):
 def _key_rows(user):
     return [
         {**item, "created_at": _when(item["created_at"]), "last_used_at": _when(item["last_used_at"])}
-        for item in account.list_keys(user).body
+        for item in account.list_keys(user, everyone=True).body
     ]
 
 
@@ -72,8 +72,17 @@ def _refusal(user, answer):
     if code == "email_verification_required":
         return {"kind": "unverified", "message": message}
     if code == "key_limit_reached":
-        workspace = current_membership(user).workspace
+        member = current_membership(user)
+        workspace = member.workspace
         cap = key_cap(workspace)
+        if not member.is_administrator and cap is not None:
+            return {
+                "kind": "other",
+                "message": (
+                    f"Your team's plan allows {cap} active {'key' if cap == 1 else 'keys'}, "
+                    "and the team has reached that limit. Ask your administrator to make room."
+                ),
+            }
         if cap is not None:
             message = (
                 f"Your {plan_name(workspace.plan)} plan allows {cap} active {'key' if cap == 1 else 'keys'}. "
@@ -118,8 +127,13 @@ def keys(request):
 
 
 def _own_key(user, key_id):
-    """The key of this person's workspace with this id, or None: another workspace's key and a missing one are the same."""
-    return APIKey.objects.filter(pk=key_id, workspace=current_membership(user).workspace).first()
+    """The key with this id that this person may reach, or None: another workspace's key, a teammate's key (for a member) and a
+    missing one are the same."""
+    member = current_membership(user)
+    key = APIKey.objects.filter(pk=key_id, workspace=member.workspace).first()
+    if key is None or (not member.is_administrator and key.member_id != member.pk):
+        return None
+    return key
 
 
 @dashboard_view

@@ -23,7 +23,19 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from drop_core import tests_oauth
-from drop_core.models import APIKey, DeviceCode, EmailVerification, get_or_create_workspace
+from drop_core.key_caps import create_key_within_cap
+from drop_core.models import (
+    APIKey,
+    DeviceCode,
+    EmailVerification,
+    Membership,
+    administrator_of,
+    get_or_create_workspace,
+)
+from drop_core.plans import PLANS
+from drop_core.tests_allowances import set_allowance
+from drop_core.tests_fix_device import GRANT
+from drop_core.tests_members import second_member
 
 User = get_user_model()
 
@@ -560,6 +572,142 @@ class DeviceConsentTests(DeviceCase):
                          'an unverified visitor sees a <p class="notice" role="status"> on the approval too (device_consent.html)')
         self.says(main, f'href="{reverse("email-verification")}"', "the notice: the link to re-send")
         self.omits(self.consent()[1], "Verify your email first", "the approval page of a verified visitor")
+
+
+class DeviceConsentOnATeamTests(DeviceCase):
+    """A person sees and replaces only their own keys; a one-person account keeps its words."""
+
+    NOTHING_TO_REPLACE = ("This login needs one of your keys to replace, and you have none. "
+                          "Ask your administrator to make room, then run veilfile login again.")
+
+    def setUp(self):
+        super().setUp()
+        self.workspace.plan = "team"
+        self.workspace.save(update_fields=["plan"])
+        self.admin = administrator_of(self.workspace)
+        self.grace = second_member(self.workspace, "grace")
+        self.lin = second_member(self.workspace, "lin")
+        self.grace_browser = APIClient()
+        self.grace_browser.force_login(self.grace.user)
+
+    def fill_the_team(self, graces=1, lins=1):
+        for i in range(graces):
+            create_key_within_cap(self.workspace, f"grace-key-{i}", member=self.grace)
+        for i in range(lins):
+            create_key_within_cap(self.workspace, f"lin-key-{i}", member=self.lin)
+        made = APIKey.objects.filter(workspace=self.workspace, is_active=True).count()
+        for i in range(PLANS["team"]["keys"] - made):
+            create_key_within_cap(self.workspace, f"ada-key-{i}", member=self.admin)
+
+    def page(self, browser):
+        grant = self.start()
+        response = browser.get("/device", {"user_code": grant["user_code"]})
+        self.assertEqual(response.status_code, 200)
+        return grant, main_of(response.content.decode())
+
+    def poll(self, grant):
+        return self.terminal.post("/api/v1/device/token", {"grant_type": GRANT, "device_code": grant["device_code"]},
+                                  format="json")
+
+    def row(self, grant):
+        return DeviceCode.objects.get(user_code=grant["user_code"].replace("-", ""))
+
+    def test_consent_offers_only_a_members_own_keys(self):
+        self.fill_the_team()
+        _grant, main = self.page(self.grace_browser)
+        radios = Tags(main).find("input", {"type": "radio"})
+        grace_keys = APIKey.objects.filter(member=self.grace)
+        self.assertEqual({radio["value"] for radio in radios}, {str(key.pk) for key in grace_keys})
+        self.omits(main, "lin-key-0", "a member's approval page")
+        self.omits(main, "ada-key-0", "a member's approval page")
+        self.says(text_of(main), f"Your team's plan allows {PLANS['team']['keys']} active API keys, and the team has "
+                  f"{PLANS['team']['keys']}.", "the page on a team")
+
+    def test_a_posted_teammates_key_is_refused(self):
+        self.fill_the_team()
+        grant = self.start()
+        lins = APIKey.objects.get(member=self.lin)
+        response = self.grace_browser.post("/device/approve", {"user_code": grant["user_code"], "confirm": "yes",
+                                                              "replace_key": str(lins.pk)})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.row(grant).status, DeviceCode.STATUS_PENDING)
+
+    def test_a_member_at_their_allowance_is_asked_before_approving(self):
+        create_key_within_cap(self.workspace, "grace-key-0", member=self.grace)
+        set_allowance(self.grace, key_allowance=1)
+        _grant, main = self.page(self.grace_browser)
+        self.assertEqual(len(Tags(main).find("input", {"type": "radio"})), 1)
+        self.says(text_of(main), "Your administrator allows you 1 active API key. Choose one of your keys to replace.",
+                  "the page")
+
+    def test_a_member_with_no_key_to_replace_is_told_before_approving(self):
+        self.fill_the_team(graces=0)
+        grant, main = self.page(self.grace_browser)
+        self.says(text_of(main), self.NOTHING_TO_REPLACE, "the page")
+        self.omits(main, ">Approve</button>", "a page with nothing to replace")
+        response = self.grace_browser.post("/device/approve", {"user_code": grant["user_code"], "confirm": "yes"})
+        self.assertEqual(response.status_code, 400)
+        self.says(text_of(response.content.decode()), self.NOTHING_TO_REPLACE, "the refusal")
+        self.assertEqual(self.row(grant).status, DeviceCode.STATUS_PENDING)
+
+    def test_an_administrator_with_no_key_to_replace_is_told_to_use_the_keys_page(self):
+        self.fill_the_team(graces=1, lins=1)
+        APIKey.objects.filter(member=self.admin).update(is_active=False)
+        for i in range(PLANS["team"]["keys"] - 2):
+            create_key_within_cap(self.workspace, f"lin-extra-{i}", member=self.lin)
+        _grant, main = self.page(self.browser)
+        self.says(text_of(main), "Revoke a key on the Keys page to make room, then run veilfile login again.",
+                  "the page")
+
+    def test_the_grant_summary_on_a_team(self):
+        _grant, main = self.page(self.grace_browser)
+        words = text_of(main)
+        self.says(words, "List your files and the files shared with your team, and download each one through its link",
+                  "a member's grant summary")
+        self.says(words, "Revoke your own files List your own API keys and revoke only the key in use",
+                  "a member's grant summary")
+        _grant, main = self.page(self.browser)
+        self.says(text_of(main), "Revoke your own files and files shared with the team", "the administrator's summary")
+
+    def test_a_one_person_consent_page_keeps_its_words(self):
+        self.workspace.plan = "free"
+        self.workspace.save(update_fields=["plan"])
+        _grant, main = self.page_of_one()
+        self.says(main, "List every artifact in the workspace and download each one through its link", "the summary")
+        self.says(main, "</li>\n    <li>Revoke artifacts</li>\n    <li>List the workspace", "the summary's lines")
+        self.omits(main, "Your plan allows", "a page below the cap")
+        self.at_the_key_cap()
+        _grant, main = self.page_of_one()
+        self.says(text_of(main), "Your plan allows 1 active API key, and this workspace has 1. The key you choose is "
+                  "revoked when the terminal receives its new key; anything still using it stops working.", "the page")
+        self.omits(main, "team", "a one-person page")
+
+    def page_of_one(self):
+        Membership.objects.filter(pk__in=[self.grace.pk, self.lin.pk]).delete()
+        return self.page(self.browser)
+
+    def test_a_person_who_moved_gets_the_moved_sentence_at_the_poll(self):
+        grant = self.start()
+        self.assertEqual(self.browser.post("/device/approve", {"user_code": grant["user_code"], "confirm": "yes"}
+                                           ).status_code, 200)
+        Membership.objects.filter(user=self.user).update(removed_at=timezone.now())
+        response = self.poll(grant)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "access_denied")
+        self.assertEqual(response.json()["error_description"],
+                         "The account that approved this login has since moved to or left a team. "
+                         "Run veilfile login again.")
+
+    def test_an_inactive_approver_keeps_the_old_sentence(self):
+        grant = self.start()
+        self.assertEqual(self.browser.post("/device/approve", {"user_code": grant["user_code"], "confirm": "yes"}
+                                           ).status_code, 200)
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+        response = self.poll(grant)
+        self.assertEqual(response.json()["error_description"],
+                         "The account that approved this login is no longer active. "
+                         "Run veilfile login again and approve it from an active account.")
 
 
 class DeviceResultPageTests(DeviceCase):

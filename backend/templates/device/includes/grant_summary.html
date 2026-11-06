@@ -4,9 +4,9 @@
   <p>Approving creates an API key for your workspace. Whoever holds the key can do these things:</p>
   <ul>
     <li>Upload files and create share links</li>
-    <li>List every artifact in the workspace and download each one through its link</li>
-    <li>Revoke artifacts</li>
-    <li>List the workspace's API keys and revoke only the key in use</li>
+    <li>{% if on_team %}List your files and the files shared with your team, and download each one through its link{% else %}List every artifact in the workspace and download each one through its link{% endif %}</li>
+    <li>{% if on_team %}{% if is_administrator %}Revoke your own files and files shared with the team{% else %}Revoke your own files{% endif %}{% else %}Revoke artifacts{% endif %}</li>
+    <li>{% if on_team %}List your own API keys and revoke only the key in use{% else %}List the workspace's API keys and revoke only the key in use{% endif %}</li>
     <li>See the account email and plan usage</li>
   </ul>
   <p class="device-grant__foot">

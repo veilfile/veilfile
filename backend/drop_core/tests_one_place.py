@@ -24,6 +24,7 @@ from .models import (
     has_other_members,
 )
 from .oauth import resolve_oauth_credential
+from .plans import PLANS
 from .tests import _use_local_dir
 from .tests_fix_device import _DeviceTestBase
 from .tests_members import BACKEND, _issue_token, _make_app, make_user, second_member
@@ -193,6 +194,126 @@ class DeviceLookupTests(_DeviceTestBase):
         self.assertEqual(self._row(grant).workspace, team)
         key = APIKey.verify(self._poll(grant).json()["api_key"])
         self.assertEqual((key.workspace, key.member), (team, grace))
+
+
+class KeysOfAPersonTests(TestCase):
+    def setUp(self):
+        tmpdir = tempfile.mkdtemp(prefix="veilfile-test-")
+        _use_local_dir(self, tmpdir)
+        self.addCleanup(shutil.rmtree, tmpdir, ignore_errors=True)
+        self.ada = make_user("ada")
+        self.team = get_or_create_workspace(self.ada)
+        Workspace.objects.filter(pk=self.team.pk).update(plan="team")
+        self.team.refresh_from_db()
+        self.admin = administrator_of(self.team)
+        self.grace = second_member(self.team, "grace")
+        self.lin = second_member(self.team, "lin")
+        self.admins_key, self.admins_raw = create_key_within_cap(self.team, "ada-key", member=self.admin)
+        self.graces_key, self.graces_raw = create_key_within_cap(self.team, "grace-key", member=self.grace)
+        self.graces_other, _ = create_key_within_cap(self.team, "grace-other", member=self.grace)
+        self.lins_key, _ = create_key_within_cap(self.team, "lin-key", member=self.lin)
+
+    def _names(self, response):
+        return {row["name"] for row in response.json()}
+
+    def _fill_the_team(self):
+        for i in range(PLANS["team"]["keys"] - APIKey.objects.filter(is_active=True).count()):
+            create_key_within_cap(self.team, f"filler-{i}", member=self.admin)
+
+    def test_a_members_key_lists_only_their_own_keys(self):
+        response = APIClient().get("/api/v1/keys", HTTP_AUTHORIZATION=f"Bearer {self.graces_raw}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._names(response), {"grace-key", "grace-other"})
+        self.assertIn(self.graces_key.key_prefix, response.content.decode())
+        self.assertNotIn("ada-key", response.content.decode())
+        self.assertNotIn("lin-key", response.content.decode())
+
+    def test_an_administrators_key_lists_only_their_own_keys(self):
+        response = APIClient().get("/api/v1/keys", HTTP_AUTHORIZATION=f"Bearer {self.admins_raw}")
+        self.assertEqual(self._names(response), {"ada-key"})
+
+    def test_the_administrators_dashboard_lists_every_key(self):
+        self.client.force_login(self.ada)
+        body = self.client.get("/app/keys/").content.decode()
+        for name in ("ada-key", "grace-key", "grace-other", "lin-key"):
+            self.assertIn(name, body)
+
+    def test_a_members_dashboard_lists_only_their_own(self):
+        self.client.force_login(self.grace.user)
+        body = self.client.get("/app/keys/").content.decode()
+        self.assertIn("grace-key", body)
+        self.assertNotIn("ada-key", body)
+        self.assertNotIn("lin-key", body)
+
+    def test_a_session_cannot_revoke_a_teammates_key(self):
+        client = APIClient()
+        client.force_login(self.grace.user)
+        response = client.delete(f"/api/v1/keys/{self.lins_key.pk}/")
+        self.assertEqual(response.status_code, 404)
+        self.lins_key.refresh_from_db()
+        self.assertTrue(self.lins_key.is_active)
+
+    def test_the_administrators_session_can_revoke_any_key(self):
+        client = APIClient()
+        client.force_login(self.ada)
+        self.assertEqual(client.delete(f"/api/v1/keys/{self.lins_key.pk}/").status_code, 204)
+        self.lins_key.refresh_from_db()
+        self.assertFalse(self.lins_key.is_active)
+
+    def test_a_key_still_cannot_revoke_a_sibling(self):
+        response = APIClient().delete(
+            f"/api/v1/keys/{self.graces_other.pk}/", HTTP_AUTHORIZATION=f"Bearer {self.graces_raw}"
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "session_required")
+        self.graces_other.refresh_from_db()
+        self.assertTrue(self.graces_other.is_active)
+
+    def test_a_members_key_probing_a_teammates_key_gets_the_missing_answer(self):
+        keyed = APIClient()
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {self.graces_raw}"}
+        theirs = keyed.delete(f"/api/v1/keys/{self.lins_key.pk}/", **auth)
+        missing = keyed.delete("/api/v1/keys/999999/", **auth)
+        self.assertEqual((theirs.status_code, theirs.json()), (missing.status_code, missing.json()))
+        self.assertEqual(theirs.status_code, 404)
+
+    def test_the_dashboard_revoke_page_follows_the_same_rule(self):
+        url = f"/app/keys/{self.lins_key.pk}/revoke/"
+        self.client.force_login(self.grace.user)
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(self.client.post(url).status_code, 404)
+        self.lins_key.refresh_from_db()
+        self.assertTrue(self.lins_key.is_active)
+        self.client.force_login(self.ada)
+        self.assertEqual(self.client.get(url).status_code, 200)
+        self.assertEqual(self.client.post(url).status_code, 302)
+        self.lins_key.refresh_from_db()
+        self.assertFalse(self.lins_key.is_active)
+
+    def _refused_at_the_cap(self, user):
+        self._fill_the_team()
+        self.client.force_login(user)
+        page = self.client.get("/app/keys/").content.decode()
+        token = re.search(r'name="token" value="([^"]+)"', page).group(1)
+        return self.client.post("/app/keys/", {"name": "more", "token": token})
+
+    def test_a_member_is_not_shown_the_billing_link_at_the_cap(self):
+        response = self._refused_at_the_cap(self.grace.user)
+        body = response.content.decode()
+        self.assertEqual(response.status_code, 402)
+        cap = PLANS["team"]["keys"]
+        self.assertIn(
+            f"Your team&#x27;s plan allows {cap} active keys, and the team has reached that limit. "
+            "Ask your administrator to make room.",
+            body,
+        )
+        self.assertNotIn('<p class="form-links"><a class="label interactive" href="/app/billing/">', body)
+
+    def test_the_administrator_still_gets_the_plan_sentence_at_the_cap(self):
+        response = self._refused_at_the_cap(self.ada)
+        body = response.content.decode()
+        self.assertIn("Your Team plan allows", body)
+        self.assertIn('<p class="form-links"><a class="label interactive" href="/app/billing/">', body)
 
 
 class LookupOutsideTransactionTests(TransactionTestCase):

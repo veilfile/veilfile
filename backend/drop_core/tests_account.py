@@ -247,7 +247,7 @@ class ListKeysTests(AccountCase):
 
     def test_a_named_workspace_is_the_one_listed(self):
         APIKey.create_key(self.strangers_workspace, "theirs")
-        names = [row["name"] for row in account.list_keys(self.user, workspace=self.strangers_workspace).body]
+        names = [row["name"] for row in account.list_keys(self.stranger, member=administrator_of(self.strangers_workspace)).body]
         self.assertEqual(names, ["theirs"], f"{WHERE}: workspace= is for a credential's own workspace")
 
 
@@ -398,7 +398,7 @@ class RevokeKeyTests(AccountCase):
 
     def test_a_named_workspace_is_the_one_searched(self):
         theirs, _raw = APIKey.create_key(self.strangers_workspace, "theirs")
-        self.assertEqual(account.revoke_key(self.user, theirs.pk, workspace=self.strangers_workspace).status, 204, ACCOUNT)
+        self.assertEqual(account.revoke_key(self.stranger, theirs.pk, member=administrator_of(self.strangers_workspace)).status, 204, ACCOUNT)
 
     def test_revoking_a_key_leaves_oauth_grants_alone(self):
         key, _raw = APIKey.create_key(self.workspace, "agent")

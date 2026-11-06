@@ -414,11 +414,15 @@ class KeyAllowanceTests(TestCase):
         old.refresh_from_db()
         self.assertEqual((old.is_active, new.is_active, new.member), (False, True, self.grace))
 
-    def test_replacing_a_teammates_key_counts_as_a_new_key(self):
+    def test_a_rotation_never_replaces_a_teammates_key(self):
         theirs, _ = create_key_within_cap(self.workspace, "theirs", member=self.admin)
-        set_allowance(self.grace, key_allowance=0)
-        with self.assertRaises(MemberKeyCapReached):
-            create_key_within_cap(self.workspace, "mine", replacing=theirs, member=self.grace)
+        new, _ = create_key_within_cap(self.workspace, "x", replacing=theirs, member=self.grace)
+        theirs.refresh_from_db()
+        self.assertEqual((theirs.is_active, new.is_active), (True, True))
+        for i in range(PLANS["team"]["keys"] - APIKey.objects.filter(is_active=True).count()):
+            create_key_within_cap(self.workspace, f"k{i}", member=self.admin)
+        with self.assertRaises(KeyCapReached):
+            create_key_within_cap(self.workspace, "y", replacing=theirs, member=self.grace)
         theirs.refresh_from_db()
         self.assertTrue(theirs.is_active)
 
@@ -469,9 +473,10 @@ class KeyAllowanceTests(TestCase):
 
 class DeviceKeyAllowanceTests(_DeviceTestBase):
     def test_a_device_login_at_the_allowance_is_refused_with_the_members_sentence(self):
-        set_allowance(administrator_of(self.workspace), key_allowance=0)
         grant = self._start()
         self.assertEqual(self._approve(grant).status_code, 200)
+        # The allowance is reached after approval, so the refusal comes at the poll.
+        set_allowance(administrator_of(self.workspace), key_allowance=0)
         response = self._poll(grant)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"], "access_denied")

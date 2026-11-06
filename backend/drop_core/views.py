@@ -600,7 +600,7 @@ class KeyListCreateView(APIView):
         if _is_oauth_credential(request):
             return _session_required_response(_OAUTH_KEYS_FORBIDDEN)
         return answer_response(
-            account.list_keys(request.user, workspace=_request_workspace(request))
+            account.list_keys(request.user, member=_request_member(request))
         )
 
     def post(self, request):
@@ -643,8 +643,8 @@ class KeyDeleteView(APIView):
             account.revoke_key(
                 request.user,
                 key_id,
-                workspace=_request_workspace(request),
-                # An API key may revoke only itself; a session may revoke any.
+                member=_request_member(request),
+                # An API key may revoke only itself; a session may revoke any key it may reach.
                 only_key_id=request.auth.pk if request.auth is not None else None,
             )
         )

@@ -29,23 +29,23 @@
 <dt>Signed in as</dt>
 <dd>{{ account }}</dd>
 </dl>
-{% include "device/includes/grant_summary.html" with key_cap=key_cap only %}
+{% include "device/includes/grant_summary.html" with key_cap=key_cap on_team=on_team is_administrator=is_administrator only %}
 <form method="post" action="{% url 'device-approve' %}">
 {% csrf_token %}
 <input type="hidden" name="user_code" value="{{ device_code.user_code_display }}">
 {% if replacement_required %}
 <fieldset>
 <legend>Choose a key to replace</legend>
-<p>Your plan allows {{ key_cap }} active API key{{ key_cap|pluralize }}, and this workspace has {{ replaceable_keys|length }}. The key you choose is revoked when the terminal receives its new key; anything still using it stops working.</p>
+<p>{% if no_key_to_replace %}This login needs one of your keys to replace, and you have none. {% if is_administrator %}Revoke a key on the Keys page to make room{% else %}Ask your administrator to make room{% endif %}, then run <code>veilfile login</code> again.{% elif at_allowance %}Your administrator allows you {{ key_allowance }} active API key{{ key_allowance|pluralize }}. Choose one of your keys to replace.{% elif on_team %}Your team's plan allows {{ key_cap }} active API key{{ key_cap|pluralize }}, and the team has {{ active_total }}. Choose one of your own keys to replace.{% else %}Your plan allows {{ key_cap }} active API key{{ key_cap|pluralize }}, and this workspace has {{ active_total }}.{% endif %}{% if not no_key_to_replace %} The key you choose is revoked when the terminal receives its new key; anything still using it stops working.{% endif %}</p>
 {% for key in replaceable_keys %}
 {# The value is the key's id and the re-checked radio is found by comparing it with the posted string: keep key.id|stringformat:"d". #}
 <label class="check"><input class="check__input" type="radio" name="replace_key" value="{{ key.id }}" required{% if selected_key == key.id|stringformat:"d" %} checked{% endif %}><span class="check__text">{{ key.name }}<span class="check__detail"><code>{{ key.key_prefix }}…</code> · created {{ key.created_at|date:"M j, Y" }} · last used {% if key.last_used_at %}{{ key.last_used_at|date:"M j, Y" }}{% else %}never{% endif %}</span></span></label>
 {% endfor %}
 </fieldset>
 {% endif %}
-<label class="check"><input class="check__input" type="checkbox" name="confirm" value="yes" required><span class="check__text">I just ran <code>veilfile login</code> myself, and this code matches my terminal.</span></label>
+{% if not no_key_to_replace %}<label class="check"><input class="check__input" type="checkbox" name="confirm" value="yes" required><span class="check__text">I just ran <code>veilfile login</code> myself, and this code matches my terminal.</span></label>{% endif %}
 <div class="form-actions">
-<button class="action interactive" type="submit">Approve</button>
+{% if not no_key_to_replace %}<button class="action interactive" type="submit">Approve</button>{% endif %}
 <button class="action interactive" type="submit" formaction="{% url 'device-deny' %}" formnovalidate>Deny</button>
 </div>
 </form>
