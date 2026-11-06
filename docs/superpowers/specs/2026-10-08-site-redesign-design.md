@@ -375,6 +375,10 @@ Every address, with the name the menu and the tests know it by. The five section
 | `app-billing-switch` | `/app/billing/switch/<slug:plan>/` | GET, POST | Confirm, then switch |
 | `app-billing-checkout` | `/app/billing/checkout/` | POST | Hand-off to Stripe Checkout (303); a GET goes to Billing |
 | `app-billing-portal` | `/app/billing/portal/` | POST | Hand-off to the Stripe portal (303); a GET goes to Billing |
+| `app-members` | `/app/members/` | GET, POST | Members (team seats, behind a switch; an administrator of a team only); the POST invites an address |
+| `app-file-visibility-setting` | `/app/members/visibility/` | POST | Save who can see new files (a GET goes to Members) |
+| `app-member-allowance` | `/app/members/<int:member_id>/allowance/` | GET, POST | Set one person's allowance |
+| `app-invitation-cancel` | `/app/members/invitations/<int:invitation_id>/cancel/` | GET, POST | Confirm, then cancel a waiting invitation |
 
 Any other address under `/app/` is the shell's 404, and `/app` without its slash goes to `/app/`.
 

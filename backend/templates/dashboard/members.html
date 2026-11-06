@@ -1,0 +1,78 @@
+{% extends "layouts/app.html" %}
+{% load dashboard shell %}
+{# Page: Members (spec 4.8, team seats). It hangs off Overview and is not a section, so it has its own title and meta blocks. The layout is the dashboard's column because the table needs its width. It shows counts, sums and addresses, never a file's name. #}
+{% block title %}Members | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block app_main %}
+<h1>Members</h1>
+{% include "components/form_errors.html" with message=refusal focus=True only %}
+{% if seat_limit %}<p>{{ seats_used }} of {{ seat_limit }} seats {{ seats_used|pluralize:"is,are" }} in use, counting invitations that are still waiting.</p>
+{% else %}<p>{{ seats_used }} seat{{ seats_used|pluralize }} {{ seats_used|pluralize:"is,are" }} in use, and this plan has no limit on seats.</p>
+{% endif %}
+<table class="rows">
+<caption>People on the team</caption>
+<thead>
+<tr>
+<th scope="col">Person</th>
+<th scope="col">Role</th>
+<th scope="col">Uploads this month</th>
+<th scope="col">Storage</th>
+<th scope="col">API keys</th>
+<th scope="col"><span class="visually-hidden">Actions</span></th>
+</tr>
+</thead>
+<tbody>
+{% for row in rows %}<tr>
+<td data-label="Person" data-wrap>{{ row.person.user.email }}</td>
+<td data-label="Role">{% if row.person.is_administrator %}Administrator{% else %}Member{% endif %}</td>
+<td data-label="Uploads this month">{{ row.uploads_used }}{% if row.upload_allowance is not None %} of {{ row.upload_allowance }}{% if row.uploads_cap %}, capped at {{ row.uploads_cap }} by the team's limit{% endif %}{% endif %}</td>
+<td data-label="Storage">{{ row.storage_used|bytes }}{% if row.storage_allowance is not None %} of {{ row.storage_allowance|bytes }}{% if row.storage_cap %}, capped at {{ row.storage_cap|bytes }} by the team's limit{% endif %}{% endif %}</td>
+<td data-label="API keys">{{ row.keys_used }}{% if row.key_allowance is not None %} of {{ row.key_allowance }}{% if row.keys_cap %}, capped at {{ row.keys_cap }} by the team's limit{% endif %}{% endif %}</td>
+<td data-label="Actions"><a class="label interactive" href="{% url 'app-member-allowance' row.person.pk %}">Set allowance<span class="visually-hidden"> for {{ row.person.user.email }}</span></a></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+<p>An allowance is the most one person can use. The team's limits still apply to everyone together.</p>
+<section aria-labelledby="members-invite">
+<h2 id="members-invite">Invite someone</h2>
+{% focus_field form "email" as focus %}
+<form method="post" action="{% url 'app-members' %}">
+{% csrf_token %}
+{% include "components/field.html" with id="id_email" name="email" label="Email address" type="email" value=form.email.value autocomplete="off" help="They get an email with a link that works for 7 days." errors=form.email.errors focus=focus extra='spellcheck="false" autocapitalize="none"' only %}
+<button class="action interactive" type="submit">Send invitation</button>
+</form>
+</section>
+{% if waiting %}<section aria-labelledby="members-waiting">
+<h2 id="members-waiting">Waiting invitations</h2>
+<table class="rows">
+<caption class="visually-hidden">Waiting invitations</caption>
+<thead>
+<tr>
+<th scope="col">Address</th>
+<th scope="col">Expires</th>
+<th scope="col"><span class="visually-hidden">Actions</span></th>
+</tr>
+</thead>
+<tbody>
+{% for invitation in waiting %}<tr>
+<td data-label="Address" data-wrap>{{ invitation.email }}</td>
+<td data-label="Expires">{{ invitation.expires_at|utc_time }}</td>
+<td data-label="Actions"><a class="label interactive" href="{% url 'app-invitation-cancel' invitation.pk %}">Cancel<span class="visually-hidden"> the invitation to {{ invitation.email }}</span></a></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</section>
+{% endif %}
+<section aria-labelledby="members-setting">
+<h2 id="members-setting">Who can see new files</h2>
+<form method="post" action="{% url 'app-file-visibility-setting' %}">
+{% csrf_token %}
+<fieldset>
+<legend class="visually-hidden">Who can see new files</legend>
+{% for value, label, detail in visibility_choices %}<label class="check"><input class="check__input" type="radio" name="file_visibility" value="{{ value }}" required{% if visibility == value %} checked{% endif %}><span class="check__text">{{ label }}{% if detail %}<span class="check__detail">{{ detail }}</span>{% endif %}</span></label>
+{% endfor %}</fieldset>
+<p>This applies to new files. Files that already exist keep the visibility they have.</p>
+<button class="action interactive" type="submit">Save</button>
+</form>
+</section>
+{% endblock %}

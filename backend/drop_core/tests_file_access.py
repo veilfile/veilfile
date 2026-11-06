@@ -336,7 +336,7 @@ class OnlyFileAccessReadsFilesTests(SimpleTestCase):
         "drop_core/services.py": 5,  # the pending upload create, two storage sums, and revoke_artifact's lookup and expiry update
         "drop_core/signals.py": 1,  # prose in a docstring, no read
         "drop_core/sweep.py": 2,  # the expiry sweep and the pending upload cleanup, no person involved
-        "drop_core/teams.py": 1,  # joining marks the unused upload URLs of the person's own place used, and returns nothing
+        "drop_core/teams.py": 2,  # joining marks the unused upload URLs of the person's own place used, and returns nothing; member_rows sums the live files' sizes for each person
         "drop_core/views.py": 7,  # two upload-number counts, the pending upload steps, and serve_artifact's lookup by token
         "drop_mcp/views.py": 1,  # the upload number, a count
     }

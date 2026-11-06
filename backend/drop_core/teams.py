@@ -11,13 +11,27 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
+from django.db.models import Count, Sum
 from django.template.loader import render_to_string
 from django.utils import timezone
 
 from pages.errors import not_found
 
 from .email_verification import is_email_verified
-from .models import APIKey, Invitation, Membership, PendingUpload, Workspace, current_membership, has_other_members
+from .models import (
+    FILE_VISIBILITY_ALWAYS_ONLY_ME,
+    FILE_VISIBILITY_ALWAYS_TEAM,
+    FILE_VISIBILITY_MEMBERS_CHOOSE,
+    APIKey,
+    Artifact,
+    Invitation,
+    Membership,
+    MemberUsageCounter,
+    PendingUpload,
+    Workspace,
+    current_membership,
+    has_other_members,
+)
 from .oauth import revoke_user_oauth_grants
 from .plans import PLANS
 
@@ -29,6 +43,7 @@ INVITES_PER_ADDRESS_PER_DAY = 3
 MAX_WAITING = 25
 SITE_INVITES_PER_DAY = 100
 DECLINE_WAIT = timedelta(days=30)
+FILE_VISIBILITY_SETTINGS = (FILE_VISIBILITY_MEMBERS_CHOOSE, FILE_VISIBILITY_ALWAYS_TEAM, FILE_VISIBILITY_ALWAYS_ONLY_ME)
 
 
 def team_seats_only(view):
@@ -331,3 +346,92 @@ def decline_invitation(raw_token):
                 token_hash=digest, accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True
             ).update(declined_at=timezone.now())
         )
+
+
+def has_team_features(workspace):
+    """Whether the team has the Members page: the switch is on, and the plan allows more than one person (or has no limit on
+    them), or someone else is on the team, or an invitation is waiting. False before any query while the switch is off."""
+    if not settings.TEAM_SEATS:
+        return False
+    limit = seat_limit(workspace)
+    if limit is None or limit > 1:
+        return True
+    return has_other_members(workspace) or _open(workspace).filter(expires_at__gt=timezone.now()).exists()
+
+
+def waiting_invitations(workspace):
+    """The invitations still waiting and not expired, oldest first. Empty while the switch is off."""
+    if not settings.TEAM_SEATS:
+        return []
+    return list(_open(workspace).filter(expires_at__gt=timezone.now()).order_by("created_at", "pk"))
+
+
+def member_rows(workspace):
+    """One dict for each current person on the team, the administrator first: the person's row and role, and what they use against
+    what they are allowed. Each figure is one query across the team and never one per person, and none reads a file's name.
+    Empty while the switch is off."""
+    if not settings.TEAM_SEATS:
+        return []
+    now = timezone.now()
+    people = list(
+        Membership.objects.filter(workspace=workspace, removed_at__isnull=True)
+        .select_related("user")
+        .order_by("role", "created_at", "pk")
+    )
+    ids = [person.pk for person in people]
+    uploads = dict(
+        MemberUsageCounter.objects.filter(member_id__in=ids, year_month=f"{now:%Y-%m}").values_list("member_id", "uploads")
+    )
+    # A sum of the live files' sizes for each person: no file's name is read.
+    storage = dict(
+        Artifact.objects.filter(workspace=workspace, member_id__in=ids, expires_at__gt=now)
+        .values("member_id")
+        .annotate(total=Sum("size_bytes"))
+        .values_list("member_id", "total")
+    )
+    keys = dict(
+        APIKey.objects.filter(workspace=workspace, member_id__in=ids, is_active=True)
+        .values("member_id")
+        .annotate(total=Count("pk"))
+        .values_list("member_id", "total")
+    )
+    return [
+        {
+            "person": person,
+            "role": person.role,
+            "uploads_used": uploads.get(person.pk, 0),
+            "upload_allowance": person.upload_allowance,
+            "storage_used": storage.get(person.pk) or 0,
+            "storage_allowance": person.storage_allowance_bytes,
+            "keys_used": keys.get(person.pk, 0),
+            "key_allowance": person.key_allowance,
+        }
+        for person in people
+    ]
+
+
+def set_allowances(administrator, member_id, *, uploads, storage_bytes, keys):
+    """Set (or, with None, clear) what one current person of the administrator's team may use. True when a person was changed."""
+    if not settings.TEAM_SEATS or not administrator.is_administrator:
+        return False
+    with transaction.atomic():
+        Workspace.objects.select_for_update().get(pk=administrator.workspace_id)
+        if not _still_administrator(administrator):
+            return False
+        return bool(
+            Membership.objects.filter(pk=member_id, workspace_id=administrator.workspace_id, removed_at__isnull=True).update(
+                upload_allowance=uploads, storage_allowance_bytes=storage_bytes, key_allowance=keys
+            )
+        )
+
+
+def set_file_visibility_setting(administrator, value):
+    """Choose who can see the team's new files. Files that already exist keep the visibility they have. True when it was saved."""
+    if not settings.TEAM_SEATS or not administrator.is_administrator or value not in FILE_VISIBILITY_SETTINGS:
+        return False
+    with transaction.atomic():
+        Workspace.objects.select_for_update().get(pk=administrator.workspace_id)
+        if not _still_administrator(administrator):
+            return False
+        Workspace.objects.filter(pk=administrator.workspace_id).update(file_visibility=value)
+        return True

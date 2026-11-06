@@ -5,7 +5,7 @@ Anything else under /app/ is the shell's 404.
 """
 from django.urls import path
 
-from dashboard import keys, views
+from dashboard import keys, members, views
 
 urlpatterns = [
     path("", views.overview, name="app"),
@@ -19,4 +19,8 @@ urlpatterns = [
     path("billing/switch/<slug:plan>/", views.billing_switch, name="app-billing-switch"),
     path("billing/checkout/", views.billing_checkout, name="app-billing-checkout"),
     path("billing/portal/", views.billing_portal, name="app-billing-portal"),
+    path("members/", members.members, name="app-members"),
+    path("members/visibility/", members.file_visibility_setting, name="app-file-visibility-setting"),
+    path("members/<int:member_id>/allowance/", members.member_allowance, name="app-member-allowance"),
+    path("members/invitations/<int:invitation_id>/cancel/", members.invitation_cancel, name="app-invitation-cancel"),
 ]
