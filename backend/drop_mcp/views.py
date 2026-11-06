@@ -26,6 +26,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from drop_core import funnel
 from drop_core.email_verification import client_ip
+from drop_core.file_access import NotYourFile, file_to_revoke, files_visible_to
 from drop_core.models import APIKey, Artifact
 from drop_core.oauth import resolve_oauth_credential
 from drop_core.plans import PLANS
@@ -629,10 +630,7 @@ def _tool_list_artifacts(key, args, request):
     if isinstance(limit, bool) or not isinstance(limit, int):
         raise ValueError('Send limit as a whole number, such as 50.')
     limit = max(1, min(200, limit))
-    artifacts = (
-        Artifact.objects.filter(workspace=key.workspace)
-        .order_by('-created_at')[:limit]
-    )
+    artifacts = files_visible_to(key.acting_member).order_by('-created_at')[:limit]
     return {'artifacts': [_artifact_json(a) for a in artifacts]}
 
 
@@ -691,7 +689,13 @@ def _tool_revoke_artifact(key, args, request):
         # Not a uuid at all: treat as unknown rather than letting the
         # service raise on the malformed lookup.
         return {'revoked': False}
-    revoked = revoke_artifact(workspace=key.workspace, artifact_id=artifact_id)
+    try:
+        artifact = file_to_revoke(key.acting_member, artifact_id)
+    except NotYourFile:
+        return {'revoked': False}
+    if artifact is None:
+        return {'revoked': False}
+    revoked = revoke_artifact(artifact.workspace, artifact.id)
     result = {'revoked': bool(revoked)}
     if revoked == REVOKE_PENDING_DELETE:
         # Additive only: the URL is already dead; storage was unreachable,

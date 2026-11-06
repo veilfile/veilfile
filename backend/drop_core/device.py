@@ -50,13 +50,15 @@ from . import funnel
 from .email_verification import client_ip, is_email_verified
 from .key_caps import (
     KeyCapReached,
+    KeyNotAllowed,
     MemberKeyCapReached,
-    active_keys,
+    active_key_count,
     create_key_within_cap,
     key_cap,
     needs_replacement,
+    replaceable_keys,
 )
-from .models import APIKey, DeviceCode, current_member, get_or_create_workspace
+from .models import APIKey, DeviceCode, current_member, current_membership, has_other_members
 
 logger = logging.getLogger(__name__)
 
@@ -309,22 +311,42 @@ def _lookup_problem_page(request, problem):
     )
 
 
+def _nothing_to_replace(member):
+    """The sentence for a person who must replace a key and has none of their own."""
+    how = (
+        "Revoke a key on the Keys page to make room"
+        if member.is_administrator
+        else "Ask your administrator to make room"
+    )
+    return (
+        f"This login needs one of your keys to replace, and you have none. {how}, "
+        "then run veilfile login again."
+    )
+
+
 def _render_consent(request, device_code, error=None, selected_key="", http_status=200):
-    workspace = get_or_create_workspace(request.user)
-    replacement_required = needs_replacement(workspace)
+    member = current_membership(request.user)
+    workspace = member.workspace
+    replacement_required = needs_replacement(workspace, member)
+    own_keys = list(replaceable_keys(workspace, member)) if replacement_required else []
+    active_total = active_key_count(workspace)
+    cap = key_cap(workspace)
     return render(
         request,
         "device/device_consent.html",
         {
             "device_code": device_code,
             "account": request.user.email or request.user.get_username(),
-            "key_cap": key_cap(workspace),
+            "key_cap": cap,
+            "active_total": active_total,
+            "key_allowance": member.key_allowance,
+            "on_team": has_other_members(workspace),
+            "is_administrator": member.is_administrator,
             "replacement_required": replacement_required,
-            "replaceable_keys": (
-                list(active_keys(workspace).order_by("created_at"))
-                if replacement_required
-                else []
-            ),
+            # The member's allowance, not the team's limit, is what stops them.
+            "at_allowance": replacement_required and not (cap is not None and active_total >= cap),
+            "no_key_to_replace": replacement_required and not own_keys,
+            "replaceable_keys": own_keys,
             "selected_key": selected_key,
             "error": error,
             # The same sentence as a list, for components/form_errors.html (it draws nothing for an empty one).
@@ -444,7 +466,12 @@ def _redeem(device_code):
             if approver is not None and approver.is_active
             else None
         )
-        if member is None:
+        if member is None and approver is not None and approver.is_active:
+            refused = (
+                "The account that approved this login has since moved to or "
+                "left a team. Run veilfile login again."
+            )
+        elif member is None:
             refused = (
                 "The account that approved this login is no longer active. "
                 "Run veilfile login again and approve it from an active "
@@ -458,6 +485,12 @@ def _redeem(device_code):
                     device_issued=True,
                     replacing=device_code.replace_key,
                     member=member,
+                )
+            except KeyNotAllowed as exc:
+                refused = (
+                    "This account is suspended, so no key was made. Contact support@veilfile.com."
+                    if exc.code == "workspace_suspended"
+                    else "You are no longer on this team, so no key was made. Run veilfile login again."
                 )
             except MemberKeyCapReached:
                 refused = (
@@ -638,7 +671,8 @@ def device_approve(request):
             show_resend=True,
             http_status=403,
         )
-    workspace = get_or_create_workspace(request.user)
+    member = current_membership(request.user)
+    workspace = member.workspace
     raw_replace = (request.POST.get("replace_key") or "").strip()
     # Anti-phishing: approval from a link someone sent you must not be a
     # single click. The user attests they started this login themselves.
@@ -661,7 +695,7 @@ def device_approve(request):
             and raw_replace.isdigit()
             and len(raw_replace) <= _MAX_KEY_ID_DIGITS
         ):
-            replace_key = active_keys(workspace).filter(pk=int(raw_replace)).first()
+            replace_key = replaceable_keys(workspace, member).filter(pk=int(raw_replace)).first()
         if replace_key is None:
             return _render_consent(
                 request,
@@ -669,7 +703,14 @@ def device_approve(request):
                 error="That key is no longer active in this workspace. Choose another.",
                 http_status=400,
             )
-    elif needs_replacement(workspace):
+    elif needs_replacement(workspace, member):
+        if not replaceable_keys(workspace, member).exists():
+            return _render_consent(
+                request,
+                device_code,
+                error=_nothing_to_replace(member),
+                http_status=400,
+            )
         return _render_consent(
             request,
             device_code,

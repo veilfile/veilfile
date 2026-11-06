@@ -184,6 +184,7 @@ curl -s -X DELETE https://YOUR-DEPLOY/api/v1/artifacts/b3f7c2a1-4d5e-4f6a-9b1c-2
 
 Response `204 No Content` on success. Unknown ids (or ids in another
 workspace) return `404` with `{"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"}`.
+A file you can see but may not revoke returns `403` with `{"error": "Only the person who uploaded a file, or the administrator of a team it is shared with, can revoke it.", "code": "not_your_file"}`.
 If the storage backend is unreachable, the URL still dies at once and the
 file is deleted by the next expiry sweep; the artifact shows as expired in
 the list until then.
@@ -467,7 +468,9 @@ only ever changes from Stripe-verified state (the webhook, or a read-back from
 Stripe), never from a client request. Billing errors use the standard
 `{"error", "code"}` envelope unless noted. Stripe failures are `502`
 `stripe_error`; missing Stripe configuration is `503`
-`{"error": "billing_not_configured"}` (no `code`).
+`{"error": "billing_not_configured"}` (no `code`). A member of a team who is not its
+administrator gets `403` `{"error": "administrator_only"}` (no `code`) from
+checkout, switch and the portal, before Stripe is asked anything.
 
 ### `POST /api/v1/billing/checkout`: subscribe
 
@@ -636,7 +639,7 @@ the URL is already dead and the file is deleted by the next expiry sweep.
 `file_too_large`, `file_type_not_allowed`, `content_not_allowed`,
 `secret_detected`, `monthly_cap_reached`, `storage_cap_reached`,
 `member_monthly_allowance_reached`, `member_storage_allowance_reached`,
-`storage_unavailable` and `rate_limited` (with `retry_after` seconds).
+`workspace_suspended`, `member_removed`, `storage_unavailable` and `rate_limited` (with `retry_after` seconds).
 Successful results have no `isError` key. `upload_artifact` and
 `create_upload_url` share the 100 uploads/hour/credential limit with REST.
 
@@ -701,6 +704,8 @@ extension, and the allowed list.
 | 401 | `unauthorized` | The credentials are missing or not valid. MCP answers with JSON-RPC `-32001`. |
 | 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
 | 402 | `key_limit_reached` | The workspace has reached its plan's API key limit (`POST /api/v1/keys`). |
+| 403 | `workspace_suspended` | This account is suspended, so nothing was stored. Contact support@veilfile.com. |
+| 403 | `member_removed` | You are no longer on this team, so nothing was stored. |
 | 403 | `forbidden` | The caller is signed in but not permitted, or a session call failed the CSRF check. |
 | 403 | `session_required` | The endpoint needs a dashboard session, not an API key or an OAuth token. |
 | 403 | `email_verification_required` | The account email must be verified first. |

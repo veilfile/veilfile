@@ -24,7 +24,7 @@ from django.utils import timezone
 from dashboard import views as dashboard_views
 from dashboard.file_rows import FLAG_WORDS, file_rows, flag_words, held_ids, state_of
 from drop_core import account, secrets
-from drop_core.models import Artifact, Workspace, get_or_create_workspace
+from drop_core.models import Artifact, Workspace, administrator_of, get_or_create_workspace
 from drop_core.storage import LocalStorage
 from pages import catalog, tests_forms_on_the_shell
 from pages.tests_chapters import BANNED
@@ -109,8 +109,9 @@ class FilesCase(TestCase):
 
     def make_file(self, name="report.pdf", *, workspace=None, size=1500, days=7, flags=(), held=False, created=None, data=b"bytes"):
         """A file of `workspace` (the owner's by default) with its bytes in storage; `days` before it expires, negative once it has."""
+        workspace = workspace or self.workspace
         artifact = Artifact.objects.create(
-            workspace=workspace or self.workspace, filename=name, size_bytes=size, expires_at=timezone.now() + timedelta(days=days),
+            workspace=workspace, member=administrator_of(workspace), filename=name, size_bytes=size, expires_at=timezone.now() + timedelta(days=days),
             secret_flags=list(flags), safety_status="held" if held else "clear")
         LocalStorage().save(artifact.token, io.BytesIO(data), "application/octet-stream")
         self.addCleanup(LocalStorage().delete, artifact.token)
@@ -697,12 +698,12 @@ class FileRevokeTests(FilesCase):
         self.assertEqual(again.status_code, 404, "backend/dashboard/views.py: a resent form finds no file, as a missing id does, and changes nothing")
 
     def test_only_the_workspace_the_list_reads_is_revoked_from(self):
-        # The list and account.revoke_artifact read get_or_create_workspace(user), the oldest workspace the user owns. The page agrees:
+        # The list and account.revoke_artifact read current_membership(user), the person's one current place. The page agrees:
         # a file of a second workspace is not found, for the confirmation page as for the revoke, so no page offers what no revoke does.
         second = Workspace.objects.create(owner=self.owner, name="second")
         artifact = self.make_file("elsewhere.txt", workspace=second)
         self.assertEqual(self.client.get(self.revoke_url(artifact)).status_code, 404,
-                         "backend/dashboard/views.py: _own_file looks in get_or_create_workspace(user), the workspace the account functions read")
+                         "backend/dashboard/views.py: _own_file looks in current_membership(user), the workspace the account functions read")
         self.assertEqual(self.client.post(self.revoke_url(artifact)).status_code, 404)
         self.assertTrue(Artifact.objects.filter(pk=artifact.pk).exists() and self.stored(artifact))
 

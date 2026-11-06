@@ -5,9 +5,11 @@ their flags. This module adds both, for the page alone, and leaves the API's ans
 """
 from datetime import datetime
 
+from django.db.models import Q
 from django.utils import timezone
 
-from drop_core.models import Artifact, get_or_create_workspace
+from drop_core.file_access import files_visible_to
+from drop_core.models import current_membership
 
 # The secret scanner's flag names (drop_core/secrets.py) in words. A test keeps this table as long as the scanner's list:
 # a new pattern there needs its words here, or the page would print the name with its underscores.
@@ -45,12 +47,15 @@ def held_ids(user, body):
     """Which of the listed files the safety review holds, as a set of id strings.
 
     The list endpoint does not say (safety_status is not in its body, which clients read), so this asks once, for the
-    ids on the page. A held file's link answers like a missing one, so the page must not offer it.
+    ids on the page. A held file's link answers like a missing one, and so does that of a suspended team's file, so the page
+    must not offer either.
     """
     ids = [item["id"] for item in body]
     if not ids:
         return set()
-    held = Artifact.objects.filter(workspace=get_or_create_workspace(user), id__in=ids, safety_status="held")
+    held = files_visible_to(current_membership(user)).filter(
+        Q(safety_status="held") | Q(workspace__suspended_at__isnull=False), id__in=ids
+    )
     return {str(pk) for pk in held.values_list("id", flat=True)}
 
 

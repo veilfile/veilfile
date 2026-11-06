@@ -26,13 +26,12 @@ from oauth2_provider.models import get_application_model, get_grant_model
 
 from . import funnel
 from .email_verification import is_email_verified
-from .key_caps import KeyCapReached, MemberKeyCapReached, active_key_count, create_key_within_cap
+from .file_access import NotYourFile, file_to_revoke, files_visible_to
+from .key_caps import KeyCapReached, KeyNotAllowed, MemberKeyCapReached, active_key_count, create_key_within_cap
 from .models import (
     APIKey,
-    Artifact,
     UsageCounter,
-    current_member,
-    get_or_create_workspace,
+    current_membership,
 )
 from .oauth import list_user_oauth_connections, revoke_user_oauth_grants
 from .plans import PLANS
@@ -54,7 +53,7 @@ class Answer(NamedTuple):
 
 
 def _workspace_of(user, workspace):
-    return workspace if workspace is not None else get_or_create_workspace(user)
+    return workspace if workspace is not None else current_membership(user).workspace
 
 
 def artifact_url(artifact):
@@ -97,10 +96,13 @@ def usage(user, *, workspace=None):
 # ---------------------------------------------------------------------------
 
 
-def list_keys(user, *, workspace=None):
-    """GET /api/v1/keys/: every key of the workspace, newest first, revoked ones included. Never the key itself."""
-    workspace = _workspace_of(user, workspace)
-    keys = workspace.api_keys.order_by("-created_at").all()
+def list_keys(user, *, member=None, everyone=False):
+    """GET /api/v1/keys/: the person's own keys, newest first, revoked ones included. Never the key itself.
+
+    ``everyone`` lists the whole team's keys and is honoured only for an administrator."""
+    member = member if member is not None else current_membership(user)
+    keys = member.workspace.api_keys if everyone and member.is_administrator else member.api_keys
+    keys = keys.order_by("-created_at").all()
     return Answer(
         200,
         [
@@ -155,6 +157,12 @@ def verification_required(user):
     )
 
 
+KEY_NOT_ALLOWED_WORDS = MappingProxyType({
+    "workspace_suspended": "This account is suspended, so no key was made. Contact support@veilfile.com.",
+    "member_removed": "You are no longer on this team, so no key was made.",
+})
+
+
 def create_key(user, name, *, request=None, body_is_object=True):
     """POST /api/v1/keys/: make a key for the user's workspace.
 
@@ -177,14 +185,15 @@ def create_key(user, name, *, request=None, body_is_object=True):
     )
     if name_error:
         return Answer(400, {"error": name_error, "code": "invalid_request"})
-    workspace = get_or_create_workspace(user)
+    member = current_membership(user)
+    workspace = member.workspace
     name = (name or "").strip() or "Untitled key"
     # Every active key counts against the plan cap, terminal
     # (device-issued) keys included.
     try:
-        key, raw = create_key_within_cap(
-            workspace, name, member=current_member(workspace, user)
-        )
+        key, raw = create_key_within_cap(workspace, name, member=member)
+    except KeyNotAllowed as exc:
+        return Answer(403, {"error": KEY_NOT_ALLOWED_WORDS[exc.code], "code": exc.code})
     except MemberKeyCapReached:
         return Answer(
             400,
@@ -214,15 +223,16 @@ def create_key(user, name, *, request=None, body_is_object=True):
     )
 
 
-def revoke_key(user, key_id, *, workspace=None, only_key_id=None):
-    """DELETE /api/v1/keys/<id>/: revoke one key of the workspace (204), or 404 for a key that is not its own.
+def revoke_key(user, key_id, *, member=None, only_key_id=None):
+    """DELETE /api/v1/keys/<id>/: revoke one key (204), or 404 for a key the caller may not reach: a member reaches
+    their own keys, an administrator every key of the team.
 
     The row is kept with ``is_active`` False. A caller that is itself an API key passes its own id as ``only_key_id``
     and may revoke only that key (403 ``session_required`` for a sibling): a leaked CI key must not be able to lock
     out the workspace's other agents."""
-    workspace = _workspace_of(user, workspace)
-    key = APIKey.objects.filter(id=key_id, workspace=workspace).first()
-    if key is None:
+    member = member if member is not None else current_membership(user)
+    key = APIKey.objects.filter(id=key_id, workspace=member.workspace).first()
+    if key is None or (not member.is_administrator and key.member_id != member.pk):
         return Answer(
             404, {"error": "No API key with that id exists in this workspace. Check the id.", "code": "not_found"}
         )
@@ -290,15 +300,15 @@ def _artifact_page(artifacts, raw_limit, raw_cursor):
     return page, _artifact_cursor(page[-1])
 
 
-def list_artifacts(user, *, cursor=None, limit=None, workspace=None):
-    """GET /api/v1/artifacts/: the workspace's files, newest first, expired and held ones included (their link
-    answers 404).
+def list_artifacts(user, *, cursor=None, limit=None, member=None):
+    """GET /api/v1/artifacts/: the files this person may see (drop_core/file_access.py), newest first, expired and held
+    ones included (their link answers 404).
 
     With neither ``limit`` nor ``cursor`` the whole list comes back. With either, a page: ``limit`` (1 to 200,
     default 50) in keyset order, and when more follow, the header ``X-Next-Cursor`` holds the ``cursor`` of the next
     page. ``limit`` and ``cursor`` are the plain values of the query string; bad ones are 400 ``invalid_request``."""
-    workspace = _workspace_of(user, workspace)
-    artifacts = Artifact.objects.filter(workspace=workspace).order_by("-created_at").all()
+    member = member if member is not None else current_membership(user)
+    artifacts = files_visible_to(member).order_by("-created_at")
     page = _artifact_page(artifacts, limit, cursor)
     if page is None:
         return Answer(
@@ -327,14 +337,34 @@ def list_artifacts(user, *, cursor=None, limit=None, workspace=None):
     return Answer(200, body, headers)
 
 
-def revoke_artifact(user, artifact_id, *, workspace=None):
-    """DELETE /api/v1/artifacts/<id>/: revoke one of the workspace's files. Its link stops working at once and
-    its file and row are deleted (204), or 404 for a file that is not the workspace's.
+def revoke_artifact(user, artifact_id, *, member=None):
+    """DELETE /api/v1/artifacts/<id>/: revoke one of this person's files, or one shared with the team they administer.
+    Its link stops working at once and its file and row are deleted (204). A file the person cannot see is 404, and one
+    they can see but may not revoke is 403 ``not_your_file``.
 
     If the storage delete fails the link is still dead and the row stays, expired, for the sweeper to retry. That is
     a 204 too, as the REST API has always answered it, and the body says ``"storage_deleted": False``."""
-    workspace = _workspace_of(user, workspace)
-    result = revoke_stored_artifact(workspace, artifact_id)
+    member = member if member is not None else current_membership(user)
+    try:
+        artifact = file_to_revoke(member, artifact_id)
+        if artifact is not None and artifact.workspace.suspended_at is not None:
+            # A suspended team's files stay until they expire, so a report's evidence does.
+            return Answer(
+                403,
+                {
+                    "error": "This account is suspended, so the file was not revoked. Contact support@veilfile.com.",
+                    "code": "workspace_suspended",
+                },
+            )
+    except NotYourFile:
+        return Answer(
+            403,
+            {
+                "error": "Only the person who uploaded a file, or the administrator of a team it is shared with, can revoke it.",
+                "code": "not_your_file",
+            },
+        )
+    result = revoke_stored_artifact(artifact.workspace, artifact.id) if artifact is not None else False
     if not result:
         return Answer(404, {"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"})
     return Answer(204, {"storage_deleted": result != REVOKE_PENDING_DELETE})

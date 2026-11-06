@@ -32,7 +32,7 @@ from drop_billing.account import ALREADY_SUBSCRIBED_MESSAGES
 from drop_billing.models import Subscription
 from drop_billing.tests_fix_billing import ENV, FixBillingBase, make_sub, missing_customer_error, sub_list
 from drop_core.account import Answer
-from drop_core.models import APIKey, Artifact, Workspace
+from drop_core.models import APIKey, Artifact, Workspace, administrator_of
 from drop_core.plans import ANNUAL_PRICE_USD, PLANS, plan_name
 from pages import registry
 from pages.tests_chapters import BANNED, visible_text
@@ -1065,7 +1065,7 @@ class NothingIsCachedTests(BillingCase):
         from dashboard.tests_keys import connect, make_app
         self.subscribe("team")
         key, _ = APIKey.create_key(self.ws, "agent")
-        artifact = Artifact.objects.create(workspace=self.ws, filename="a.txt", size_bytes=1, expires_at=timezone.now() + timedelta(days=3))
+        artifact = Artifact.objects.create(workspace=self.ws, member=administrator_of(self.ws), filename="a.txt", size_bytes=1, expires_at=timezone.now() + timedelta(days=3))
         app = make_app("Claude Code")
         connect(self.user, app)
         pages = [reverse(name) for name in ("app", "app-files", "app-keys", "app-apps", "app-billing")] + [

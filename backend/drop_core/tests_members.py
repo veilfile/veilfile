@@ -342,6 +342,8 @@ class CredentialPersonTests(TestCase):
         raw, _, _ = _issue_token(ada, _make_app())
         Membership.objects.filter(user=ada).update(removed_at=timezone.now())
         self.assertIsNone(resolve_oauth_credential(raw))
+        self.assertTrue(Membership.objects.filter(user=ada, removed_at__isnull=False).exists())
+        self.assertFalse(Membership.objects.filter(user=ada, removed_at__isnull=True).exists())
 
 
 class DeviceCredentialPersonTests(_DeviceTestBase):
@@ -362,8 +364,8 @@ class DeviceCredentialPersonTests(_DeviceTestBase):
         self.assertEqual(response.json()["error"], "access_denied")
         self.assertEqual(
             response.json()["error_description"],
-            "The account that approved this login is no longer active. "
-            "Run veilfile login again and approve it from an active account.",
+            "The account that approved this login has since moved to or left a team. "
+            "Run veilfile login again.",
         )
         self.assertEqual(self._row(grant).status, DeviceCode.STATUS_DENIED)
         self.assertEqual(APIKey.objects.count(), 0)

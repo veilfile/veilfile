@@ -32,6 +32,7 @@ from drop_core.account import Answer
 from drop_core.models import APIKey, Artifact, Workspace, get_or_create_workspace
 from drop_core.plans import PLANS
 from drop_core.tests_json_answers import ShortFailures
+from drop_core.tests_members import second_member
 
 User = get_user_model()
 WHERE = "backend/drop_billing/account.py"
@@ -587,3 +588,29 @@ class EndpointsSendTheirAnswersTests(AccountCase):
         self.assertEqual((url, err), ("https://checkout.stripe.com/pay/cs_test_123", None), "backend/drop_billing/views.py: (url, None) on success")
         url, err = create_checkout_session_for_user(self.user, "enterprise")
         self.assertEqual((url, err.status_code, err.data), (None, 400, {"error": "invalid_plan"}), "backend/drop_billing/views.py: (None, Response) on a refusal, which paid_signup_redirect reads")
+
+
+class MemberBillingTests(AccountCase):
+    def setUp(self):
+        super().setUp()
+        self.grace = second_member(self.workspace, "grace")
+        self.refusal = Answer(403, {"error": "administrator_only"})
+
+    def test_a_member_cannot_reach_checkout_switch_or_portal(self):
+        mocked = stripe_mock()
+        for function, args in (
+            (account.checkout, ("team",)),
+            (account.switch, ("scale",)),
+            (account.portal, ()),
+        ):
+            with self.subTest(function=function.__name__):
+                self.assertEqual(self.call(function, self.grace.user, *args, mocked=mocked), self.refusal)
+        self.assertEqual(mocked.mock_calls, [], "a member's request must not reach Stripe")
+
+    def test_status_reads_the_team_for_a_member(self):
+        self.subscribe(plan="scale")
+        self.assertEqual(account.status(self.grace.user).body["plan"], "scale")
+
+    def test_the_administrator_still_reaches_them(self):
+        answer = self.call(account.checkout, self.user, "team")
+        self.assertEqual(answer.status, 200)

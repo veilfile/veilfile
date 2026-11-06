@@ -60,7 +60,7 @@ from .models import (
     EmailSendLog,
     EmailVerification,
     PendingUpload,
-    current_member,
+    current_membership,
     get_or_create_workspace,
 )
 from .plans import ANNUAL_PRICE_USD, PLANS, plan_name
@@ -91,6 +91,8 @@ ERROR_STATUS = {
     "storage_cap_reached": status.HTTP_402_PAYMENT_REQUIRED,
     "member_monthly_allowance_reached": status.HTTP_429_TOO_MANY_REQUESTS,
     "member_storage_allowance_reached": status.HTTP_400_BAD_REQUEST,
+    "workspace_suspended": status.HTTP_403_FORBIDDEN,
+    "member_removed": status.HTTP_403_FORBIDDEN,
 }
 
 ERROR_MESSAGES = {
@@ -125,6 +127,10 @@ ERROR_MESSAGES = {
         "Revoke files you no longer need, or ask your administrator to "
         "raise it."
     ),
+    "workspace_suspended": (
+        "This account is suspended, so nothing was stored. Contact support@veilfile.com."
+    ),
+    "member_removed": "You are no longer on this team, so nothing was stored.",
     "invalid_request": (
         "The upload has an invalid parameter. Check on_secret and ttl_days."
     ),
@@ -136,15 +142,17 @@ def _request_workspace(request):
     auth = request.auth
     if auth is not None and getattr(auth, "workspace", None) is not None:
         return auth.workspace
-    return get_or_create_workspace(request.user)
+    return _request_member(request).workspace
 
 
 def _request_member(request):
     """The person behind the request: the credential's member, or the
-    signed-in user's membership."""
+    signed-in user's current membership. The answer stays on the request, so one request never sees two places."""
     if _has_credential(request.auth):
         return request.auth.acting_member
-    return current_member(_request_workspace(request), request.user)
+    if not hasattr(request, "_person_membership"):
+        request._person_membership = current_membership(request.user)
+    return request._person_membership
 
 
 def _upload_failure_response(exc):
@@ -306,6 +314,8 @@ def _minting_credential_active(pending):
     member = pending.member
     if member is None or member.removed_at is not None:
         return False
+    if pending.workspace.suspended_at is not None:
+        return False
     person = member.user
     if not person.is_active:
         # Same rule as APIKey.verify / resolve_oauth_credential: a
@@ -376,7 +386,7 @@ class ArtifactListCreateView(APIView):
             request.user,
             cursor=request.query_params.get("cursor"),
             limit=request.query_params.get("limit"),
-            workspace=_request_workspace(request),
+            member=_request_member(request),
         )
         response = answer_response(answer)
         next_cursor = answer.headers.get("X-Next-Cursor")
@@ -450,7 +460,7 @@ class ArtifactDeleteView(APIView):
     def delete(self, request, artifact_id):
         return answer_response(
             account.revoke_artifact(
-                request.user, artifact_id, workspace=_request_workspace(request)
+                request.user, artifact_id, member=_request_member(request)
             )
         )
 
@@ -598,7 +608,7 @@ class KeyListCreateView(APIView):
         if _is_oauth_credential(request):
             return _session_required_response(_OAUTH_KEYS_FORBIDDEN)
         return answer_response(
-            account.list_keys(request.user, workspace=_request_workspace(request))
+            account.list_keys(request.user, member=_request_member(request))
         )
 
     def post(self, request):
@@ -641,8 +651,8 @@ class KeyDeleteView(APIView):
             account.revoke_key(
                 request.user,
                 key_id,
-                workspace=_request_workspace(request),
-                # An API key may revoke only itself; a session may revoke any.
+                member=_request_member(request),
+                # An API key may revoke only itself; a session may revoke any key it may reach.
                 only_key_id=request.auth.pk if request.auth is not None else None,
             )
         )
@@ -759,13 +769,16 @@ def serve_artifact(request, token):
     # Every kind of miss is the same answer, from one function (pages.errors.artifact_miss), so a link
     # that never existed, one that expired and one whose object is gone cannot be told apart.
     try:
-        artifact = Artifact.objects.get(token=token)
+        artifact = Artifact.objects.select_related("workspace").get(token=token)
     except Artifact.DoesNotExist:
         return artifact_miss()
     if artifact.is_expired():
         return artifact_miss()
     if artifact.safety_status == "held":
         # Do not confirm the object exists.
+        return artifact_miss()
+    if artifact.workspace.suspended_at is not None:
+        # A suspended team's links answer as a missing file does; lifting the suspension brings them back.
         return artifact_miss()
     try:
         fileobj = get_storage().open(artifact.token)
@@ -883,7 +896,7 @@ def signup(request):
     if request.user.is_authenticated and paid:
         if request.method == "POST":
             return redirect(_paid_signup_checkout(request.user, plan, interval))
-        if get_or_create_workspace(request.user).stripe_subscription_id:
+        if current_membership(request.user).workspace.stripe_subscription_id:
             return redirect("/app/?billing=already_subscribed")
         return render(
             request,

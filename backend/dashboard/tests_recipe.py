@@ -66,7 +66,7 @@ class RecipeTests(SimpleTestCase):
         ("shell_sign_out", "backend/pages/templatetags/shell.py"),
         ("plain_menu", "backend/pages/errors.py"),
         ("not_found", "backend/pages/errors.py"),
-        ("get_or_create_workspace", "backend/drop_core/models.py"),
+        ("current_membership", "backend/drop_core/models.py"),
         ("FormPagesAreOnTheShellTests", "backend/pages/tests_forms_on_the_shell.py"),
         ("READING_TEST_MODULES", "backend/pages/tests_site_rules.py"),
         ("NoBuildStepTests", "backend/config/tests_fix_platform.py"),

@@ -16,6 +16,7 @@ from .models import (
     Artifact,
     BlockedHash,
     MemberUsageCounter,
+    Membership,
     PendingUpload,
     SafetyEvent,
     UsageCounter,
@@ -343,7 +344,8 @@ def upload_artifact(
     ``file_type_not_allowed``, ``invalid_request``, ``monthly_cap_reached``,
     ``storage_cap_reached``, ``member_monthly_allowance_reached``,
     ``member_storage_allowance_reached``, ``content_not_allowed``,
-    ``secret_detected``. The team's limits are tested before the member's.
+    ``secret_detected``, ``workspace_suspended``, ``member_removed``. The team's limits are tested before the member's.
+    The last two are read under the workspace lock, so an upload that began before a suspension or a removal is refused.
     ``ttl_days`` is clamped to the plan maximum; a non-integer value raises
     ``invalid_request``. The returned artifact carries a non-persistent
     ``ttl_adjusted`` attribute: True when the requested ``ttl_days`` was not
@@ -474,7 +476,13 @@ def upload_artifact(
             MemberUsageCounter.objects.get_or_create(member=member, year_month=month)
             if not member_reserve.update(uploads=F("uploads") + 1):
                 raise ValueError("member_monthly_allowance_reached")
-        Workspace.objects.select_for_update().only("id").get(pk=workspace.pk)
+        locked = Workspace.objects.select_for_update().only("id", "suspended_at").get(pk=workspace.pk)
+        # Read after the lock, so a removal or a suspension that committed first is seen. Raising rolls back the
+        # reservations above. The test is positive, so a row that has gone or belongs elsewhere refuses too.
+        if locked.suspended_at is not None:
+            raise ValueError("workspace_suspended")
+        if not Membership.objects.filter(pk=member.pk, workspace_id=workspace.pk, removed_at__isnull=True).exists():
+            raise ValueError("member_removed")
         artifact = Artifact(
             workspace=workspace,
             api_key=api_key,
@@ -642,10 +650,18 @@ def revoke_artifact(workspace, artifact_id):
     ``REVOKE_PENDING_DELETE`` when the storage delete failed. In that case
     the row is kept, already expired, so the link 404s and the sweeper (or
     another revoke) retries the delete; the bytes are never lost track of.
+
+    A suspended team's files stay until they expire, so a report's evidence
+    does: this returns False for them, whatever route called it.
     """
     try:
-        artifact = Artifact.objects.get(id=artifact_id, workspace=workspace)
+        artifact = Artifact.objects.select_related("workspace").get(
+            id=artifact_id, workspace=workspace
+        )
     except Artifact.DoesNotExist:
+        return False
+    if artifact.workspace.suspended_at is not None:
+        # A suspended team's files stay until they expire, so a report's evidence does.
         return False
     # Kill the link first, so it is dead even while storage is slow or down.
     now = timezone.now()

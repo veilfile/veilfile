@@ -44,6 +44,7 @@ from drop_core.models import (
     FunnelEvent,
     UsageCounter,
     Workspace,
+    administrator_of,
     get_or_create_workspace,
 )
 from drop_core.oauth import OAUTH_SCOPE_MCP_USE, resolve_oauth_credential
@@ -105,7 +106,7 @@ class AccountCase(ShortFailures, TestCase):
         rows = []
         for i in range(n):
             row = Artifact.objects.create(
-                workspace=workspace, filename=f"f{i}.txt", mime_type="text/plain", size_bytes=i * 1000, expires_at=expires
+                workspace=workspace, member=administrator_of(workspace), filename=f"f{i}.txt", mime_type="text/plain", size_bytes=i * 1000, expires_at=expires
             )
             Artifact.objects.filter(pk=row.pk).update(created_at=base + timedelta(minutes=i))
             row.refresh_from_db()
@@ -246,7 +247,7 @@ class ListKeysTests(AccountCase):
 
     def test_a_named_workspace_is_the_one_listed(self):
         APIKey.create_key(self.strangers_workspace, "theirs")
-        names = [row["name"] for row in account.list_keys(self.user, workspace=self.strangers_workspace).body]
+        names = [row["name"] for row in account.list_keys(self.stranger, member=administrator_of(self.strangers_workspace)).body]
         self.assertEqual(names, ["theirs"], f"{WHERE}: workspace= is for a credential's own workspace")
 
 
@@ -397,7 +398,7 @@ class RevokeKeyTests(AccountCase):
 
     def test_a_named_workspace_is_the_one_searched(self):
         theirs, _raw = APIKey.create_key(self.strangers_workspace, "theirs")
-        self.assertEqual(account.revoke_key(self.user, theirs.pk, workspace=self.strangers_workspace).status, 204, ACCOUNT)
+        self.assertEqual(account.revoke_key(self.stranger, theirs.pk, member=administrator_of(self.strangers_workspace)).status, 204, ACCOUNT)
 
     def test_revoking_a_key_leaves_oauth_grants_alone(self):
         key, _raw = APIKey.create_key(self.workspace, "agent")
@@ -430,9 +431,12 @@ class ListArtifactsTests(AccountCase):
 
     def test_expired_and_held_files_are_listed_for_the_page_to_mark(self):
         self.files(self.workspace, 1)
-        Artifact.objects.create(workspace=self.workspace, filename="old", size_bytes=1, expires_at=timezone.now() - timedelta(days=1))
         Artifact.objects.create(
-            workspace=self.workspace, filename="held", size_bytes=1, expires_at=timezone.now() + timedelta(days=1), safety_status="held"
+            workspace=self.workspace, member=administrator_of(self.workspace), filename="old", size_bytes=1,
+            expires_at=timezone.now() - timedelta(days=1),
+        )
+        Artifact.objects.create(
+            workspace=self.workspace, member=administrator_of(self.workspace), filename="held", size_bytes=1, expires_at=timezone.now() + timedelta(days=1), safety_status="held"
         )
         self.assertEqual({row["filename"] for row in account.list_artifacts(self.user).body}, {"f0.txt", "old", "held"}, ACCOUNT)
 
@@ -497,7 +501,7 @@ class ListArtifactsTests(AccountCase):
 
     def test_a_named_workspace_is_the_one_listed(self):
         self.files(self.strangers_workspace, 1)
-        answer = account.list_artifacts(self.user, workspace=self.strangers_workspace)
+        answer = account.list_artifacts(self.user, member=administrator_of(self.strangers_workspace))
         self.assertEqual(self.names(answer), ["f0.txt"], f"{WHERE}: workspace= is for a credential's own workspace")
 
 
@@ -541,7 +545,7 @@ class RevokeArtifactTests(AccountCase):
 
     def test_a_named_workspace_is_the_one_searched(self):
         theirs = self.upload(self.strangers_workspace)
-        self.assertEqual(account.revoke_artifact(self.user, theirs.id, workspace=self.strangers_workspace).status, 204, ACCOUNT)
+        self.assertEqual(account.revoke_artifact(self.user, theirs.id, member=administrator_of(self.strangers_workspace)).status, 204, ACCOUNT)
 
 
 class GrantTests(AccountCase):
