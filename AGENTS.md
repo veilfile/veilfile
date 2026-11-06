@@ -663,13 +663,21 @@ The design is `docs/superpowers/specs/2026-11-05-team-seats-design.md` and the f
 - The backfill is non-atomic and commits in batches of `BATCH_SIZE` rows, so it holds no long row locks while the previous release serves requests, and it can resume after being killed because a second run fills whatever the first did not reach.
 - Code resolves a member with `administrator_of` before it takes a workspace row lock, never under it, because creating the administrator row under that lock can deadlock with a concurrent request that does the same. `upload_artifact` and `create_key_within_cap` follow this rule, and a test in `backend/drop_core/tests_members.py` checks that neither calls `administrator_of` inside a transaction.
 - A release older than this section cannot delete a user or a workspace once membership rows exist, because the foreign keys from those rows raise an `IntegrityError`. After a code-only rollback, account deletions must wait until the code rolls forward again or `migrate drop_core 0010` has run.
-- A member's allowances are nullable columns on `Membership`, NULL means no allowance, and only staff can set them until PR C.
+- A member's allowances are nullable columns on `Membership`, NULL means no allowance, and only staff can set them until PR C2.
 - `MemberUsageCounter` counts every upload per member per month, from this deploy on.
 - When both limits are reached, the team's code is returned, because the team's limits are tested first. In a race the member's code can appear while the team's storage has just filled, and the team's limit is still enforced.
 - The lock order is the team counter, the member counter, then the workspace row, with the give-back in the same order.
 - The member counter's insert takes a key-share lock on `Membership`, so code that later locks a `Membership` row must use `select_for_update(no_key=True)` or take the counters first.
 - A request in flight honours the allowance it loaded when it started.
 - A release older than this one cannot delete a user, workspace or membership once member counters exist, because it does not know the table. This affects staff in the admin only, during the deploy or after a code-only rollback. Staff should also not delete an account with live traffic: a Postgres rehearsal showed that deleting a user while its keys upload can deadlock, on this release and the one before it.
+- A person has one place, and `current_membership(user)` finds it. Every session, OAuth token and device login goes through it. Only signup and that function call `get_or_create_workspace`, and a test keeps it so.
+- `current_membership` can write, so it runs before any transaction, as `administrator_of` does.
+- A person with no current row gets their own workspace back at the lookup. A key does not come back with it, because a join sets the person's old keys inactive.
+- `drop_core/file_access.py` is the only way to list or revoke a file. A person sees their files here, their files left behind under a membership that has ended, and files shared with the team here. A test keeps every other read of files by workspace to a count, sum or exists.
+- A key and REST `GET /api/v1/keys` see only that person's keys. Only the administrator's dashboard lists the team's. A rotation replaces only your own key.
+- `Workspace.suspended_at`, set by a staff action, stops every credential and every new upload or key on that team, and every link of that team answers as a missing file does. Its people can still sign in, but they cannot revoke its files, so that a report's evidence stays. Lifting it brings back the links that have not expired. Suspending one person with `is_active` is separate, and stops only that person's credentials.
+- An upload and a key mint re-read the person's row and the team's suspension under the workspace lock, and removal must take the same lock.
+- A plain member is refused checkout, plan switch and the portal, and PR D owns the rest of billing.
 
 ## Pricing changes
 
