@@ -105,6 +105,17 @@ class PageTests(Base):
         self.assertEqual(response.status_code, 404, f"{VIEW}: the page must be behind team_seats_only")
         self.assertIn("<title>Not found | Veilfile</title>", response.content.decode(), f"{VIEW}: the answer must be the shell's 404")
 
+    def test_a_suspended_teams_link_gets_the_same_answer_as_a_bad_one(self):
+        Workspace.objects.filter(pk=self.team.pk).update(suspended_at=timezone.now())
+        for signed_in in (False, True):
+            if signed_in:
+                self.sign_in(self.grace)
+            bad = self.client.get(url("not-a-token"))
+            response = self.client.get(url(self.raw))
+            self.assertEqual(response.status_code, 404, f"{VIEW}: a suspended team's link must answer 404 on a GET")
+            self.assertEqual(response.content, bad.content, f"{VIEW}: a suspended team's link must read like a bad one")
+            self.assertNotIn("What joining means", response.content.decode())
+
     def test_a_bad_expired_used_or_cancelled_link_gets_one_answer(self):
         expired, expired_raw = self.send("expired@example.com")
         Invitation.objects.filter(pk=expired.pk).update(expires_at=timezone.now() - timedelta(minutes=1))

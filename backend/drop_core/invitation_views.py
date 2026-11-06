@@ -42,7 +42,7 @@ def _answer(request, token):
             return render(request, "registration/invitation_declined.html")
         return _invalid(request)
     invitation = find_invitation(token)
-    if invitation is None:
+    if invitation is None or invitation.workspace.suspended_at is not None:
         return _invalid(request)
     if request.method != "POST":
         return _page(request, invitation)
