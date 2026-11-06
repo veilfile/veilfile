@@ -208,6 +208,8 @@ def resolve_oauth_credential(raw_token):
     if not token.user.is_active or not is_email_verified(token.user):
         return None
     member = current_membership(token.user)
+    if member.workspace.suspended_at is not None:
+        return None
     return OAuthCredentialAdapter(token, member.workspace, member)
 
 

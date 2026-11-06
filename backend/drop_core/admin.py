@@ -1,12 +1,26 @@
 from django.contrib import admin
+from django.utils import timezone
 
 from .models import APIKey, Artifact, EmailVerification, MemberUsageCounter, Membership, UsageCounter, Workspace
 
 
 @admin.register(Workspace)
 class WorkspaceAdmin(admin.ModelAdmin):
-    list_display = ("name", "owner", "plan", "created_at")
+    list_display = ("name", "owner", "plan", "suspended_at", "created_at")
     list_filter = ("plan",)
+    # Changed only by the actions below. A full form save would write back a stale plan and stale Stripe values.
+    readonly_fields = ("suspended_at",)
+    actions = ("suspend_workspaces", "lift_suspensions")
+
+    @admin.action(description="Suspend the selected workspaces")
+    def suspend_workspaces(self, request, queryset):
+        count = queryset.filter(suspended_at__isnull=True).update(suspended_at=timezone.now())
+        self.message_user(request, f"Suspended {count} workspace(s).")
+
+    @admin.action(description="Lift the suspension of the selected workspaces")
+    def lift_suspensions(self, request, queryset):
+        count = queryset.filter(suspended_at__isnull=False).update(suspended_at=None)
+        self.message_user(request, f"Lifted the suspension of {count} workspace(s).")
 
 
 @admin.register(APIKey)

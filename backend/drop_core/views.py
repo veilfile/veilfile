@@ -91,6 +91,8 @@ ERROR_STATUS = {
     "storage_cap_reached": status.HTTP_402_PAYMENT_REQUIRED,
     "member_monthly_allowance_reached": status.HTTP_429_TOO_MANY_REQUESTS,
     "member_storage_allowance_reached": status.HTTP_400_BAD_REQUEST,
+    "workspace_suspended": status.HTTP_403_FORBIDDEN,
+    "member_removed": status.HTTP_403_FORBIDDEN,
 }
 
 ERROR_MESSAGES = {
@@ -125,6 +127,10 @@ ERROR_MESSAGES = {
         "Revoke files you no longer need, or ask your administrator to "
         "raise it."
     ),
+    "workspace_suspended": (
+        "This account is suspended, so nothing was stored. Contact support@veilfile.com."
+    ),
+    "member_removed": "You are no longer on this team, so nothing was stored.",
     "invalid_request": (
         "The upload has an invalid parameter. Check on_secret and ttl_days."
     ),
@@ -307,6 +313,8 @@ def _minting_credential_active(pending):
     """
     member = pending.member
     if member is None or member.removed_at is not None:
+        return False
+    if pending.workspace.suspended_at is not None:
         return False
     person = member.user
     if not person.is_active:
@@ -761,13 +769,16 @@ def serve_artifact(request, token):
     # Every kind of miss is the same answer, from one function (pages.errors.artifact_miss), so a link
     # that never existed, one that expired and one whose object is gone cannot be told apart.
     try:
-        artifact = Artifact.objects.get(token=token)
+        artifact = Artifact.objects.select_related("workspace").get(token=token)
     except Artifact.DoesNotExist:
         return artifact_miss()
     if artifact.is_expired():
         return artifact_miss()
     if artifact.safety_status == "held":
         # Do not confirm the object exists.
+        return artifact_miss()
+    if artifact.workspace.suspended_at is not None:
+        # A suspended team's links answer as a missing file does; lifting the suspension brings them back.
         return artifact_miss()
     try:
         fileobj = get_storage().open(artifact.token)

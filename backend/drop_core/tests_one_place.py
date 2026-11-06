@@ -1,6 +1,9 @@
+import io
 import re
 import shutil
 import tempfile
+from datetime import timedelta
+from pathlib import Path
 from unittest import mock
 
 from rest_framework.test import APIClient
@@ -10,12 +13,15 @@ from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.utils import timezone
 
 from . import account
-from .key_caps import create_key_within_cap
+from .key_caps import KeyNotAllowed, create_key_within_cap
 from .models import (
     APIKey,
     Artifact,
+    MemberUsageCounter,
     Membership,
     NoCurrentAdministrator,
+    PendingUpload,
+    UsageCounter,
     Workspace,
     administrator_of,
     current_member,
@@ -25,6 +31,8 @@ from .models import (
 )
 from .oauth import resolve_oauth_credential
 from .plans import PLANS
+from .services import upload_artifact
+from .storage import LocalStorage
 from .tests import _use_local_dir
 from .tests_fix_device import _DeviceTestBase
 from .tests_members import BACKEND, _issue_token, _make_app, make_user, second_member
@@ -314,6 +322,257 @@ class KeysOfAPersonTests(TestCase):
         body = response.content.decode()
         self.assertIn("Your Team plan allows", body)
         self.assertIn('<p class="form-links"><a class="label interactive" href="/app/billing/">', body)
+
+
+class _SuspensionBase(_DeviceTestBase):
+    """Ada's Team workspace with Grace in it, each with a key and a live file with bytes in storage."""
+
+    def setUp(self):
+        super().setUp()
+        self.team = self.workspace
+        Workspace.objects.filter(pk=self.team.pk).update(plan="team")
+        self.team.refresh_from_db()
+        self.ada = self.user
+        self.admin = administrator_of(self.team)
+        self.grace = second_member(self.team, "grace")
+        self.admins_key, self.admins_raw = create_key_within_cap(self.team, "ada-key", member=self.admin)
+        self.graces_key, self.graces_raw = create_key_within_cap(self.team, "grace-key", member=self.grace)
+        self.admins_file = self._file(self.admin, "ada.txt")
+        self.graces_file = self._file(self.grace, "grace.txt")
+
+    def _file(self, member, name, days=7):
+        artifact = Artifact.objects.create(
+            workspace=member.workspace, member=member, filename=name, size_bytes=5,
+            expires_at=timezone.now() + timedelta(days=days),
+        )
+        LocalStorage().save(artifact.token, io.BytesIO(b"bytes"), "application/octet-stream")
+        self.addCleanup(LocalStorage().delete, artifact.token)
+        return artifact
+
+    def _suspend(self):
+        Workspace.objects.filter(pk=self.team.pk).update(suspended_at=timezone.now())
+        self.team.refresh_from_db()
+
+    def _lift(self):
+        Workspace.objects.filter(pk=self.team.pk).update(suspended_at=None)
+        self.team.refresh_from_db()
+
+    def _link(self, artifact):
+        return self.client.get(f"/a/{artifact.token}")
+
+
+class SuspensionTests(_SuspensionBase):
+    def test_a_suspended_teams_keys_are_refused(self):
+        self._suspend()
+        self.assertIsNone(APIKey.verify(self.admins_raw))
+        self.assertIsNone(APIKey.verify(self.graces_raw))
+
+    def test_a_suspended_teams_oauth_tokens_are_refused(self):
+        raw, _, _ = _issue_token(self.grace.user, _make_app())
+        self.assertIsNotNone(resolve_oauth_credential(raw))
+        self._suspend()
+        self.assertIsNone(resolve_oauth_credential(raw))
+
+    def test_a_suspended_teams_upload_urls_are_dead(self):
+        pending = PendingUpload.objects.create(
+            workspace=self.team, api_key=self.graces_key, member=self.grace, filename="a.txt", ttl_days=1,
+            token="suspended-url", expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        self._suspend()
+        response = self.client.put("/api/v1/uploads/suspended-url", b"hi", content_type="application/octet-stream")
+        self.assertEqual(response.status_code, 404)
+        pending.refresh_from_db()
+        self.assertTrue(pending.used)
+        self.assertFalse(Artifact.objects.filter(filename="a.txt").exists())
+
+    def test_a_suspended_teams_device_login_is_refused(self):
+        grant = self._start()
+        browser = APIClient()
+        browser.force_login(self.grace.user)
+        self.assertEqual(self._approve(grant, browser=browser).status_code, 200)
+        self._suspend()
+        response = self._poll(grant)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json()["error"], "access_denied")
+        self.assertEqual(
+            response.json()["error_description"],
+            "This account is suspended, so no key was made. Contact support@veilfile.com.",
+        )
+        self.assertEqual(APIKey.objects.filter(member=self.grace, is_active=True).count(), 1)
+
+    def test_a_session_upload_is_refused_with_its_code(self):
+        self._suspend()
+        client = APIClient()
+        client.force_login(self.grace.user)
+        response = client.post("/api/v1/artifacts/", {"file": SimpleUploadedFile("a.txt", b"hi")})
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "workspace_suspended")
+        self.assertEqual(
+            response.json()["error"],
+            "This account is suspended, so nothing was stored. Contact support@veilfile.com.",
+        )
+        self.assertFalse(Artifact.objects.filter(filename="a.txt").exists())
+        self.assertFalse(UsageCounter.objects.filter(workspace=self.team, uploads__gt=0).exists())
+        self.assertFalse(MemberUsageCounter.objects.filter(member=self.grace, uploads__gt=0).exists())
+
+    def test_a_session_key_is_refused_with_its_code(self):
+        self._suspend()
+        client = APIClient()
+        client.force_login(self.grace.user)
+        response = client.post("/api/v1/keys", {"name": "new"}, format="json")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "workspace_suspended")
+        self.assertFalse(APIKey.objects.filter(name="new").exists())
+
+    def test_people_can_still_sign_in(self):
+        self._suspend()
+        self.client.force_login(self.grace.user)
+        self.assertEqual(self.client.get("/app/").status_code, 200)
+
+    def test_a_suspended_teams_links_answer_like_missing_ones(self):
+        missing = self.client.get("/a/token-that-never-existed")
+        self._suspend()
+        for artifact in (self.admins_file, self.graces_file):
+            with self.subTest(file=artifact.filename):
+                response = self._link(artifact)
+                self.assertEqual(response.status_code, missing.status_code)
+                self.assertEqual(response.content, missing.content)
+                self.assertEqual(dict(response.headers), dict(missing.headers))
+                self.assertTrue(LocalStorage().exists(artifact.token))
+
+    def test_lifting_a_suspension_brings_back_the_links(self):
+        self._suspend()
+        self.assertEqual(self._link(self.graces_file).status_code, 404)
+        Artifact.objects.filter(pk=self.admins_file.pk).update(expires_at=timezone.now() - timedelta(minutes=1))
+        self._lift()
+        response = self._link(self.graces_file)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(b"".join(response.streaming_content), b"bytes")
+        self.assertEqual(self._link(self.admins_file).status_code, 404)
+
+    def test_a_left_behind_file_stops_with_the_team_it_lives_in(self):
+        own = get_or_create_workspace(self.grace.user)
+        mine = self._file(administrator_of(own), "mine.txt")
+        Membership.objects.filter(pk=self.grace.pk).update(removed_at=timezone.now())
+        self._suspend()
+        self.assertEqual(self._link(self.graces_file).status_code, 404)
+        self.assertEqual(self._link(mine).status_code, 200)
+
+    def test_suspending_a_person_leaves_their_links_serving(self):
+        type(self.ada).objects.filter(pk=self.grace.user_id).update(is_active=False)
+        self.assertEqual(self._link(self.graces_file).status_code, 200)
+
+    def test_the_files_page_shows_a_suspended_teams_files_as_held(self):
+        self._suspend()
+        self.client.force_login(self.ada)
+        body = self.client.get("/app/files/").content.decode()
+        self.assertIn("ada.txt", body)
+        self.assertIn("Held", body)
+        self.assertNotIn(self.admins_file.token, body)
+        self.assertNotIn(f"/app/files/{self.admins_file.id}/revoke/", body)
+
+    def test_a_suspended_teams_files_cannot_be_revoked(self):
+        self._suspend()
+        client = APIClient()
+        client.force_login(self.ada)
+        response = client.delete(f"/api/v1/artifacts/{self.admins_file.id}/")
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "workspace_suspended")
+        self.assertEqual(
+            response.json()["error"],
+            "This account is suspended, so the file was not revoked. Contact support@veilfile.com.",
+        )
+        self.client.force_login(self.ada)
+        page = self.client.post(f"/app/files/{self.admins_file.id}/revoke/")
+        self.assertRedirects(page, "/app/files/", fetch_redirect_response=False)
+        self.assertTrue(Artifact.objects.filter(pk=self.admins_file.pk).exists())
+        self.assertTrue(LocalStorage().exists(self.admins_file.token))
+
+    def test_suspending_one_team_touches_no_other(self):
+        other = get_or_create_workspace(make_user("lin"))
+        _, raw = APIKey.create_key(other, "lin-key")
+        self._suspend()
+        self.assertIsNotNone(APIKey.verify(raw))
+
+    def test_the_admin_action_writes_only_the_suspension(self):
+        from django.contrib.auth import get_user_model
+
+        staff = get_user_model().objects.create_superuser("staff", "staff@example.com", "pw12345678")
+        self.client.force_login(staff)
+        self.assertEqual(self.client.get("/admin/drop_core/workspace/").status_code, 200)
+        Workspace.objects.filter(pk=self.team.pk).update(plan="scale")
+        response = self.client.post(
+            "/admin/drop_core/workspace/",
+            {"action": "suspend_workspaces", "_selected_action": [str(self.team.pk)]},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.team.refresh_from_db()
+        self.assertEqual(self.team.plan, "scale")
+        self.assertIsNotNone(self.team.suspended_at)
+        self.client.post(
+            "/admin/drop_core/workspace/",
+            {"action": "lift_suspensions", "_selected_action": [str(self.team.pk)]},
+        )
+        self.team.refresh_from_db()
+        self.assertIsNone(self.team.suspended_at)
+        self.assertEqual(self.team.plan, "scale")
+
+    def test_lifting_a_suspension_restores_access(self):
+        self._suspend()
+        self._lift()
+        self.assertIsNotNone(APIKey.verify(self.graces_raw))
+
+    def test_suspending_a_person_still_touches_only_that_person(self):
+        type(self.ada).objects.filter(pk=self.ada.pk).update(is_active=False)
+        self.assertIsNone(APIKey.verify(self.admins_raw))
+        self.assertIsNotNone(APIKey.verify(self.graces_raw))
+
+
+class InFlightTests(_SuspensionBase):
+    def _counts(self):
+        """What the counters count, ignoring empty rows an early check may have made."""
+        return (
+            sorted(UsageCounter.objects.filter(uploads__gt=0).values_list("workspace_id", "uploads")),
+            sorted(MemberUsageCounter.objects.filter(uploads__gt=0).values_list("member_id", "uploads")),
+        )
+
+    def _stored(self):
+        return sorted(path.name for path in Path(self.tmpdir).rglob("*") if path.is_file())
+
+    def test_an_upload_is_refused_when_the_member_was_removed_after_it_began(self):
+        stale = current_member(self.team, self.grace.user)
+        before = self._counts()
+        files_before = self._stored()
+        Membership.objects.filter(pk=stale.pk).update(removed_at=timezone.now())
+        with self.assertRaisesMessage(ValueError, "member_removed"):
+            upload_artifact(self.team, None, "a.txt", b"hi", "text/plain", member=stale)
+        self.assertFalse(Artifact.objects.filter(filename="a.txt").exists())
+        self.assertEqual(self._counts(), before)
+        self.assertEqual(self._stored(), files_before)
+
+    def test_an_upload_is_refused_when_the_team_was_suspended_after_it_began(self):
+        stale = current_member(self.team, self.grace.user)
+        before = self._counts()
+        self._suspend()
+        with self.assertRaisesMessage(ValueError, "workspace_suspended"):
+            upload_artifact(self.team, None, "a.txt", b"hi", "text/plain", member=stale)
+        self.assertFalse(Artifact.objects.filter(filename="a.txt").exists())
+        self.assertEqual(self._counts(), before)
+
+    def test_a_key_mint_is_refused_when_the_member_was_removed_after_it_began(self):
+        stale = current_member(self.team, self.grace.user)
+        Membership.objects.filter(pk=stale.pk).update(removed_at=timezone.now())
+        with self.assertRaises(KeyNotAllowed) as caught:
+            create_key_within_cap(self.team, "late", member=stale)
+        self.assertEqual(caught.exception.code, "member_removed")
+        self.assertFalse(APIKey.objects.filter(name="late").exists())
+
+    def test_a_key_mint_is_refused_when_the_team_was_suspended_after_it_began(self):
+        stale = current_member(self.team, self.grace.user)
+        self._suspend()
+        with self.assertRaises(KeyNotAllowed) as caught:
+            create_key_within_cap(self.team, "late", member=stale)
+        self.assertEqual(caught.exception.code, "workspace_suspended")
 
 
 class LookupOutsideTransactionTests(TransactionTestCase):

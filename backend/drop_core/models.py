@@ -32,6 +32,9 @@ class Workspace(models.Model):
     stripe_customer_id = models.CharField(max_length=255, blank=True, default="")
     stripe_subscription_id = models.CharField(max_length=255, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
+    # Set by a staff action. While set, every key, token, upload URL and device login of the team is refused, and
+    # every link of the team answers as a missing file does.
+    suspended_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.name} ({self.plan})"
@@ -242,7 +245,7 @@ class APIKey(models.Model):
     def verify(cls, raw):
         """Return the active APIKey for ``raw``, or None. Fast-path rejects
         anything that isn't a ``vlf_`` key without touching the database.
-        A key verifies while its person is active and still a member."""
+        A key verifies while its person is active and still a member, and its team is not suspended."""
         if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
             return None
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -252,6 +255,7 @@ class APIKey(models.Model):
                 is_active=True,
                 member__user__is_active=True,
                 member__removed_at__isnull=True,
+                workspace__suspended_at__isnull=True,
             )
         except cls.DoesNotExist:
             return None

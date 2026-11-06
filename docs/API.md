@@ -639,7 +639,7 @@ the URL is already dead and the file is deleted by the next expiry sweep.
 `file_too_large`, `file_type_not_allowed`, `content_not_allowed`,
 `secret_detected`, `monthly_cap_reached`, `storage_cap_reached`,
 `member_monthly_allowance_reached`, `member_storage_allowance_reached`,
-`storage_unavailable` and `rate_limited` (with `retry_after` seconds).
+`workspace_suspended`, `member_removed`, `storage_unavailable` and `rate_limited` (with `retry_after` seconds).
 Successful results have no `isError` key. `upload_artifact` and
 `create_upload_url` share the 100 uploads/hour/credential limit with REST.
 
@@ -704,6 +704,8 @@ extension, and the allowed list.
 | 401 | `unauthorized` | The credentials are missing or not valid. MCP answers with JSON-RPC `-32001`. |
 | 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
 | 402 | `key_limit_reached` | The workspace has reached its plan's API key limit (`POST /api/v1/keys`). |
+| 403 | `workspace_suspended` | This account is suspended, so nothing was stored. Contact support@veilfile.com. |
+| 403 | `member_removed` | You are no longer on this team, so nothing was stored. |
 | 403 | `forbidden` | The caller is signed in but not permitted, or a session call failed the CSRF check. |
 | 403 | `session_required` | The endpoint needs a dashboard session, not an API key or an OAuth token. |
 | 403 | `email_verification_required` | The account email must be verified first. |

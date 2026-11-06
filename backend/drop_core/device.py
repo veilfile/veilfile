@@ -50,6 +50,7 @@ from . import funnel
 from .email_verification import client_ip, is_email_verified
 from .key_caps import (
     KeyCapReached,
+    KeyNotAllowed,
     MemberKeyCapReached,
     active_key_count,
     create_key_within_cap,
@@ -484,6 +485,12 @@ def _redeem(device_code):
                     device_issued=True,
                     replacing=device_code.replace_key,
                     member=member,
+                )
+            except KeyNotAllowed as exc:
+                refused = (
+                    "This account is suspended, so no key was made. Contact support@veilfile.com."
+                    if exc.code == "workspace_suspended"
+                    else "You are no longer on this team, so no key was made. Run veilfile login again."
                 )
             except MemberKeyCapReached:
                 refused = (

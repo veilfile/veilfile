@@ -27,7 +27,7 @@ from oauth2_provider.models import get_application_model, get_grant_model
 from . import funnel
 from .email_verification import is_email_verified
 from .file_access import NotYourFile, file_to_revoke, files_visible_to
-from .key_caps import KeyCapReached, MemberKeyCapReached, active_key_count, create_key_within_cap
+from .key_caps import KeyCapReached, KeyNotAllowed, MemberKeyCapReached, active_key_count, create_key_within_cap
 from .models import (
     APIKey,
     UsageCounter,
@@ -157,6 +157,12 @@ def verification_required(user):
     )
 
 
+KEY_NOT_ALLOWED_WORDS = MappingProxyType({
+    "workspace_suspended": "This account is suspended, so no key was made. Contact support@veilfile.com.",
+    "member_removed": "You are no longer on this team, so no key was made.",
+})
+
+
 def create_key(user, name, *, request=None, body_is_object=True):
     """POST /api/v1/keys/: make a key for the user's workspace.
 
@@ -186,6 +192,8 @@ def create_key(user, name, *, request=None, body_is_object=True):
     # (device-issued) keys included.
     try:
         key, raw = create_key_within_cap(workspace, name, member=member)
+    except KeyNotAllowed as exc:
+        return Answer(403, {"error": KEY_NOT_ALLOWED_WORDS[exc.code], "code": exc.code})
     except MemberKeyCapReached:
         return Answer(
             400,
@@ -339,6 +347,15 @@ def revoke_artifact(user, artifact_id, *, member=None):
     member = member if member is not None else current_membership(user)
     try:
         artifact = file_to_revoke(member, artifact_id)
+        if artifact is not None and artifact.workspace.suspended_at is not None:
+            # A suspended team's files stay, so a report's evidence does.
+            return Answer(
+                403,
+                {
+                    "error": "This account is suspended, so the file was not revoked. Contact support@veilfile.com.",
+                    "code": "workspace_suspended",
+                },
+            )
     except NotYourFile:
         return Answer(
             403,

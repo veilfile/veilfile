@@ -119,7 +119,8 @@ def file_revoke(request, artifact_id):
     file that is not live (expired or held) is not revoked here, for a GET or a POST: the visitor goes back to Files with a
     sentence and nothing changes."""
     artifact = _own_file(request.user, artifact_id)
-    if state_of(artifact.expires_at, artifact.safety_status == "held", timezone.now()) != "live":
+    held = artifact.safety_status == "held" or artifact.workspace.suspended_at is not None
+    if state_of(artifact.expires_at, held, timezone.now()) != "live":
         messages.info(request, NOT_LIVE)
         return redirect("app-files")
     if request.method != "POST":

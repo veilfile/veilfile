@@ -14,7 +14,7 @@ from a bigger plan) can still rotate keys but never add one.
 
 from django.db import transaction
 
-from .models import APIKey, Workspace, administrator_of
+from .models import APIKey, Membership, Workspace, administrator_of
 from .plans import PLANS
 
 
@@ -24,6 +24,15 @@ class KeyCapReached(Exception):
 
 class MemberKeyCapReached(KeyCapReached):
     """Minting another key would exceed the key allowance set for this member."""
+
+
+class KeyNotAllowed(Exception):
+    """The person or the team may no longer mint keys. ``code`` is ``member_removed``
+    or ``workspace_suspended``. It is not a cap, so it is no KeyCapReached."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
 
 
 def key_cap(workspace):
@@ -62,13 +71,18 @@ def create_key_within_cap(workspace, name, device_issued=False, replacing=None, 
     so the caps then apply as for a new key. The workspace row is
     locked (SELECT ... FOR UPDATE on Postgres) so concurrent mints cannot
     both pass the check. Returns ``(key, raw_key)``; raises KeyCapReached, or
-    MemberKeyCapReached when only the member's own allowance is reached.
+    MemberKeyCapReached when only the member's own allowance is reached, and KeyNotAllowed when the team is
+    suspended or the member has been removed (both read under the lock).
     The person is resolved first, because creating the administrator row
     under that lock can deadlock with another request doing the same.
     """
     member = member or administrator_of(workspace)
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=workspace.pk)
+        if locked.suspended_at is not None:
+            raise KeyNotAllowed("workspace_suspended")
+        if not Membership.objects.filter(pk=member.pk, workspace_id=workspace.pk, removed_at__isnull=True).exists():
+            raise KeyNotAllowed("member_removed")
         active = active_keys(locked)
         replaced_pk = None
         if replacing is not None:
