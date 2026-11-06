@@ -37,6 +37,8 @@ The owner reviews these with the plan. Each says what it costs if wrong.
 9. **An upload and a key mint re-read the person's membership under the workspace lock.** Removal in C3 will take the same lock, so either the upload commits first and "revoke all" sees it, or removal commits first and the upload is refused with 403 `member_removed`. This adds one small query to every upload for every customer, and it is the only way to keep decision 12's "stop at once" true under concurrency.
 10. **OAuth grants are not touched here.** With the lookup moved, a token follows its person. C2 and C3 will revoke a person's grants when they join, leave or are removed, because the spec's reason for stopping old keys, that a team never inherits what it did not set up, applies to connected apps too.
 
+**Changed during the build, after security reviews.** Decision 2 is narrower than it first read: only a signed-in session reopens a row, and it switches off that row's keys first, in one transaction. A credential never reopens one: `resolve_oauth_credential` passes `reopen=False` and refuses, so Task 2's rename of `test_an_oauth_token_of_a_removed_member_is_refused` is undone. `services.revoke_artifact` itself refuses a suspended team's file, so no route can skip decision 8's evidence rule. The suspend and lift actions need change permission and are recorded in the admin's history. The guard on file reads became an exact table of every read of `Artifact` and `PendingUpload`.
+
 **Found while planning:** the design says a hold "lands on the file and on the key that sent it, as it does now". The code does not do that: nothing in the repository sets `safety_status="held"` except a staff edit in the admin, a safety block has no file, and no email of any kind follows a hold. C3's plan has to build that notice from nothing, and it will say so.
 
 ## Global Constraints
@@ -684,7 +686,7 @@ This is the only evidence on locks and query plans, because the suite runs on SQ
 
 - [ ] **Step 1: Rebuild the cluster and seed it** at the same volume as PR B: 5,146 workspaces, 20,046 keys and 200,207 files, with the old release's migrations applied.
 
-- [ ] **Step 2: Migrate under load.** Run the old release's readers and writers during `migrate`, and record the duration, probe errors, lock waits and longest stall. **Bar:** 0 probe errors, and no stall over 1 s that a lock explains.
+- [ ] **Step 2: Migrate under load.** Run the old release's readers and writers during `migrate`, and record the duration, probe errors, lock waits and longest stall. Then repeat `0017` with a transaction holding one workspace row for 5 s, as a webhook waiting on Stripe would, and record how long reads of the table queue behind it. **Bar:** 0 probe errors, and no stall over 1 s that a lock explains, apart from that deliberate hold, whose queue goes in the deploy notes.
 
 - [ ] **Step 3: Compare one-person responses.** Run the old and new releases against the same rows, across REST, MCP and the device consent page at the cap and below it. **Bar:** byte-identical once `last_used_at` is masked. Also compare `GET /a/<token>` for live, expired and held files, status, headers and bytes.
 
@@ -702,7 +704,7 @@ This is the only evidence on locks and query plans, because the suite runs on SQ
 
 - [ ] **Step 10: Remove the cluster and the worktree, and confirm** that port 8779 is closed and that port 5432 is untouched.
 
-- [ ] **Step 11: Stop for the owner.** Report the results and the rulings. The pull request's description carries these deploy notes: `0016` stops the deploy if two current member rows exist; `0017`'s `ALTER TABLE` waits for any transaction holding a workspace row, including one waiting on Stripe, and new reads of the table queue behind it for that time; a rollback removes the code first and loses suspensions; staff suspend with `is_active` or `suspended_at`, never by closing an owner's row. Pushing, opening the pull request and merging each need the owner's go-ahead.
+- [ ] **Step 11: Stop for the owner.** Report the results and the rulings. The pull request's description carries these deploy notes: `0016` stops the deploy if two current member rows exist; `0017`'s `ALTER TABLE` waits for any transaction holding a workspace row, including one waiting on Stripe, and new reads of the table queue behind it for that time; a rollback removes the code first and loses suspensions; staff should not suspend anyone until the rollout finishes, because the previous release ignores `suspended_at`; `docs/API.md` has rows for codes no customer can reach yet, as PR B's did, and a test requires them; staff suspend with `is_active` or `suspended_at`, never by closing an owner's row. Pushing, opening the pull request and merging each need the owner's go-ahead.
 
 ## Carried to C2 and C3
 
