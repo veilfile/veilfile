@@ -50,12 +50,14 @@ class InviteRefused(Exception):
         self.code = code
 
 
+def fold_address(value):
+    """An address with compatibility forms and case folded away, so that one mailbox has one spelling."""
+    return unicodedata.normalize("NFKC", value).casefold()
+
+
 def same_address(a, b):
     """Whether two addresses are one, ignoring case and compatibility forms."""
-    def fold(value):
-        return unicodedata.normalize("NFKC", value).casefold()
-
-    return fold(a) == fold(b)
+    return fold_address(a) == fold_address(b)
 
 
 def seat_limit(workspace):
@@ -109,7 +111,10 @@ def _check_and_create(member, email, token_hash, now):
         raise InviteRefused("workspace_suspended")
     # Close expired rows first, so that the one-waiting constraint and the count agree.
     _open(workspace).filter(expires_at__lte=now).update(revoked_at=now)
-    if Membership.objects.filter(workspace=workspace, removed_at__isnull=True, user__email__iexact=email).exists():
+    member_emails = Membership.objects.filter(workspace=workspace, removed_at__isnull=True).values_list(
+        "user__email", flat=True
+    )
+    if any(same_address(existing, email) for existing in member_emails):
         raise InviteRefused("already_on_team")
     if _open(workspace).filter(email__iexact=email).exists():
         raise InviteRefused("already_waiting")
@@ -148,7 +153,7 @@ def invite(member, email, *, build_url):
     otherwise. Call it outside a transaction: the mail goes out after the row is committed."""
     if not settings.TEAM_SEATS or not member.is_administrator:
         raise PermissionDenied
-    email = email.strip().lower()
+    email = fold_address(email.strip())
     if "\n" in email or "\r" in email:
         raise ValidationError("Enter a valid email address.")
     validate_email(email)

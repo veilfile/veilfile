@@ -281,6 +281,23 @@ class InviteTests(TestCase):
             invite(admin, "GRACE@example.com" if n else "grace@example.com", build_url=build_url)
         refusal(self, "address_rate_limited", team_of("last")[1], "grace@EXAMPLE.com")
 
+    def test_a_compatibility_form_of_an_address_is_the_same_address(self):
+        full = "grace@\uff25\uff38\uff21\uff2d\uff30\uff2c\uff25.com"
+        row = self.invite(full)
+        self.assertEqual(row.email, "grace@example.com", "backend/drop_core/teams.py: fold the address before storing it")
+        refusal(self, "already_waiting", self.admin, "grace@example.com")
+        refusal(self, "already_waiting", self.admin, full)
+        Invitation.objects.update(declined_at=timezone.now())
+        refusal(self, "declined_recently", self.admin, full)
+        for n in range(INVITES_PER_ADDRESS_PER_DAY - 1):
+            _, admin = team_of(f"t{n}")
+            invite(admin, full if n else "grace@example.com", build_url=build_url)
+        refusal(self, "address_rate_limited", team_of("last")[1], full)
+
+    def test_a_member_stored_in_another_form_cannot_be_invited(self):
+        second_member(self.workspace, "grace", "grace@\uff25\uff38\uff21\uff2d\uff30\uff2c\uff25.com")
+        refusal(self, "already_on_team", self.admin, "grace@example.com")
+
     def test_someone_on_the_team_cannot_be_invited(self):
         member = second_member(self.workspace, "grace", "grace@example.com")
         refusal(self, "already_on_team", self.admin, "ada@example.com")
