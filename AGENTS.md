@@ -653,7 +653,7 @@ npm and PyPI each trust one publisher, release.yml in this repository. npm 0.4.1
 The design is `docs/superpowers/specs/2026-11-05-team-seats-design.md` and the first pull request's plan is `docs/superpowers/plans/2026-11-05-team-seats-pr-a-members.md`. Nothing here is visible yet.
 
 - A workspace is an account. `Membership` (in `backend/drop_core/models.py`) joins a person to it as an administrator or a member. A workspace has at most one current administrator and a person has at most one row per workspace; two constraints enforce both.
-- `Workspace.owner` stays the administrator and the payer. Billing, Stripe lookups and `get_or_create_workspace` are unchanged.
+- `Workspace.owner` stays the administrator and the payer. Billing's plan logic and Stripe calls are unchanged, and `get_or_create_workspace` is called only by signup and by `current_membership`. Every session, OAuth and device lookup finds a person's place with `current_membership(user)` (in `backend/drop_core/models.py`), which runs before any transaction and never under a lock, as `administrator_of` does. A plain member is refused checkout, plan switch and the billing portal with 403 `administrator_only`.
 - Every workspace gets its administrator row from the `post_save` receiver in `backend/drop_core/signals.py` and from the backfill in `backend/drop_core/migrations/0013_backfill_members.py`. `administrator_of(workspace)` returns it, creating it if it is missing, and `current_member(workspace, user)` returns a person's current membership or None.
 - Keys, upload URLs, files and safety events record `member`. After the second backfill, `backend/drop_core/migrations/0014_backfill_members_again.py`, no key, file or upload URL names no member. A stray key or upload URL is refused; a stray file still lists, serves and revokes, but it counts toward nobody's allowance. `SafetyEvent.member` can be NULL because it is `SET_NULL`. The second backfill runs once, and it stops the deploy if it cannot finish.
 - A credential exposes `.acting_member` and `.person`: `APIKey` has both, and `OAuthCredentialAdapter` in `backend/drop_core/oauth.py` has both. Each person's account state governs only their own credentials, so a check tests the person who made the key, token or upload URL, never the owner. No code reads `workspace.owner` for a credential or file check, and `OwnerReadsTests` in `backend/drop_core/tests_members.py` keeps its `ALLOWED` table empty.
@@ -1223,7 +1223,7 @@ functions, never a DRF view, and reaches Stripe only through `drop_billing.accou
    `Name | Veilfile` and `<meta name="robots" content="noindex, nofollow">` in its `meta` block. A POST without
    its token is the shell's "Form not sent" page, from the middleware.
 8. Whose objects. An address names an object (a key's id, a file's uuid, an app's id). Look it up inside the
-   signed-in person's own account (`get_or_create_workspace(request.user)` is the workspace the account
+   signed-in person's own account (`current_membership(request.user).workspace` is the workspace the account
    functions read), and answer another person's and a missing one with the shell's 404, the same bytes for both:
    `return not_found(request)` (`pages.errors`) or `raise Http404`, never a 403 and never a change. Ask whose
    it is before anything about its state, so that a stranger never gets the sentence an owner would. A malformed

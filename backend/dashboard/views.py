@@ -24,7 +24,7 @@ from dashboard import billing_page
 from dashboard.file_rows import file_rows, state_of
 from drop_billing import account as billing_account
 from drop_core import account
-from drop_core.models import Artifact, get_or_create_workspace
+from drop_core.models import Artifact, current_membership
 from pages.errors import not_found
 
 
@@ -96,10 +96,10 @@ def files(request):
 def _own_file(user, artifact_id):
     """The user's own file, else the shell's 404: another workspace's file and a missing one cannot be told apart.
 
-    It looks in get_or_create_workspace(user), the workspace the list and account.revoke_artifact read, so the page, the
+    It looks in the person's current place, the workspace the list and account.revoke_artifact read, so the page, the
     confirmation and the revoke agree on which files are the user's.
     """
-    artifact = Artifact.objects.filter(id=artifact_id, workspace=get_or_create_workspace(user)).first()
+    artifact = Artifact.objects.filter(id=artifact_id, workspace=current_membership(user).workspace).first()
     if artifact is None:
         raise Http404("No such file.")
     return artifact

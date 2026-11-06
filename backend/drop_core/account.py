@@ -31,8 +31,7 @@ from .models import (
     APIKey,
     Artifact,
     UsageCounter,
-    current_member,
-    get_or_create_workspace,
+    current_membership,
 )
 from .oauth import list_user_oauth_connections, revoke_user_oauth_grants
 from .plans import PLANS
@@ -54,7 +53,7 @@ class Answer(NamedTuple):
 
 
 def _workspace_of(user, workspace):
-    return workspace if workspace is not None else get_or_create_workspace(user)
+    return workspace if workspace is not None else current_membership(user).workspace
 
 
 def artifact_url(artifact):
@@ -177,14 +176,13 @@ def create_key(user, name, *, request=None, body_is_object=True):
     )
     if name_error:
         return Answer(400, {"error": name_error, "code": "invalid_request"})
-    workspace = get_or_create_workspace(user)
+    member = current_membership(user)
+    workspace = member.workspace
     name = (name or "").strip() or "Untitled key"
     # Every active key counts against the plan cap, terminal
     # (device-issued) keys included.
     try:
-        key, raw = create_key_within_cap(
-            workspace, name, member=current_member(workspace, user)
-        )
+        key, raw = create_key_within_cap(workspace, name, member=member)
     except MemberKeyCapReached:
         return Answer(
             400,

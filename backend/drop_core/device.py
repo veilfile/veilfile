@@ -56,7 +56,7 @@ from .key_caps import (
     key_cap,
     needs_replacement,
 )
-from .models import APIKey, DeviceCode, current_member, get_or_create_workspace
+from .models import APIKey, DeviceCode, current_member, current_membership
 
 logger = logging.getLogger(__name__)
 
@@ -310,7 +310,7 @@ def _lookup_problem_page(request, problem):
 
 
 def _render_consent(request, device_code, error=None, selected_key="", http_status=200):
-    workspace = get_or_create_workspace(request.user)
+    workspace = current_membership(request.user).workspace
     replacement_required = needs_replacement(workspace)
     return render(
         request,
@@ -638,7 +638,7 @@ def device_approve(request):
             show_resend=True,
             http_status=403,
         )
-    workspace = get_or_create_workspace(request.user)
+    workspace = current_membership(request.user).workspace
     raw_replace = (request.POST.get("replace_key") or "").strip()
     # Anti-phishing: approval from a link someone sent you must not be a
     # single click. The user attests they started this login themselves.

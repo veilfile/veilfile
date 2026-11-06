@@ -467,7 +467,9 @@ only ever changes from Stripe-verified state (the webhook, or a read-back from
 Stripe), never from a client request. Billing errors use the standard
 `{"error", "code"}` envelope unless noted. Stripe failures are `502`
 `stripe_error`; missing Stripe configuration is `503`
-`{"error": "billing_not_configured"}` (no `code`).
+`{"error": "billing_not_configured"}` (no `code`). A member of a team who is not its
+administrator gets `403` `{"error": "administrator_only"}` (no `code`) from
+checkout, switch and the portal, before Stripe is asked anything.
 
 ### `POST /api/v1/billing/checkout`: subscribe
 

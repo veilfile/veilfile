@@ -27,7 +27,7 @@ from django.utils import timezone
 
 from drop_core.account import Answer
 from drop_core.key_caps import active_key_count
-from drop_core.models import Artifact, Workspace, get_or_create_workspace
+from drop_core.models import Artifact, Workspace, current_membership
 from drop_core.plans import PLANS
 from drop_core.services import workspace_storage_bytes
 
@@ -128,6 +128,11 @@ def _stripe_error(exc):
     if len(message) > 280:
         message = message[:277] + "…"
     return Answer(502, {"error": f"Stripe: {message}", "code": "stripe_error"})
+
+
+def _administrator_only():
+    """A plain member acts on the team's Stripe customer through none of the billing operations."""
+    return Answer(403, {"error": "administrator_only"})
 
 
 def _no_subscription():
@@ -507,7 +512,7 @@ def _over_plan_limits(workspace, caps, storage_used, active_keys):
 def status(user):
     """GET /api/v1/billing/status: the plan, its caps, what the workspace uses of them and which limits it is over.
     Reads the local mirror of Stripe's state; it makes no Stripe call."""
-    workspace = get_or_create_workspace(user)
+    workspace = current_membership(user).workspace
     plan = workspace.plan if workspace.plan in PLANS else "free"
     caps = PLANS[plan]
     storage_used = workspace_storage_bytes(workspace)
@@ -570,7 +575,10 @@ def checkout(user, plan, interval="month"):
     if not price_id:
         return Answer(503, {"error": "billing_not_configured"})
 
-    workspace = get_or_create_workspace(user)
+    member = current_membership(user)
+    if not member.is_administrator:
+        return _administrator_only()
+    workspace = member.workspace
     try:
         customer_id = _ensure_customer(stripe_mod, workspace, user)
         # Stripe, not the local mirror, decides: the webhook for a checkout
@@ -635,7 +643,10 @@ def switch(user, plan, interval="month"):
     if not price_id:
         return Answer(503, {"error": "billing_not_configured"})
 
-    workspace = get_or_create_workspace(user)
+    member = current_membership(user)
+    if not member.is_administrator:
+        return _administrator_only()
+    workspace = member.workspace
     if not workspace.stripe_customer_id:
         return _no_subscription()
     try:
@@ -795,7 +806,10 @@ def portal(user):
     if err is not None:
         return err
 
-    workspace = get_or_create_workspace(user)
+    member = current_membership(user)
+    if not member.is_administrator:
+        return _administrator_only()
+    workspace = member.workspace
     if not workspace.stripe_customer_id:
         return Answer(400, {"error": "no_billing_account"})
 

@@ -15,7 +15,7 @@ from django.views.decorators.http import require_http_methods
 
 from drop_core import account
 from drop_core.key_caps import key_cap
-from drop_core.models import APIKey, get_or_create_workspace
+from drop_core.models import APIKey, current_membership
 from drop_core.plans import plan_name
 from pages.errors import not_found
 
@@ -72,7 +72,7 @@ def _refusal(user, answer):
     if code == "email_verification_required":
         return {"kind": "unverified", "message": message}
     if code == "key_limit_reached":
-        workspace = get_or_create_workspace(user)
+        workspace = current_membership(user).workspace
         cap = key_cap(workspace)
         if cap is not None:
             message = (
@@ -119,7 +119,7 @@ def keys(request):
 
 def _own_key(user, key_id):
     """The key of this person's workspace with this id, or None: another workspace's key and a missing one are the same."""
-    return APIKey.objects.filter(pk=key_id, workspace=get_or_create_workspace(user)).first()
+    return APIKey.objects.filter(pk=key_id, workspace=current_membership(user).workspace).first()
 
 
 @dashboard_view

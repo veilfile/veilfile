@@ -60,7 +60,7 @@ from .models import (
     EmailSendLog,
     EmailVerification,
     PendingUpload,
-    current_member,
+    current_membership,
     get_or_create_workspace,
 )
 from .plans import ANNUAL_PRICE_USD, PLANS, plan_name
@@ -136,15 +136,17 @@ def _request_workspace(request):
     auth = request.auth
     if auth is not None and getattr(auth, "workspace", None) is not None:
         return auth.workspace
-    return get_or_create_workspace(request.user)
+    return _request_member(request).workspace
 
 
 def _request_member(request):
     """The person behind the request: the credential's member, or the
-    signed-in user's membership."""
+    signed-in user's current membership. The answer stays on the request, so one request never sees two places."""
     if _has_credential(request.auth):
         return request.auth.acting_member
-    return current_member(_request_workspace(request), request.user)
+    if not hasattr(request, "_person_membership"):
+        request._person_membership = current_membership(request.user)
+    return request._person_membership
 
 
 def _upload_failure_response(exc):
@@ -883,7 +885,7 @@ def signup(request):
     if request.user.is_authenticated and paid:
         if request.method == "POST":
             return redirect(_paid_signup_checkout(request.user, plan, interval))
-        if get_or_create_workspace(request.user).stripe_subscription_id:
+        if current_membership(request.user).workspace.stripe_subscription_id:
             return redirect("/app/?billing=already_subscribed")
         return render(
             request,

@@ -697,12 +697,12 @@ class FileRevokeTests(FilesCase):
         self.assertEqual(again.status_code, 404, "backend/dashboard/views.py: a resent form finds no file, as a missing id does, and changes nothing")
 
     def test_only_the_workspace_the_list_reads_is_revoked_from(self):
-        # The list and account.revoke_artifact read get_or_create_workspace(user), the oldest workspace the user owns. The page agrees:
+        # The list and account.revoke_artifact read current_membership(user), the person's one current place. The page agrees:
         # a file of a second workspace is not found, for the confirmation page as for the revoke, so no page offers what no revoke does.
         second = Workspace.objects.create(owner=self.owner, name="second")
         artifact = self.make_file("elsewhere.txt", workspace=second)
         self.assertEqual(self.client.get(self.revoke_url(artifact)).status_code, 404,
-                         "backend/dashboard/views.py: _own_file looks in get_or_create_workspace(user), the workspace the account functions read")
+                         "backend/dashboard/views.py: _own_file looks in current_membership(user), the workspace the account functions read")
         self.assertEqual(self.client.post(self.revoke_url(artifact)).status_code, 404)
         self.assertTrue(Artifact.objects.filter(pk=artifact.pk).exists() and self.stored(artifact))
 
