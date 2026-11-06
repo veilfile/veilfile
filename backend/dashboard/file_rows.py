@@ -81,6 +81,9 @@ def file_rows(user, body, *, now=None, team=None):
     rows = []
     for item in body:
         expires = datetime.fromisoformat(item["expires_at"])
+        if details is not None and uuid.UUID(item["id"]) not in details:
+            # The person can no longer see this file (it became hidden while the page loaded), so the row is left out.
+            continue
         state = state_of(expires, item["id"] in held, now)
         row = {
             "id": item["id"],

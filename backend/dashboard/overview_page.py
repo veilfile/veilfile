@@ -57,7 +57,7 @@ def overview_context(request):
     status = None if member_view else read(billing_account.status, user, "billing status")
     verified = is_email_verified(user)
     record = EmailVerification.objects.filter(user=user).first()
-    own_keys = team["own"]["keys_used"] if member_view else (usage or {}).get("keys_used")
+    own_keys = team.get("own", {}).get("keys_used") if member_view else (usage or {}).get("keys_used")
     return {
         "team": team,
         "member_view": member_view,

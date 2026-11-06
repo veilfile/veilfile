@@ -30,7 +30,7 @@
 <p>{% if member_view %}Your team is on the <strong>{{ plan|plan_name }}</strong> plan.{% else %}You are on the <strong>{{ plan|plan_name }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a>{% endif %}</p>
 </section>
 {% endif %}
-{% if member_view %}<section aria-labelledby="overview-own">
+{% if member_view and team.own %}<section aria-labelledby="overview-own">
 <h2 id="overview-own">Your use</h2>
 <div class="meters">
 {% include "components/meter.html" with id="overview-own-uploads" label="Successful uploads this month" used=team.own.uploads_used cap=team.own.upload_allowance only %}

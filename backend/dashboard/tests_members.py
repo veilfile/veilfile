@@ -284,6 +284,12 @@ class InviteTests(MembersCase):
                 self.assertNotIn('class="form-errors"', html)
         self.assertEqual(Invitation.objects.count(), 0)
 
+    def test_an_address_too_long_after_folding_is_a_field_error(self):
+        response = self.client.post(URL, {"email": "\u3389" * 64 + "@example.com"})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('class="field__error"', response.content.decode())
+        self.assertEqual(Invitation.objects.count(), 0)
+
     def test_a_resent_form_does_not_invite_twice(self):
         self.client.post(URL, {"email": "grace@example.com"})
         response = self.client.post(URL, {"email": "grace@example.com"})
@@ -315,6 +321,16 @@ class CancelTests(MembersCase):
         self.assertEqual(response.redirect_chain, [(URL, 302)])
         self.assertIn("The invitation is canceled.", visible(response.content.decode()))
         self.assertEqual(teams.seats_in_use(self.workspace), before - 1)
+
+    def test_cancelling_works_with_csrf_enforced(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin.user)
+        page = client.get(self.url).content.decode()
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page).group(1)
+        response = client.post(self.url, {"csrfmiddlewaretoken": token})
+        self.assertEqual(response.status_code, 302)
+        self.invitation.refresh_from_db()
+        self.assertIsNotNone(self.invitation.revoked_at)
 
     def test_the_page_is_a_form_page_on_the_shell(self):
         form_pages.FormPagesAreOnTheShellTests.check(self, self.url)
@@ -491,6 +507,11 @@ class OverviewTests(TestCase):
         self.assertIn("Team You are the administrator. 1 seat is in use. Members", visible(html))
         self.assertIn('href="/app/members/"', html)
         self.assertIn("2 of 5 seats are in use.", visible(self.page(self.admin.user)))
+
+    def test_a_member_with_no_row_in_the_summary_gets_no_own_block(self):
+        with mock.patch("drop_core.teams.member_rows", return_value=[]):
+            html = self.as_member()
+        self.assertIn("You are on the team that ada@example.com administers", visible(html))
 
     def test_a_member_sees_the_team_their_allowances_and_the_totals(self):
         Membership.objects.filter(pk=self.member.pk).update(upload_allowance=7, storage_allowance_bytes=2 * 1024**3, key_allowance=3)

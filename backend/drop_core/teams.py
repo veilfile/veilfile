@@ -115,6 +115,19 @@ def find_invitation(raw_token):
     ).select_related("workspace").first()
 
 
+def joined_through(user, raw_token):
+    """Whether `user` is on the team of the accepted invitation behind this link. Says nothing else of the invitation or its
+    team, so a double click on Join can land on Overview and anyone else gets the answer a bad link gets."""
+    if not settings.TEAM_SEATS or not user.is_authenticated:
+        return False
+    workspace_id = Invitation.objects.filter(token_hash=_digest(raw_token), accepted_at__isnull=False).values_list(
+        "workspace_id", flat=True).first()
+    if workspace_id is None:
+        return False
+    row = current_membership(user)
+    return row is not None and row.workspace_id == workspace_id
+
+
 def _still_administrator(member):
     """Re-read the caller's row. Call it under the workspace lock."""
     return Membership.objects.filter(
@@ -176,6 +189,9 @@ def invite(member, email, *, build_url):
     email = fold_address(email.strip())
     if "\n" in email or "\r" in email:
         raise ValidationError("Enter a valid email address.")
+    if len(email) > 254:
+        # Folding can lengthen an address, and the column holds 254 characters.
+        raise ValidationError("Enter a valid email address.")
     validate_email(email)
     if not is_email_verified(member.user):
         raise InviteRefused("email_verification_required")
@@ -198,7 +214,9 @@ def invite(member, email, *, build_url):
             },
         )
         send_mail("You are invited to a team on Veilfile", body, settings.DEFAULT_FROM_EMAIL, [email])
-    except Exception:
+    except Exception as exc:
+        # The class name only: the message can hold a third party's address, and the URL holds the token.
+        logger.error("Invitation mail failed: %s", type(exc).__name__)
         # The row goes, so the seat and every limit it counted against are free again.
         Invitation.objects.filter(pk=invitation.pk).delete()
         raise InviteRefused("send_failed") from None
@@ -461,9 +479,10 @@ def team_summary(member):
         "seat_limit": seat_limit(workspace),
     }
     if not member.is_administrator:
-        own = next(row for row in member_rows(workspace) if row["person"].pk == member.pk)
-        summary["own"] = {key: own[key] for key in (
-            "uploads_used", "upload_allowance", "storage_used", "storage_allowance", "keys_used", "key_allowance")}
+        own = next((row for row in member_rows(workspace) if row["person"].pk == member.pk), None)
+        if own is not None:
+            summary["own"] = {key: own[key] for key in (
+                "uploads_used", "upload_allowance", "storage_used", "storage_allowance", "keys_used", "key_allowance")}
     return summary
 
 

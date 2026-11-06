@@ -383,9 +383,24 @@ class JoinTests(_DeviceTestBase):
     def test_accepting_twice_is_harmless(self):
         self.join()
         second = self.join()
-        self.assertEqual(second.status_code, 404)
-        self.assertIn(NOT_VALID, second.content.decode())
+        self.assertEqual((second.status_code, second["Location"]), (302, "/app/"))
         self.assertEqual(Membership.objects.filter(user=self.person, removed_at__isnull=True).count(), 1)
+
+    def test_a_double_click_lands_on_overview(self):
+        self.join()
+        second = self.join()
+        self.assertEqual((second.status_code, second["Location"]), (302, "/app/"), f"{VIEW}: a second accept must redirect")
+        page = self.web.get("/app/").content.decode()
+        self.assertEqual(page.count(JOINED), 1, f"{VIEW}: the notice must show once")
+
+    def test_someone_else_with_a_used_link_still_gets_not_valid(self):
+        self.join()
+        lin = make_user("lin")
+        client = Client()
+        client.force_login(lin)
+        response = self.join(client)
+        self.assertEqual(response.status_code, 404)
+        self.assertIn(NOT_VALID, response.content.decode())
 
     def test_a_person_ends_on_one_team_after_two_accepts(self):
         other, other_admin = team_of("lin")

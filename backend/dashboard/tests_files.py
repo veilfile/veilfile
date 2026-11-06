@@ -24,6 +24,7 @@ from django.utils import timezone
 from dashboard import views as dashboard_views
 from dashboard.file_rows import FLAG_WORDS, file_rows, flag_words, held_ids, state_of
 from drop_core import account, secrets
+from drop_core.file_access import file_details
 from drop_core.models import (
     FILE_VISIBILITY_ALWAYS_ONLY_ME,
     FILE_VISIBILITY_ALWAYS_TEAM,
@@ -976,6 +977,21 @@ class TeamFilesTests(FilesCase):
 
     def row(self, html, name):
         return next(row for row in rows_in(html) if row["cells"]["File"] == name)
+
+    def test_a_file_hidden_while_the_page_loads_is_left_out(self):
+        self.mine("kept.txt")
+        gone = self.mine("vanished.txt")
+        real = file_details
+
+        def without_one(member, ids):
+            return {key: value for key, value in real(member, ids).items() if key != gone.id}
+
+        with mock.patch("dashboard.file_rows.file_details", side_effect=without_one):
+            response = self.client.get(LIST)
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn("kept.txt", html)
+        self.assertNotIn("vanished.txt", html)
 
     def test_a_one_person_page_is_byte_identical_with_the_switch_on(self):
         solo = User.objects.create_user("solo", email="solo@example.com", password=PASSWORD)

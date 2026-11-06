@@ -172,6 +172,24 @@ class InviteTests(TestCase):
     def invite(self, email="grace@example.com", admin=None):
         return invite(admin or self.admin, email, build_url=build_url)
 
+    def test_an_address_that_grows_past_the_column_when_folded_is_refused(self):
+        typed = "\u3389" * 64 + "@example.com"
+        self.assertLessEqual(len(typed), 254, "the typed address must fit, so only folding makes it too long")
+        with self.assertRaises(ValidationError):
+            self.invite(typed)
+        self.assertEqual(Invitation.objects.count(), 0)
+
+    def test_a_failed_send_logs_its_class_and_nothing_else(self):
+        sent = []
+        with mock.patch("drop_core.teams.send_mail", side_effect=SMTPException("refused grace@example.com")):
+            with self.assertLogs("drop_core.teams", level="ERROR") as logged:
+                with self.assertRaises(InviteRefused):
+                    invite(self.admin, "grace@example.com", build_url=lambda raw: sent.append(raw) or build_url(raw))
+        line = "\n".join(logged.output)
+        self.assertIn("SMTPException", line)
+        self.assertNotIn("grace@example.com", line)
+        self.assertNotIn(sent[0], line)
+
     def test_an_invitation_is_mailed_and_only_its_hash_is_stored(self):
         row = self.invite()
         self.assertEqual(len(mail.outbox), 1)

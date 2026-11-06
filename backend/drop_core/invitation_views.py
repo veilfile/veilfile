@@ -9,13 +9,20 @@ from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
-from .teams import JoinRefused, accept_invitation, decline_invitation, find_invitation, team_seats_only, why_not_join
+from .teams import JoinRefused, accept_invitation, decline_invitation, find_invitation, joined_through, team_seats_only, why_not_join
 
 JOINED = "You have joined the team. Connect your agents again with veilfile login."
 
 
 def _invalid(request):
     return render(request, "registration/invitation_invalid.html", status=404)
+
+
+def _invalid_or_joined(request, token):
+    """The not-valid answer, except for a second click on Join by a person already on that team, who goes to Overview."""
+    if request.method == "POST" and request.POST.get("action") == "accept" and joined_through(request.user, token):
+        return redirect("app")
+    return _invalid(request)
 
 
 def _page(request, invitation, code=None, status=200):
@@ -43,7 +50,7 @@ def _answer(request, token):
         return _invalid(request)
     invitation = find_invitation(token)
     if invitation is None or invitation.workspace.suspended_at is not None:
-        return _invalid(request)
+        return _invalid_or_joined(request, token)
     if request.method != "POST":
         return _page(request, invitation)
     if request.POST.get("action") != "accept":
@@ -54,7 +61,7 @@ def _answer(request, token):
         accept_invitation(request.user, token)
     except JoinRefused as refused:
         if refused.code == "not_valid":
-            return _invalid(request)
+            return _invalid_or_joined(request, token)
         return _page(request, invitation, code=refused.code, status=400)
     messages.success(request, JOINED)
     return redirect("app")
