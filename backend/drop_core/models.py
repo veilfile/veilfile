@@ -3,6 +3,7 @@
 import hashlib
 import secrets as stdlib_secrets
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models, transaction
@@ -706,3 +707,36 @@ class LoopHeartbeat(models.Model):
 
     def __str__(self):
         return f"last loop pass {self.last_pass:%Y-%m-%d %H:%M}"
+
+
+class Invitation(models.Model):
+    """An administrator's invitation of one address to the team. While it waits and has not expired, it holds a seat.
+
+    Only the hash of the link's token is stored. An invitation ends in exactly one of accepted, declined or revoked;
+    an expired one is closed as revoked the next time its team invites."""
+
+    TTL = timedelta(days=7)
+
+    workspace = models.ForeignKey(Workspace, related_name="invitations", on_delete=models.CASCADE)
+    email = models.EmailField()
+    token_hash = models.CharField(max_length=64, unique=True)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, related_name="+", on_delete=models.SET_NULL
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    declined_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["workspace", "email"],
+                condition=models.Q(accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True),
+                name="invitation_one_waiting",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.email} to {self.workspace_id}"

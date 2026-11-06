@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 
-from .models import APIKey, Artifact, EmailVerification, MemberUsageCounter, Membership, UsageCounter, Workspace
+from .models import APIKey, Artifact, EmailVerification, Invitation, MemberUsageCounter, Membership, UsageCounter, Workspace
 
 
 @admin.register(Workspace)
@@ -87,3 +87,10 @@ class MembershipAdmin(admin.ModelAdmin):
 class MemberUsageCounterAdmin(admin.ModelAdmin):
     list_display = ("member", "year_month", "uploads")
     raw_id_fields = ("member",)
+
+
+@admin.register(Invitation)
+class InvitationAdmin(admin.ModelAdmin):
+    list_display = ("email", "workspace", "created_at", "expires_at", "accepted_at", "declined_at", "revoked_at")
+    exclude = ("token_hash",)
+    raw_id_fields = ("workspace", "invited_by")

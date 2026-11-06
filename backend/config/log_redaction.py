@@ -24,6 +24,7 @@ SECRET_PATH_PREFIXES = (
     "/api/v1/uploads/",  # one-time upload URL (MCP create_upload_url)
     "/accounts/verify-email/",  # email verification token
     "/accounts/reset/",  # password reset <uidb64>/<token>
+    "/accounts/invitations/",  # team invitation token
 )
 
 # Defense in depth for any other route: a long URL-safe segment containing an
