@@ -43,6 +43,14 @@ def _file_samples():
     )
 
 
+def _team_file_samples():
+    """The same files as a team's Files page shows them: some are the viewer's own, one is a teammate's, shared with the team."""
+    own = {"visibility": "only_me", "uploaded_by": "You", "can_revoke": True, "can_change_visibility": True}
+    shared = {**own, "visibility": "team"}
+    theirs = {"visibility": "team", "uploaded_by": "grace@example.com", "can_revoke": False, "can_change_visibility": False}
+    return [{**row, **extra} for row, extra in zip(_file_samples(), (own, shared, {**own, "can_change_visibility": False}, theirs, own))]
+
+
 def entries():
     return (
         Entry("mark", "This is the Let go mark on its own, in the current text color."),
@@ -63,11 +71,13 @@ def entries():
               {"id": "catalog-code", "code": BEGIN_SNIPPETS["claude_code"], "label": "Copy the Claude Code command"}),
         Entry("file_list", "The dashboard's Files section shows a stacked row for each file with its size, times, secret flags in words and state, "
                            "Copy and Revoke while its link works, and the way to older or newer files. It appears with five files (one that works, one with "
-                           "flags, an expired one, a held one and one with a 512-character name), with no files at all, and with no older ones.",
+                           "flags, an expired one, a held one and one with a 512-character name), with no files at all, with no older ones, and on a team, where it adds who can see each file and who uploaded it, and Share with the team or Make it only mine.",
               {"files": _file_samples(), "id_prefix": "catalog-files", "older_url": "/app/files/?cursor=1-2", "newest_url": "/app/files/"},
               within="app",
               states=({"files": [], "id_prefix": "catalog-files-empty", "older_url": "", "newest_url": ""},
-                      {"files": [], "id_prefix": "catalog-files-none-older", "older_url": "", "newest_url": "/app/files/"})),
+                      {"files": [], "id_prefix": "catalog-files-none-older", "older_url": "", "newest_url": "/app/files/"},
+                      {"files": _team_file_samples(), "id_prefix": "catalog-files-team", "older_url": "", "newest_url": "",
+                       "show_team": True, "csrf_token": "catalog-files-not-a-token"})),
         Entry("sections", "The top of a Docs page or a legal document shows links to its sections, and leaves them out when there are fewer than two.",
               {"sections": (Section(id="auth", title="Auth"), Section(id="upload", title="Upload"), Section(id="list", title="List"),
                             Section(id="revoke", title="Revoke"), Section(id="download", title="Download"),

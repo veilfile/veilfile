@@ -146,6 +146,7 @@ DASHBOARD_SECTIONS = {
     "app": "app",
     "app-files": "app-files",
     "app-file-revoke": "app-files",
+    "app-file-visibility": "app-files",
     "app-keys": "app-keys",
     "app-key-revoke": "app-keys",
     "app-apps": "app-apps",

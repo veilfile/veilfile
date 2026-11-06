@@ -3,13 +3,15 @@
 The JSON list is the API's, which clients read (drop_core/account.py), so its rows carry neither a state nor words for
 their flags. This module adds both, for the page alone, and leaves the API's answer as it is.
 """
+import uuid
 from datetime import datetime
 
+from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from drop_core.file_access import files_visible_to
-from drop_core.models import current_membership
+from drop_core.file_access import file_details, files_visible_to
+from drop_core.models import current_membership, has_other_members
 
 # The secret scanner's flag names (drop_core/secrets.py) in words. A test keeps this table as long as the scanner's list:
 # a new pattern there needs its words here, or the page would print the name with its underscores.
@@ -59,20 +61,28 @@ def held_ids(user, body):
     return {str(pk) for pk in held.values_list("id", flat=True)}
 
 
-def file_rows(user, body, *, now=None):
+def shows_team(user):
+    """Whether the Files page shows the team's columns: the switch is on and someone else is on the team. False before any query
+    while the switch is off."""
+    return settings.TEAM_SEATS and has_other_members(current_membership(user).workspace)
+
+
+def file_rows(user, body, *, now=None, team=None):
     """The list endpoint's rows (`body`) as the file_list component takes them.
 
     The endpoint lists expired rows until the sweep deletes them (and a revoke whose storage delete failed leaves one),
     and does not say which are held, so the state is worked out here (state_of). Only a live row carries its url: the
-    link of the others opens nothing, and the page has no use for a bearer link that does not work.
+    link of the others opens nothing, and the page has no use for a bearer link that does not work. On a team (`team`, which
+    is worked out when not given) each row also carries file_details' keys.
     """
     now = now or timezone.now()
     held = held_ids(user, body)
+    details = file_details(current_membership(user), [item["id"] for item in body]) if (shows_team(user) if team is None else team) else None
     rows = []
     for item in body:
         expires = datetime.fromisoformat(item["expires_at"])
         state = state_of(expires, item["id"] in held, now)
-        rows.append({
+        row = {
             "id": item["id"],
             "name": item["filename"],
             "size": item["size_bytes"],
@@ -81,5 +91,8 @@ def file_rows(user, body, *, now=None):
             "flags": flag_words(item["secret_flags"]),
             "state": state,
             "url": item["url"] if state == "live" else "",
-        })
+        }
+        if details is not None:
+            row.update(details[uuid.UUID(item["id"])])
+        rows.append(row)
     return rows

@@ -11,6 +11,7 @@ urlpatterns = [
     path("", views.overview, name="app"),
     path("files/", views.files, name="app-files"),
     path("files/<uuid:artifact_id>/revoke/", views.file_revoke, name="app-file-revoke"),
+    path("files/<uuid:artifact_id>/visibility/", views.file_visibility, name="app-file-visibility"),
     path("keys/", keys.keys, name="app-keys"),
     path("keys/<int:key_id>/revoke/", keys.key_revoke, name="app-key-revoke"),
     path("apps/", keys.apps, name="app-apps"),

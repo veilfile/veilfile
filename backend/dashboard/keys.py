@@ -9,13 +9,14 @@ A 200 from the Keys POST therefore always means a key was made and is on the pag
 """
 from datetime import datetime
 
+from django.conf import settings
 from django.contrib import messages
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
 from drop_core import account
 from drop_core.key_caps import key_cap
-from drop_core.models import APIKey, current_membership
+from drop_core.models import APIKey, current_membership, has_other_members
 from drop_core.plans import plan_name
 from pages.errors import not_found
 
@@ -34,11 +35,29 @@ def _when(value):
     return datetime.fromisoformat(value) if value else None
 
 
-def _key_rows(user):
-    return [
+def _shows_people(user):
+    """Whether the page names the person each key belongs to: the switch is on, someone else is on the team, and the viewer is its
+    administrator. False before any query while the switch is off."""
+    if not settings.TEAM_SEATS:
+        return False
+    member = current_membership(user)
+    return member.is_administrator and has_other_members(member.workspace)
+
+
+def _key_rows(user, people=False):
+    """The Keys list's rows. With `people`, each also has `person`, the address of whose it is, from one lookup for all the keys."""
+    items = account.list_keys(user, everyone=True).body
+    owners = {}
+    if people:
+        owners = dict(APIKey.objects.filter(pk__in=[item["id"] for item in items]).values_list("pk", "member__user__email"))
+    rows = [
         {**item, "created_at": _when(item["created_at"]), "last_used_at": _when(item["last_used_at"])}
-        for item in account.list_keys(user, everyone=True).body
+        for item in items
     ]
+    if people:
+        for row in rows:
+            row["person"] = owners.get(row["id"]) or ""
+    return rows
 
 
 def _active_key_count(user):
@@ -56,7 +75,8 @@ def _active_key_count(user):
 def _keys_page(request, form, status=200, refusal=None):
     """The Keys page with a fresh form token. A page that is the answer to a refused POST has the refusal's status and says why; none of them
     holds a key."""
-    context = {"rows": _key_rows(request.user), "form": form, "token": issue_key_token(request.session), "refusal": refusal,
+    people = _shows_people(request.user)
+    context = {"rows": _key_rows(request.user, people), "show_people": people, "form": form, "token": issue_key_token(request.session), "refusal": refusal,
                "active_key_count": _active_key_count(request.user)}
     response = render(request, "dashboard/keys.html", context, status=status)
     response["Cache-Control"] = "no-store"  # the form carries a one-time token, and Back must not show a spent one
@@ -150,7 +170,10 @@ def key_revoke(request, key_id):
             return not_found(request)
         messages.success(request, "The key is revoked.")
         return redirect("app-keys")
-    return render(request, "dashboard/key_revoke.html", {"key": key})
+    person = ""
+    if _shows_people(request.user):
+        person = APIKey.objects.values_list("member__user__email", flat=True).get(pk=key.pk) or ""
+    return render(request, "dashboard/key_revoke.html", {"key": key, "person": person})
 
 
 def _app_rows(user):

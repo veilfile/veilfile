@@ -17,14 +17,25 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.template.loader import render_to_string
-from django.test import Client, SimpleTestCase, TestCase
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
 from dashboard import views as dashboard_views
 from dashboard.file_rows import FLAG_WORDS, file_rows, flag_words, held_ids, state_of
 from drop_core import account, secrets
-from drop_core.models import Artifact, Workspace, administrator_of, get_or_create_workspace
+from drop_core.models import (
+    FILE_VISIBILITY_ALWAYS_ONLY_ME,
+    FILE_VISIBILITY_ALWAYS_TEAM,
+    VISIBILITY_ONLY_ME,
+    VISIBILITY_TEAM,
+    Artifact,
+    Membership,
+    Workspace,
+    administrator_of,
+    get_or_create_workspace,
+)
+from drop_core.tests_members import second_member
 from drop_core.storage import LocalStorage
 from pages import catalog, tests_forms_on_the_shell
 from pages.tests_chapters import BANNED
@@ -925,7 +936,7 @@ class FilesConventionTests(SimpleTestCase):
         self.assertEqual(entry.within, "app",
                          "backend/pages/catalog.py: pass within=\"app\" to the file_list Entry; the rows stack by a container query on .app, which the catalog draws only when it wraps the sample")
         samples = (entry.context, *entry.states)
-        self.assertEqual(len(samples), 3, "backend/pages/catalog.py: the file_list Entry shows the list, no files at all, and no older files")
+        self.assertEqual(len(samples), 4, "backend/pages/catalog.py: the file_list Entry shows the list, no files at all, no older files, and a team's list")
         listed = entry.context["files"]
         self.assertEqual(sorted({row["state"] for row in listed}), ["expired", "held", "live"])
         self.assertTrue(any(len(row["name"]) == 512 for row in listed), "a 512-character name is in the catalog, where the browser checks look at it at 320")
@@ -934,3 +945,174 @@ class FilesConventionTests(SimpleTestCase):
         self.assertEqual(len(prefixes), len(set(prefixes)), "each state needs an id_prefix of its own, or the catalog repeats ids")
         for sample_context in samples:
             render_to_string("components/file_list.html", sample_context)
+
+
+VISIBILITY_URL = "/app/files/{}/visibility/"
+
+
+@override_settings(TEAM_SEATS=True)
+class TeamFilesTests(FilesCase):
+    """The Files page on a team: who uploaded each file, who can see it, and the buttons for sharing."""
+    longMessage = False
+
+    def setUp(self):
+        super().setUp()
+        self.grace = second_member(self.workspace, "grace")
+        self.ada = administrator_of(self.workspace)
+
+    def theirs(self, name, visibility=VISIBILITY_ONLY_ME, *, member=None, **fields):
+        fields.setdefault("expires_at", timezone.now() + timedelta(days=3))
+        return Artifact.objects.create(workspace=self.workspace, member=member or self.grace, filename=name, size_bytes=5,
+                                       visibility=visibility, **fields)
+
+    def mine(self, name, visibility=VISIBILITY_ONLY_ME, **fields):
+        return self.theirs(name, visibility, member=self.ada, **fields)
+
+    def as_member(self):
+        self.client.force_login(self.grace.user)
+
+    def page(self):
+        return self.client.get(LIST).content.decode()
+
+    def row(self, html, name):
+        return next(row for row in rows_in(html) if row["cells"]["File"] == name)
+
+    def test_a_one_person_page_is_byte_identical_with_the_switch_on(self):
+        solo = User.objects.create_user("solo", email="solo@example.com", password=PASSWORD)
+        workspace = get_or_create_workspace(solo)
+        Artifact.objects.create(workspace=workspace, member=administrator_of(workspace), filename="a.txt", size_bytes=5,
+                                expires_at=timezone.now() + timedelta(days=3))
+        self.client.force_login(solo)
+        on = without_tokens(self.client.get(LIST).content.decode())
+        with override_settings(TEAM_SEATS=False):
+            off = without_tokens(self.client.get(LIST).content.decode())
+        self.assertEqual(on, off, "backend/templates/components/file_list.html: a page for one person is the same with the switch on")
+
+    def test_on_a_team_it_has_the_two_columns_and_the_caption(self):
+        self.mine("a.txt")
+        html = self.page()
+        self.assertIn("<caption>Your files and your team's, newest first</caption>", html)
+        for label in ("Visible to", "Uploaded by"):
+            self.assertIn(f'<th scope="col">{label}</th>', html)
+        row = self.row(html, "a.txt")
+        self.assertEqual((row["cells"]["Visible to"], row["cells"]["Uploaded by"]), ("Only you", "You"))
+
+    def test_a_teammates_shared_file_shows_their_address_and_no_revoke(self):
+        self.theirs("shared.txt", VISIBILITY_TEAM)
+        other = second_member(self.workspace, "lin")
+        self.client.force_login(other.user)
+        row = self.row(self.page(), "shared.txt")
+        self.assertEqual((row["cells"]["Visible to"], row["cells"]["Uploaded by"]), ("The team", "grace@example.com"))
+        self.assertNotIn("Revoke", row["cells"]["Actions"])
+        self.assertNotIn("Share with the team", row["cells"]["Actions"])
+        self.assertIn("Copy", row["cells"]["Actions"])
+
+    def test_the_administrator_gets_revoke_on_a_shared_file(self):
+        self.theirs("shared.txt", VISIBILITY_TEAM)
+        row = self.row(self.page(), "shared.txt")
+        self.assertIn("Revoke", row["cells"]["Actions"])
+        self.assertNotIn("Share with the team", row["cells"]["Actions"], "the administrator does not change a member's file")
+
+    def test_a_teammates_only_me_file_is_not_there(self):
+        self.theirs("secret.txt")
+        self.assertNotIn("secret.txt", self.page())
+
+    def test_a_file_left_behind_is_there_and_cannot_change_visibility(self):
+        old = Membership.objects.create(workspace=get_or_create_workspace(User.objects.create_user("old", email="old@example.com")),
+                                        user=self.grace.user, role=Membership.MEMBER, removed_at=timezone.now())
+        Artifact.objects.create(workspace=old.workspace, member=old, filename="left.txt", size_bytes=5,
+                                expires_at=timezone.now() + timedelta(days=3))
+        self.as_member()
+        row = self.row(self.page(), "left.txt")
+        self.assertEqual(row["cells"]["Uploaded by"], "You")
+        self.assertIn("Revoke", row["cells"]["Actions"])
+        self.assertNotIn("Share with the team", row["cells"]["Actions"])
+        self.assertNotIn("Make it only mine", row["cells"]["Actions"])
+
+    def test_sharing_and_unsharing_work_for_the_uploader(self):
+        artifact = self.theirs("a.txt")
+        self.as_member()
+        self.assertIn("Share with the team", self.row(self.page(), "a.txt")["cells"]["Actions"])
+        response = self.client.post(VISIBILITY_URL.format(artifact.id), {"visibility": VISIBILITY_TEAM}, follow=True)
+        self.assertRedirects(response, LIST)
+        self.assertIn("Your team can now see this file.", notices(response.content.decode()))
+        artifact.refresh_from_db()
+        self.assertEqual(artifact.visibility, VISIBILITY_TEAM)
+        row = self.row(response.content.decode(), "a.txt")
+        self.assertEqual(row["cells"]["Visible to"], "The team")
+        self.assertIn("Make it only mine", row["cells"]["Actions"])
+        response = self.client.post(VISIBILITY_URL.format(artifact.id), {"visibility": VISIBILITY_ONLY_ME}, follow=True)
+        self.assertIn("Only you can see this file now.", notices(response.content.decode()))
+        artifact.refresh_from_db()
+        self.assertEqual(artifact.visibility, VISIBILITY_ONLY_ME)
+
+    def test_only_the_uploader_can_change_it(self):
+        for visibility in (VISIBILITY_ONLY_ME, VISIBILITY_TEAM):
+            artifact = self.theirs(f"{visibility}.txt", visibility)
+            target = VISIBILITY_TEAM if visibility == VISIBILITY_ONLY_ME else VISIBILITY_ONLY_ME
+            response = self.client.post(VISIBILITY_URL.format(artifact.id), {"visibility": target})
+            self.assertEqual(response.status_code, 404, visibility)
+            artifact.refresh_from_db()
+            self.assertEqual(artifact.visibility, visibility)
+
+    def test_it_cannot_change_when_the_team_decides(self):
+        artifact = self.theirs("a.txt")
+        self.as_member()
+        for setting in (FILE_VISIBILITY_ALWAYS_TEAM, FILE_VISIBILITY_ALWAYS_ONLY_ME):
+            Workspace.objects.filter(pk=self.workspace.pk).update(file_visibility=setting)
+            actions = self.row(self.page(), "a.txt")["cells"]["Actions"]
+            self.assertNotIn("Share with the team", actions, setting)
+            self.assertNotIn("Make it only mine", actions, setting)
+            self.client.post(VISIBILITY_URL.format(artifact.id), {"visibility": VISIBILITY_TEAM})
+            artifact.refresh_from_db()
+            self.assertEqual(artifact.visibility, VISIBILITY_ONLY_ME, setting)
+
+    def test_an_expired_or_held_file_offers_no_change(self):
+        expired = self.theirs("old.txt", expires_at=timezone.now() - timedelta(days=1))
+        held = self.theirs("held.txt", safety_status="held")
+        self.as_member()
+        html = self.page()
+        for name in ("old.txt", "held.txt"):
+            self.assertNotIn("Share with the team", self.row(html, name)["cells"]["Actions"], name)
+        for artifact in (expired, held):
+            self.client.post(VISIBILITY_URL.format(artifact.id), {"visibility": VISIBILITY_TEAM})
+            artifact.refresh_from_db()
+            self.assertEqual(artifact.visibility, VISIBILITY_ONLY_ME)
+
+    def test_sharing_works_with_csrf_enforced(self):
+        artifact = self.theirs("a.txt")
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.grace.user)
+        html = client.get(LIST).content.decode()
+        start = html.index(f'action="{VISIBILITY_URL.format(artifact.id)}"')
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', html[start:html.index("</form>", start)]).group(1)
+        response = client.post(VISIBILITY_URL.format(artifact.id), {"visibility": VISIBILITY_TEAM, "csrfmiddlewaretoken": token})
+        self.assertEqual(response.status_code, 302, "backend/templates/components/file_list.html: the form carries {% csrf_token %}")
+        artifact.refresh_from_db()
+        self.assertEqual(artifact.visibility, VISIBILITY_TEAM)
+
+    def test_a_post_without_its_token_is_form_not_sent(self):
+        artifact = self.theirs("a.txt")
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.grace.user)
+        with self.assertLogs("django.security.csrf", level="WARNING"):
+            response = client.post(VISIBILITY_URL.format(artifact.id), {"visibility": VISIBILITY_TEAM})
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Form not sent", response.content.decode())
+        artifact.refresh_from_db()
+        self.assertEqual(artifact.visibility, VISIBILITY_ONLY_ME)
+
+    def test_the_route_is_the_shells_404_with_the_switch_off(self):
+        artifact = self.theirs("a.txt")
+        self.as_member()
+        with override_settings(TEAM_SEATS=False):
+            for method in (self.client.get, self.client.post):
+                self.assertEqual(method(VISIBILITY_URL.format(artifact.id)).status_code, 404)
+            self.assertEqual(Client().get(VISIBILITY_URL.format(artifact.id)).status_code, 404)
+        artifact.refresh_from_db()
+        self.assertEqual(artifact.visibility, VISIBILITY_ONLY_ME)
+
+    def test_a_get_is_not_allowed(self):
+        artifact = self.theirs("a.txt")
+        self.as_member()
+        self.assertEqual(self.client.get(VISIBILITY_URL.format(artifact.id)).status_code, 405)

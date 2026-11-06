@@ -18,8 +18,10 @@ from django.utils import timezone
 
 from dashboard.file_rows import held_ids
 from . import account
-from .file_access import NotYourFile, file_to_revoke, files_visible_to
+from .file_access import NotYourFile, file_details, file_to_revoke, files_visible_to, set_visibility
 from .models import (
+    FILE_VISIBILITY_ALWAYS_ONLY_ME,
+    FILE_VISIBILITY_ALWAYS_TEAM,
     VISIBILITY_ONLY_ME,
     VISIBILITY_TEAM,
     APIKey,
@@ -112,6 +114,41 @@ class PrivacyMatrixTests(TestCase):
             self.assertEqual((response.status_code, response.content), (gone.status_code, gone.content))
             self.assertNotIn(artifact.filename, response.content.decode())
         self.assertTrue(Artifact.objects.filter(pk=artifact.pk).exists())
+
+    def test_only_the_uploader_can_set_visibility(self):
+        for viewer in self.people:
+            for name in ("ada-private", "ada-shared", "grace-private", "grace-shared", "lin-private", "lin-shared"):
+                with self.subTest(viewer=viewer, file=name):
+                    artifact = self.fresh_files()[name]
+                    target = VISIBILITY_ONLY_ME if artifact.visibility == VISIBILITY_TEAM else VISIBILITY_TEAM
+                    changed = set_visibility(self.people[viewer], artifact.id, target)
+                    artifact.refresh_from_db()
+                    mine = name.startswith(viewer)
+                    self.assertEqual((changed, artifact.visibility == target), (mine, mine))
+
+    def test_nothing_changes_when_the_team_decides_or_the_file_is_not_live(self):
+        for setting in (FILE_VISIBILITY_ALWAYS_TEAM, FILE_VISIBILITY_ALWAYS_ONLY_ME):
+            Workspace.objects.filter(pk=self.workspace.pk).update(file_visibility=setting)
+            artifact = self.fresh_files()["grace-private"]
+            self.assertFalse(set_visibility(self.people["grace"], artifact.id, VISIBILITY_TEAM), setting)
+        Workspace.objects.filter(pk=self.workspace.pk).update(file_visibility="members_choose")
+        artifact = self.fresh_files()["grace-private"]
+        self.assertFalse(set_visibility(self.people["grace"], artifact.id, "everyone"))
+        Artifact.objects.filter(pk=artifact.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.assertFalse(set_visibility(self.people["grace"], artifact.id, VISIBILITY_TEAM))
+        Artifact.objects.filter(pk=artifact.pk).update(expires_at=timezone.now() + timedelta(days=1), safety_status="held")
+        self.assertFalse(set_visibility(self.people["grace"], artifact.id, VISIBILITY_TEAM))
+
+    def test_details_say_who_uploaded_and_what_may_be_done(self):
+        files = self.fresh_files()
+        ids = [artifact.id for artifact in files.values() if artifact.member_id != self.people["lin"].pk or artifact.visibility == VISIBILITY_TEAM]
+        details = file_details(self.people["grace"], ids)
+        mine, theirs = details[files["grace-private"].id], details[files["ada-shared"].id]
+        self.assertEqual((mine["uploaded_by"], mine["visibility"], mine["can_revoke"], mine["can_change_visibility"]), ("You", VISIBILITY_ONLY_ME, True, True))
+        self.assertEqual((theirs["uploaded_by"], theirs["visibility"], theirs["can_revoke"], theirs["can_change_visibility"]), ("ada@example.com", VISIBILITY_TEAM, False, False))
+        admin = file_details(self.people["ada"], [files["grace-shared"].id])[files["grace-shared"].id]
+        self.assertEqual((admin["uploaded_by"], admin["can_revoke"], admin["can_change_visibility"]), ("grace@example.com", True, False))
+        self.assertNotIn(files["grace-private"].id, file_details(self.people["ada"], [files["grace-private"].id]))
 
     def test_rest_list_with_a_key(self):
         for viewer, _, seen, _, artifact in self.rows():

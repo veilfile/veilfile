@@ -355,8 +355,8 @@ The dashboard uses the same shell and follows the Motion setting. It is for sign
 | Section | Address | Contents |
 |---|---|---|
 | Overview | `/app/` | In this order: the line a return from Stripe leaves (`?billing=`), a prompt to verify the email, anything over a limit (keys, storage, how long links last, and uploads this month), the plan, the meters (uploads this month, storage, API keys, how long links last) and the account (the email and whether it is verified, Change email, Change password). |
-| Files | `/app/files/` | Each file's name, size, when it was added and when it expires, secret flags (in words) and state (live, expired or held), 50 to a page, newest first, with Copy and Revoke while its link works. Paginated on the server (`?cursor=`). |
-| Keys | `/app/keys/` | Each key's name, prefix, creation, last use and state (a revoked key stays listed), and a form to create one: the raw key is shown once, with Copy and a clear warning. Revoke. |
+| Files | `/app/files/` | Each file's name, size, when it was added and when it expires, secret flags (in words) and state (live, expired or held), 50 to a page, newest first, with Copy and Revoke while its link works. Paginated on the server (`?cursor=`). On a team (team seats switch on, someone else on the team) the list adds "Visible to" and "Uploaded by", Revoke shows only on files the person may revoke, and the uploader gets "Share with the team" or "Make it only mine" on a live file while the administrator lets members choose. |
+| Keys | `/app/keys/` | Each key's name, prefix, creation, last use and state (a revoked key stays listed), and a form to create one: the raw key is shown once, with Copy and a clear warning. Revoke. On a team, the administrator's list adds a "Person" column, and the revoke page says whose the key is. |
 | Connected apps | `/app/apps/` | OAuth grants: the app's name, the host it returns to and when it was last authorized. Disconnect. |
 | Billing | `/app/billing/` | The plan and the status of its subscription in the customer's words (Active, Payment overdue; never Stripe's codes), the status warnings, anything over a limit, Upgrade (to Stripe Checkout), Switch plan (behind a confirmation page), Manage billing (the Stripe portal, for a workspace that has a Stripe customer) and a switch that is waiting for payment. |
 
@@ -367,6 +367,7 @@ Every address, with the name the menu and the tests know it by. The five section
 | `app` | `/app/` | GET | Overview |
 | `app-files` | `/app/files/` | GET | Files (`?cursor=`) |
 | `app-file-revoke` | `/app/files/<uuid:artifact_id>/revoke/` | GET, POST | Confirm, then revoke |
+| `app-file-visibility` | `/app/files/<uuid:artifact_id>/visibility/` | POST | Share one's own file with the team, or make it only one's own (team seats, behind a switch) |
 | `app-keys` | `/app/keys/` | GET, POST | Keys; the POST creates a key and answers with it |
 | `app-key-revoke` | `/app/keys/<int:key_id>/revoke/` | GET, POST | Confirm, then revoke |
 | `app-apps` | `/app/apps/` | GET | Connected apps |

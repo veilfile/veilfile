@@ -21,13 +21,13 @@ from django.views.decorators.http import require_http_methods, require_safe
 from .overview_page import overview_context
 
 from dashboard import billing_page
-from dashboard.file_rows import file_rows, state_of
+from dashboard.file_rows import file_rows, shows_team, state_of
 from drop_billing import account as billing_account
 from drop_core import account
 from drop_core.account import Answer
-from drop_core.file_access import NotYourFile, file_to_revoke
-from drop_core.models import current_membership
-from drop_core.teams import is_plain_member
+from drop_core.file_access import NotYourFile, file_to_revoke, set_visibility
+from drop_core.models import VISIBILITY_TEAM, current_membership
+from drop_core.teams import is_plain_member, team_seats_only
 from pages.errors import not_found
 
 
@@ -88,8 +88,10 @@ def files(request):
         answer = account.list_artifacts(request.user, limit=FILES_PER_PAGE)
     here = reverse("app-files")
     next_cursor = answer.headers.get("X-Next-Cursor")
+    team = shows_team(request.user)
     return render(request, "dashboard/files.html", {
-        "files": file_rows(request.user, answer.body),
+        "files": file_rows(request.user, answer.body, team=team),
+        "show_team": team,
         "older_url": f"{here}?{urlencode({'cursor': next_cursor})}" if next_cursor else "",
         "newest_url": here if cursor else "",
         "bad_cursor": bad_cursor,
@@ -134,6 +136,23 @@ def file_revoke(request, artifact_id):
         messages.success(request, REVOKED)
     else:
         messages.warning(request, REVOKED_PENDING)
+    return redirect("app-files")
+
+
+SHARED = "Your team can now see this file."
+UNSHARED = "Only you can see this file now."
+
+
+@team_seats_only
+@dashboard_view
+@require_http_methods(["POST"])
+def file_visibility(request, artifact_id):
+    """Share one of the person's own files with the team, or make it only theirs again, and go back to Files. Whatever refuses it
+    (another person's file, a team that decides for itself, a file that is not live, a missing one) is the shell's 404."""
+    visibility = request.POST.get("visibility", "")
+    if not set_visibility(current_membership(request.user), artifact_id, visibility):
+        raise Http404("No such file.")
+    messages.success(request, SHARED if visibility == VISIBILITY_TEAM else UNSHARED)
     return redirect("app-files")
 
 
