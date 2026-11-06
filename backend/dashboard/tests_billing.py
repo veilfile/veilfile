@@ -22,7 +22,7 @@ import stripe
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.messages import get_messages
-from django.test import Client, SimpleTestCase
+from django.test import Client, SimpleTestCase, override_settings
 from django.urls import resolve, reverse
 from django.utils import timezone
 
@@ -32,8 +32,9 @@ from drop_billing.account import ALREADY_SUBSCRIBED_MESSAGES
 from drop_billing.models import Subscription
 from drop_billing.tests_fix_billing import ENV, FixBillingBase, make_sub, missing_customer_error, sub_list
 from drop_core.account import Answer
-from drop_core.models import APIKey, Artifact, Workspace, administrator_of
+from drop_core.models import APIKey, Artifact, Membership, Workspace, administrator_of
 from drop_core.plans import ANNUAL_PRICE_USD, PLANS, plan_name
+from drop_core.tests_members import second_member
 from pages import registry
 from pages.tests_chapters import BANNED, visible_text
 
@@ -1144,3 +1145,71 @@ class WordsTests(SimpleTestCase):
             stripped = re.sub(r"{#.*?#}", "", text) if where.endswith(".html") else text
             with self.subTest(file=where):
                 self.assertIsNone(typed.search(stripped), f"{where}: a price or a cap is typed here. Take it from drop_core/plans.py (AGENTS.md, Pricing changes)")
+
+
+MEMBER_SENTENCE = "Your administrator manages billing for this team."
+
+
+@override_settings(TEAM_SEATS=True)
+class MemberBillingPageTests(BillingCase):
+    """A plain member of a team reads who manages billing and changes nothing."""
+
+    def setUp(self):
+        super().setUp()
+        self.set_billing("team", customer="cus_A", sub_id="sub_A")
+        self.person = second_member(self.ws, "lin")
+        self.member_client = Client()
+        self.member_client.force_login(self.person.user)
+
+    def test_a_member_reads_who_manages_it_and_gets_no_buttons(self):
+        response = self.member_client.get(self.billing)
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn(MEMBER_SENTENCE, visible_text(html), f"{PAGE}: a member reads who manages billing")
+        self.assertEqual((forms_in(html), links_in(html)), ([], []), f"{PAGE}: and gets no button or link in main")
+
+    def member_posts(self, path):
+        calls = self.no_stripe()
+        with self.assertLogs("drop_billing", level="WARNING") as captured:
+            response = self.member_client.post(path, {"plan": "scale"}, follow=True)
+        self.assertEqual(response.redirect_chain, [(self.billing, 302)])
+        self.assertEqual([record.levelname for record in captured.records], ["WARNING"], f"{VIEWS}: a member's refusal is explained, so it logs no ERROR")
+        self.assertEqual(self.said(response), [MEMBER_SENTENCE])
+        self.assertIn(MEMBER_SENTENCE, visible_text(response.content.decode()))
+        self.assertNoStripe(calls, "a member reached Stripe")
+
+    def test_each_post_answers_with_that_sentence_and_logs_a_warning(self):
+        for configured in (True, False):
+            for path in (self.checkout, self.portal, self.switch_url("scale")):
+                with self.subTest(path=path, configured=configured):
+                    if configured:
+                        self.member_posts(path)
+                    else:
+                        with mock.patch.dict(os.environ):
+                            os.environ.pop("STRIPE_SECRET_KEY")
+                            self.member_posts(path)
+
+    def test_the_switch_confirmation_says_the_same_to_a_member(self):
+        response = self.member_client.get(self.switch_url("scale"), follow=True)
+        self.assertEqual(response.redirect_chain, [(self.billing, 302)])
+        self.assertIn(MEMBER_SENTENCE, visible_text(response.content.decode()))
+
+    def test_the_paid_signup_path_sends_a_member_to_billing(self):
+        calls = self.no_stripe()
+        with self.assertNoLogs("", level="ERROR"):
+            for method in ("get", "post"):
+                with self.subTest(method=method):
+                    response = getattr(self.member_client, method)("/accounts/signup/?plan=team")
+                    self.assertSentTo(response, self.billing, "backend/drop_core/views.py: a member choosing a paid plan goes to Billing")
+        self.assertNoStripe(calls, "a checkout was started")
+
+    def test_an_administrators_page_is_unchanged(self):
+        def page():
+            html = self.client.get(self.billing).content.decode()
+            return re.sub(r'(name="csrfmiddlewaretoken" value=")[^"]*', r"\1CSRF", html)
+
+        on = page()
+        with override_settings(TEAM_SEATS=False):
+            off = page()
+        self.assertEqual(on, off, f"{PAGE}: an administrator sees the page they saw before")
+        self.assertNotIn(MEMBER_SENTENCE, on)

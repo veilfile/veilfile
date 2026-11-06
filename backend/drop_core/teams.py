@@ -435,3 +435,52 @@ def set_file_visibility_setting(administrator, value):
             return False
         Workspace.objects.filter(pk=administrator.workspace_id).update(file_visibility=value)
         return True
+
+
+def team_summary(member):
+    """What Overview says of the team the person is on, or None: the switch is off, or the person administers a plan with one seat
+    and nobody else. Keys: is_administrator, admin_email (from the administrator's own row), people, seats_used and seat_limit, and,
+    for a member, `own` with their use against their allowance. None before any query while the switch is off."""
+    if not settings.TEAM_SEATS:
+        return None
+    workspace = member.workspace
+    if member.is_administrator and not has_team_features(workspace):
+        return None
+    administrator = (
+        member
+        if member.is_administrator
+        else Membership.objects.filter(workspace=workspace, role=Membership.ADMINISTRATOR, removed_at__isnull=True)
+        .select_related("user")
+        .first()
+    )
+    summary = {
+        "is_administrator": member.is_administrator,
+        "admin_email": administrator.user.email if administrator is not None else "",
+        "people": Membership.objects.filter(workspace=workspace, removed_at__isnull=True).count(),
+        "seats_used": seats_in_use(workspace),
+        "seat_limit": seat_limit(workspace),
+    }
+    if not member.is_administrator:
+        own = next(row for row in member_rows(workspace) if row["person"].pk == member.pk)
+        summary["own"] = {key: own[key] for key in (
+            "uploads_used", "upload_allowance", "storage_used", "storage_allowance", "keys_used", "key_allowance")}
+    return summary
+
+
+def waiting_invitation_for(user):
+    """Whether a verified person's address has an invitation that is waiting and not expired. False before any query while the
+    switch is off, and for an address that is not verified, so that the page tells a stranger nothing."""
+    if not settings.TEAM_SEATS or not is_email_verified(user) or not user.email:
+        return False
+    if not same_address(user.email_verification.email, user.email):
+        return False
+    waiting = Invitation.objects.filter(
+        email__iexact=fold_address(user.email), accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True,
+        expires_at__gt=timezone.now(),
+    )
+    return waiting.exists()
+
+
+def is_plain_member(user):
+    """Whether the person is a member of someone else's team, not its administrator. False while the switch is off."""
+    return settings.TEAM_SEATS and not current_membership(user).is_administrator

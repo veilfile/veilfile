@@ -452,3 +452,111 @@ class HelperTests(MembersCase):
         Membership.objects.filter(pk=self.admin.pk).update(removed_at=timezone.now())
         self.assertFalse(teams.set_allowances(self.admin, member.pk, uploads=1, storage_bytes=None, keys=None))
         self.assertFalse(teams.set_file_visibility_setting(self.admin, FILE_VISIBILITY_ALWAYS_TEAM))
+
+
+@override_settings(TEAM_SEATS=True)
+class OverviewTests(TestCase):
+    """Overview for a person on a team (spec 4.8, team seats). The switch-off bytes are SwitchOffTests'."""
+
+    longMessage = False
+
+    def setUp(self):
+        self.workspace, self.admin = team_of("ada")
+        self.member = second_member(self.workspace, "lin")
+
+    def page(self, user, **query):
+        client = Client()
+        client.force_login(user)
+        response = client.get("/app/", query)
+        self.assertEqual(response.status_code, 200)
+        return re.sub(r'(name="csrfmiddlewaretoken" value=")[^"]*', r"\1CSRF", response.content.decode())
+
+    def as_member(self):
+        return self.page(self.member.user)
+
+    def test_a_free_one_person_account_sees_no_change_with_the_switch_on(self):
+        _, free = team_of("kay", plan=Workspace.PLAN_FREE)
+        on = self.page(free.user)
+        with override_settings(TEAM_SEATS=False):
+            off = self.page(free.user)
+        self.assertEqual(on, off, "backend/dashboard/overview_page.py: a Free one-person account sees the page it saw before")
+
+    def test_a_paid_administrator_gets_the_team_section_and_a_link(self):
+        _, alone = team_of("sam", plan=Workspace.PLAN_TEAM)
+        html = self.page(alone.user)
+        self.assertIn("Team You are the administrator. 1 of 5 seats is in use. Members", visible(html))
+        self.assertIn('href="/app/members/"', html)
+        _, scale = team_of("sky", plan="scale")
+        html = self.page(scale.user)
+        self.assertIn("Team You are the administrator. 1 seat is in use. Members", visible(html))
+        self.assertIn('href="/app/members/"', html)
+        self.assertIn("2 of 5 seats are in use.", visible(self.page(self.admin.user)))
+
+    def test_a_member_sees_the_team_their_allowances_and_the_totals(self):
+        Membership.objects.filter(pk=self.member.pk).update(upload_allowance=7, storage_allowance_bytes=2 * 1024**3, key_allowance=3)
+        html = self.as_member()
+        text = visible(html)
+        self.assertIn("You are on the team that ada@example.com administers, which has 2 people.", text)
+        self.assertIn("Your use", text)
+        self.assertIn("The team's use", text)
+        for meter, figure in (("overview-own-uploads", "0 of 7"), ("overview-own-storage", "0 B of 2.0 GB"), ("overview-own-keys", "0 of 3")):
+            with self.subTest(meter=meter):
+                self.assertIn(f'id="{meter}_figures"', html)
+        self.assertIn('id="overview-own-uploads_figures">0 of 7', html)
+        self.assertIn('id="overview-own-keys_figures">0 of 3', html)
+        self.assertIn('id="overview-uploads_figures"', html, "the team's totals are still drawn")
+
+    def test_a_member_with_no_allowance_sees_their_use_without_a_cap(self):
+        live_file(self.member, "mine.txt", size=2048)
+        APIKey.create_key(self.workspace, "agent", member=self.member)
+        html = self.as_member()
+        self.assertIn('id="overview-own-keys_figures">1</p>', html)
+        self.assertIn('id="overview-own-uploads_figures">0</p>', html)
+        self.assertNotIn("overview-own-keys_figures\">1 of", html)
+
+    def test_a_zero_allowance_shows_as_a_limit_of_zero(self):
+        Membership.objects.filter(pk=self.member.pk).update(upload_allowance=0, key_allowance=0)
+        html = self.as_member()
+        self.assertIn('id="overview-own-uploads_figures">0 of 0', html)
+        self.assertIn('id="overview-own-keys_figures">0 of 0', html)
+
+    def test_a_member_sees_no_list_of_people(self):
+        second_member(self.workspace, "gus", "gus@example.com")
+        text = visible(self.as_member())
+        self.assertNotIn("gus@example.com", text)
+        self.assertNotIn("/app/members/", self.as_member())
+
+    def test_a_member_gets_no_billing_link_or_notice(self):
+        Workspace.objects.filter(pk=self.workspace.pk).update(plan=Workspace.PLAN_FREE)
+        for number in range(PLANS["free"]["keys"] + 1):
+            APIKey.create_key(self.workspace, f"k{number}")
+        html = self.as_member()
+        text = visible(html)
+        self.assertIn("Your team is on the Free plan.", text)
+        self.assertNotIn("/app/billing/", html[html.index("<main"):html.index("</main>")])
+        self.assertNotIn("is over the", text)
+        self.assertNotIn("Plan limits could not be checked", text)
+
+    def test_get_connected_follows_a_members_own_keys(self):
+        APIKey.create_key(self.workspace, "agent", member=self.admin)
+        self.assertIn("Get connected", self.as_member())
+        APIKey.create_key(self.workspace, "mine", member=self.member)
+        self.assertNotIn("Get connected", self.as_member())
+
+    def test_a_waiting_invitation_shows_a_notice_only_when_verified(self):
+        tokens = []
+        teams.invite(self.admin, "grace@example.com", build_url=lambda raw: tokens.append(raw) or f"https://veilfile.test/{raw}/")
+        from django.contrib.auth import get_user_model
+
+        grace = get_user_model().objects.create_user(username="grace", email="grace@example.com")
+        sentence = "An invitation to a team is waiting for this address. Open the link in the email to accept or decline it."
+        html = self.page(grace)
+        self.assertNotIn(sentence, visible(html), "an unverified address is told nothing")
+        from drop_core.models import EmailVerification
+
+        EmailVerification.objects.create(user=grace, email=grace.email, is_verified=True, verified_at=timezone.now())
+        html = self.page(grace)
+        self.assertIn(sentence, visible(html))
+        self.assertNotIn(tokens[0], html, "the page holds no token")
+        with override_settings(TEAM_SEATS=False):
+            self.assertNotIn(sentence, visible(self.page(grace)))

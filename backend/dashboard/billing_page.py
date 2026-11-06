@@ -38,8 +38,10 @@ MULTIPLE_SUBSCRIPTIONS = "This workspace has more than one subscription. Use Man
 NO_SUCH_PLAN = "That plan isn't available. Choose one of the plans on this page."
 NO_BILLING_ACCOUNT = "There is no billing account to manage yet. Upgrade to a paid plan to start one."
 NOT_SUBSCRIBED = "You have no subscription to switch yet. Upgrade to a paid plan to start one."
+MEMBER_BILLING = "Your administrator manages billing for this team."
 
 FIXED = {
+    (403, None): MEMBER_BILLING,
     (402, "payment_required"): PAYMENT_FAILED,
     (409, "subscription_past_due"): PAST_DUE,
     (409, "no_subscription"): NOT_SUBSCRIBED,
