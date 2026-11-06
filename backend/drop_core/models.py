@@ -5,7 +5,7 @@ import secrets as stdlib_secrets
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 
 
@@ -137,12 +137,15 @@ def administrator_of(workspace):
     return membership
 
 
-def current_membership(user):
+def current_membership(user, *, reopen=True):
     """The one place this person is now: a team beats an own workspace, then the oldest first.
 
     A person with no current row gets their own workspace back, so that leaving
-    or being removed strands nobody. It can write, so call it before any
-    transaction, as with administrator_of.
+    or being removed strands nobody. Reopening a closed row is for a signed-in
+    person. A credential passes reopen=False and gets None for a closed row, so
+    that a token cannot undo a closure. Reopening stops the row's keys first.
+    A person with no rows at all still gets a first workspace, with either value.
+    It can write, so call it before any transaction, as with administrator_of.
     """
     rows = list(
         Membership.objects.filter(user=user, removed_at__isnull=True)
@@ -157,7 +160,12 @@ def current_membership(user):
     workspace = get_or_create_workspace(user)
     row = _administrator_row(workspace)
     if row.removed_at is not None:
-        Membership.objects.filter(pk=row.pk).update(removed_at=None)
+        if not reopen:
+            return None
+        # Stop the keys first, so nothing made before the row closed comes back with it.
+        with transaction.atomic():
+            APIKey.objects.filter(member=row, is_active=True).update(is_active=False)
+            Membership.objects.filter(pk=row.pk).update(removed_at=None)
         row.removed_at = None
     row.workspace = workspace
     return row

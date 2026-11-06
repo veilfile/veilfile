@@ -327,17 +327,20 @@ def non_test_sources():
 
 
 class OnlyFileAccessReadsFilesTests(SimpleTestCase):
-    # What remains outside file_access.py: each entry is a count, a sum or an exists, or services.revoke_artifact's own
-    # lookup, and none returns a name.
+    # Every other read of Artifact and PendingUpload, counted per file, each with what those reads are.
     REMAINING = {
         "drop_billing/account.py": 1,  # an exists, for the allowance check
-        "drop_core/services.py": 2,  # the storage sum, and revoke_artifact's own lookup
-        "drop_core/views.py": 2,  # the upload number, a count
+        "drop_core/management/commands/funnel_report.py": 1,  # a count of workspaces that have a file
+        "drop_core/management/commands/reconcile_storage.py": 2,  # a token lookup and an exists, for the storage sweep
+        "drop_core/services.py": 5,  # the pending upload create, two storage sums, and revoke_artifact's lookup and expiry update
+        "drop_core/signals.py": 1,  # prose in a docstring, no read
+        "drop_core/sweep.py": 2,  # the expiry sweep and the pending upload cleanup, no person involved
+        "drop_core/views.py": 7,  # two upload-number counts, the pending upload steps, and serve_artifact's lookup by token
         "drop_mcp/views.py": 1,  # the upload number, a count
     }
 
     def test_no_other_code_reads_files_by_workspace(self):
-        pattern = re.compile(r"Artifact\.objects\.\w+\(\s*(?:id=[^,]+,\s*)?workspace|\.artifacts\b")
+        pattern = re.compile(r"\b(?:Artifact|PendingUpload)\.objects\b|\.artifacts\b")
         found = {}
         for rel, text in non_test_sources():
             if rel == "drop_core/file_access.py":

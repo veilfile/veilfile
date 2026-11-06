@@ -69,6 +69,34 @@ class CurrentMembershipTests(TestCase):
         self.assertEqual(Workspace.objects.filter(owner=ada).count(), 0)
         self.assertEqual(current_membership(ada).workspace.owner_id, ada.pk)
 
+    def test_reopening_a_row_stops_its_keys(self):
+        ada = make_user("ada")
+        workspace = get_or_create_workspace(ada)
+        row = administrator_of(workspace)
+        key, raw = create_key_within_cap(workspace, "old", member=row)
+        Membership.objects.filter(pk=row.pk).update(removed_at=timezone.now())
+        current_membership(ada)
+        self.assertIsNone(APIKey.verify(raw))
+        key.refresh_from_db()
+        self.assertFalse(key.is_active)
+
+    def test_a_credential_lookup_does_not_reopen_a_row(self):
+        ada = make_user("ada")
+        workspace = get_or_create_workspace(ada)
+        row = administrator_of(workspace)
+        key, _ = create_key_within_cap(workspace, "old", member=row)
+        Membership.objects.filter(pk=row.pk).update(removed_at=timezone.now())
+        self.assertIsNone(current_membership(ada, reopen=False))
+        self.assertIsNotNone(Membership.objects.get(pk=row.pk).removed_at)
+        key.refresh_from_db()
+        self.assertTrue(key.is_active)
+
+    def test_a_credential_lookup_still_makes_a_first_workspace(self):
+        ada = make_user("ada")
+        row = current_membership(ada, reopen=False)
+        self.assertIsNotNone(row)
+        self.assertEqual(row.workspace.owner_id, ada.pk)
+
     def test_a_person_with_no_current_row_gets_their_own_workspace_back(self):
         ada = make_user("ada")
         workspace = get_or_create_workspace(ada)
@@ -175,11 +203,12 @@ class LookupTests(TestCase):
         self.assertEqual(artifact.member.user, self.grace.user)
         self.assertFalse(Artifact.objects.filter(workspace=self.team).exists())
 
-    def test_a_removed_persons_token_acts_on_their_own_account(self):
+    def test_a_removed_persons_token_is_refused_until_they_sign_in(self):
         self._remove_grace()
         raw, _, _ = _issue_token(self.grace.user, _make_app())
-        credential = resolve_oauth_credential(raw)
-        self.assertEqual(credential.workspace, self.old)
+        self.assertIsNone(resolve_oauth_credential(raw))
+        current_membership(self.grace.user)
+        self.assertEqual(resolve_oauth_credential(raw).workspace, self.old)
 
     def test_signup_paid_pick_reads_the_persons_place(self):
         Workspace.objects.filter(pk=self.team.pk).update(stripe_subscription_id="sub_T")
@@ -487,6 +516,64 @@ class SuspensionTests(_SuspensionBase):
         self.assertRedirects(page, "/app/files/", fetch_redirect_response=False)
         self.assertTrue(Artifact.objects.filter(pk=self.admins_file.pk).exists())
         self.assertTrue(LocalStorage().exists(self.admins_file.token))
+
+    def test_the_service_refuses_a_suspended_teams_file(self):
+        from . import services
+
+        self._suspend()
+        before = Artifact.objects.get(pk=self.admins_file.pk).expires_at
+        self.assertIs(services.revoke_artifact(self.team, self.admins_file.id), False)
+        artifact = Artifact.objects.get(pk=self.admins_file.pk)
+        self.assertEqual(artifact.expires_at, before)
+        self.assertTrue(LocalStorage().exists(self.admins_file.token))
+
+    def test_a_file_left_behind_in_a_suspended_team_cannot_be_revoked_from_elsewhere(self):
+        own = get_or_create_workspace(self.grace.user)
+        _, own_raw = create_key_within_cap(own, "own", member=administrator_of(own))
+        Membership.objects.filter(pk=self.grace.pk).update(removed_at=timezone.now())
+        self._suspend()
+        auth = {"HTTP_AUTHORIZATION": f"Bearer {own_raw}"}
+        response = APIClient().delete(f"/api/v1/artifacts/{self.graces_file.id}/", **auth)
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.json()["code"], "workspace_suspended")
+        rpc = {
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "revoke_artifact", "arguments": {"id": str(self.graces_file.id)}},
+        }
+        answer = APIClient().post("/mcp", rpc, format="json", **auth)
+        self.assertEqual(answer.status_code, 200)
+        import json
+
+        self.assertEqual(json.loads(answer.json()["result"]["content"][0]["text"]), {"revoked": False})
+        self.assertTrue(Artifact.objects.filter(pk=self.graces_file.pk).exists())
+        self.assertTrue(LocalStorage().exists(self.graces_file.token))
+
+    def test_a_view_only_staff_user_cannot_suspend_a_team(self):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Permission
+
+        staff = get_user_model().objects.create_user("viewer", "viewer@example.com", "pw12345678", is_staff=True)
+        staff.user_permissions.add(Permission.objects.get(codename="view_workspace"))
+        self.client.force_login(staff)
+        self.client.post(
+            "/admin/drop_core/workspace/",
+            {"action": "suspend_workspaces", "_selected_action": [str(self.team.pk)]},
+        )
+        self.team.refresh_from_db()
+        self.assertIsNone(self.team.suspended_at)
+
+    def test_each_suspension_is_recorded_in_the_admin_history(self):
+        from django.contrib.admin.models import LogEntry
+        from django.contrib.auth import get_user_model
+
+        staff = get_user_model().objects.create_superuser("staff", "staff@example.com", "pw12345678")
+        self.client.force_login(staff)
+        for action in ("suspend_workspaces", "lift_suspensions"):
+            self.client.post(
+                "/admin/drop_core/workspace/", {"action": action, "_selected_action": [str(self.team.pk)]}
+            )
+        entries = LogEntry.objects.filter(object_id=str(self.team.pk)).order_by("pk")
+        self.assertEqual([e.change_message for e in entries], ["Suspended.", "Lifted the suspension."])
 
     def test_suspending_one_team_touches_no_other(self):
         other = get_or_create_workspace(make_user("lin"))

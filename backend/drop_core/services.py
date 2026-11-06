@@ -650,10 +650,18 @@ def revoke_artifact(workspace, artifact_id):
     ``REVOKE_PENDING_DELETE`` when the storage delete failed. In that case
     the row is kept, already expired, so the link 404s and the sweeper (or
     another revoke) retries the delete; the bytes are never lost track of.
+
+    A suspended team's files stay, so a report's evidence does: this returns
+    False for them, whatever route called it.
     """
     try:
-        artifact = Artifact.objects.get(id=artifact_id, workspace=workspace)
+        artifact = Artifact.objects.select_related("workspace").get(
+            id=artifact_id, workspace=workspace
+        )
     except Artifact.DoesNotExist:
+        return False
+    if artifact.workspace.suspended_at is not None:
+        # A suspended team's files stay, so a report's evidence does.
         return False
     # Kill the link first, so it is dead even while storage is slow or down.
     now = timezone.now()

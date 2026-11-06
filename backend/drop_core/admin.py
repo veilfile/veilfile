@@ -12,15 +12,21 @@ class WorkspaceAdmin(admin.ModelAdmin):
     readonly_fields = ("suspended_at",)
     actions = ("suspend_workspaces", "lift_suspensions")
 
-    @admin.action(description="Suspend the selected workspaces")
+    @admin.action(description="Suspend the selected workspaces", permissions=["change"])
     def suspend_workspaces(self, request, queryset):
-        count = queryset.filter(suspended_at__isnull=True).update(suspended_at=timezone.now())
-        self.message_user(request, f"Suspended {count} workspace(s).")
+        chosen = list(queryset.filter(suspended_at__isnull=True))
+        Workspace.objects.filter(pk__in=[w.pk for w in chosen]).update(suspended_at=timezone.now())
+        for workspace in chosen:
+            self.log_change(request, workspace, "Suspended.")
+        self.message_user(request, f"Suspended {len(chosen)} workspace(s).")
 
-    @admin.action(description="Lift the suspension of the selected workspaces")
+    @admin.action(description="Lift the suspension of the selected workspaces", permissions=["change"])
     def lift_suspensions(self, request, queryset):
-        count = queryset.filter(suspended_at__isnull=False).update(suspended_at=None)
-        self.message_user(request, f"Lifted the suspension of {count} workspace(s).")
+        chosen = list(queryset.filter(suspended_at__isnull=False))
+        Workspace.objects.filter(pk__in=[w.pk for w in chosen]).update(suspended_at=None)
+        for workspace in chosen:
+            self.log_change(request, workspace, "Lifted the suspension.")
+        self.message_user(request, f"Lifted the suspension of {len(chosen)} workspace(s).")
 
 
 @admin.register(APIKey)

@@ -336,14 +336,14 @@ class CredentialPersonTests(TestCase):
             (administrator_of(get_or_create_workspace(ada)), ada),
         )
 
-    def test_a_closed_owner_row_comes_back_for_an_oauth_token(self):
+    def test_an_oauth_token_of_a_removed_member_is_refused(self):
         ada = make_user("ada")
         get_or_create_workspace(ada)
         raw, _, _ = _issue_token(ada, _make_app())
         Membership.objects.filter(user=ada).update(removed_at=timezone.now())
-        credential = resolve_oauth_credential(raw)
-        self.assertIsNotNone(credential)
-        self.assertIsNone(credential.acting_member.removed_at)
+        self.assertIsNone(resolve_oauth_credential(raw))
+        self.assertTrue(Membership.objects.filter(user=ada, removed_at__isnull=False).exists())
+        self.assertFalse(Membership.objects.filter(user=ada, removed_at__isnull=True).exists())
 
 
 class DeviceCredentialPersonTests(_DeviceTestBase):
