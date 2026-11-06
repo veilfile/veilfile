@@ -1,6 +1,6 @@
 {% extends "layouts/app.html" %}
 {% load dashboard %}
-{# Overview: the return from Stripe, the prompt to verify an email, anything over a limit, the plan, the meters and the account, in that order (spec 4.8). The figures come from dashboard/overview_page.py; the words are here. #}
+{# Overview: the return from Stripe, the prompt to verify an email, anything over a limit, the plan, the meters and the account, in that order, and the Team section last, so the meters stay where they were under the open sheet (spec 4.8). The figures come from dashboard/overview_page.py; the words are here. #}
 {% block app_main %}
 <h1>Overview</h1>
 {% if billing_notice.kind == "success" %}<p class="notice" role="status"><strong>Your subscription is updated.</strong> It can take a moment for the new plan to appear below. Refresh if it doesn't.</p>
@@ -25,13 +25,7 @@
 <p class="notice">Each login mints one API key, and device-issued keys count toward your plan's key cap (one key on Free). The full three-step walkthrough is in the <a href="{% url 'docs-page' 'quickstart' %}">quickstart</a>.</p>
 </section>
 {% endif %}
-{% if team %}<section aria-labelledby="overview-team">
-<h2 id="overview-team">Team</h2>
-{% if team.is_administrator %}<p>You are the administrator. {% if team.seat_limit %}{{ team.seats_used }} of {{ team.seat_limit }} seats {{ team.seats_used|pluralize:"is,are" }} in use.{% else %}{{ team.seats_used }} seat{{ team.seats_used|pluralize }} {{ team.seats_used|pluralize:"is,are" }} in use.{% endif %}</p>
-<p class="form-links"><a class="label interactive" href="{% url 'app-members' %}">Members</a></p>
-{% else %}<p>You are on the team that {{ team.admin_email }} administers, which has {{ team.people }} {{ team.people|pluralize:"person,people" }}.</p>
-{% endif %}</section>
-{% endif %}{% if plan %}<section aria-labelledby="overview-plan">
+{% if plan %}<section aria-labelledby="overview-plan">
 <h2 id="overview-plan">Plan</h2>
 <p>{% if member_view %}Your team is on the <strong>{{ plan|plan_name }}</strong> plan.{% else %}You are on the <strong>{{ plan|plan_name }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a>{% endif %}</p>
 </section>
@@ -59,5 +53,11 @@
 {% if email %}<p><strong>{{ email }}</strong> is {% if email_verified %}verified{% else %}not verified{% endif %}.</p>
 {% else %}<p>No email address is set.</p>
 {% endif %}<p class="form-links"><a class="label interactive" href="{% url 'email-verification' %}">{% if email %}Change email{% else %}Add email{% endif %}</a> <a class="label interactive" href="{% url 'password_change' %}">Change password</a></p>
-</section>
+</section>{% if team %}
+<section aria-labelledby="overview-team">
+<h2 id="overview-team">Team</h2>
+{% if team.is_administrator %}<p>You are the administrator. {% if team.seat_limit %}{{ team.seats_used }} of {{ team.seat_limit }} seats {{ team.seats_used|pluralize:"is,are" }} in use.{% else %}{{ team.seats_used }} seat{{ team.seats_used|pluralize }} {{ team.seats_used|pluralize:"is,are" }} in use.{% endif %}</p>
+<p class="form-links"><a class="label interactive" href="{% url 'app-members' %}">Members</a></p>
+{% else %}<p>You are on the team that {{ team.admin_email }} administers, which has {{ team.people }} {{ team.people|pluralize:"person,people" }}.</p>
+{% endif %}</section>{% endif %}
 {% endblock %}
