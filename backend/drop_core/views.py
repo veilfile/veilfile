@@ -89,6 +89,8 @@ ERROR_STATUS = {
     "secret_detected": status.HTTP_400_BAD_REQUEST,
     "monthly_cap_reached": status.HTTP_429_TOO_MANY_REQUESTS,
     "storage_cap_reached": status.HTTP_402_PAYMENT_REQUIRED,
+    "member_monthly_allowance_reached": status.HTTP_429_TOO_MANY_REQUESTS,
+    "member_storage_allowance_reached": status.HTTP_400_BAD_REQUEST,
 }
 
 ERROR_MESSAGES = {
@@ -112,6 +114,16 @@ ERROR_MESSAGES = {
     "storage_cap_reached": (
         "Your workspace has reached its plan's storage cap. Revoke files "
         "you no longer need, or upgrade your plan."
+    ),
+    "member_monthly_allowance_reached": (
+        "You have reached the monthly upload allowance your administrator "
+        "set. Uploads work again next month, or your administrator can "
+        "raise it."
+    ),
+    "member_storage_allowance_reached": (
+        "You have reached the storage allowance your administrator set. "
+        "Revoke files you no longer need, or ask your administrator to "
+        "raise it."
     ),
     "invalid_request": (
         "The upload has an invalid parameter. Check on_secret and ttl_days."
@@ -284,8 +296,7 @@ def _audit_ip(request):
 def _minting_credential_active(pending):
     """False once the credential that minted ``pending`` is revoked.
 
-    The URL follows the person who minted it, never the account's owner
-    unless the row has no member. API-key URLs follow the key row.
+    The URL follows the person who minted it. API-key URLs follow the key row.
     OAuth-minted URLs follow that person's grants for the minting
     application: any unexpired access token or unrevoked refresh token
     keeps them alive (a routine token refresh does not kill the URL;
@@ -293,10 +304,9 @@ def _minting_credential_active(pending):
     check existed) stay valid until they expire.
     """
     member = pending.member
-    if member is not None and member.removed_at is not None:
+    if member is None or member.removed_at is not None:
         return False
-    # A row with no member belongs to the account's owner.
-    person = member.user if member is not None else pending.workspace.owner
+    person = member.user
     if not person.is_active:
         # Same rule as APIKey.verify / resolve_oauth_credential: a
         # suspended person's credentials, and the URLs they minted, are dead.
@@ -474,7 +484,7 @@ class PendingUploadView(APIView):
         )
         pending = (
             PendingUpload.objects.select_related(
-                "workspace__owner", "api_key", "member__user"
+                "api_key", "member__user", "workspace"
             )
             .filter(token=token, used=False, expires_at__gt=timezone.now())
             .first()

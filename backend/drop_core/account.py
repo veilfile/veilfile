@@ -26,7 +26,7 @@ from oauth2_provider.models import get_application_model, get_grant_model
 
 from . import funnel
 from .email_verification import is_email_verified
-from .key_caps import KeyCapReached, active_key_count, create_key_within_cap
+from .key_caps import KeyCapReached, MemberKeyCapReached, active_key_count, create_key_within_cap
 from .models import (
     APIKey,
     Artifact,
@@ -162,7 +162,8 @@ def create_key(user, name, *, request=None, body_is_object=True):
     (only its hash is), so the caller must show it once and keep it nowhere. Refusals, in this order: the email is not
     verified (403 ``email_verification_required``), the name is not acceptable (400 ``invalid_request``; the JSON API
     passes ``body_is_object=False`` when its body was not a JSON object), the plan's key cap is reached (402
-    ``key_limit_reached``, and no key is made). ``name`` may be None or empty: the key is then called "Untitled key".
+    ``key_limit_reached``, and no key is made), the member's own key allowance is reached (400
+    ``member_key_allowance_reached``). ``name`` may be None or empty: the key is then called "Untitled key".
 
     ``request`` is the HTTP request, for the funnel's anonymous id (a cookie): pass it from a view.
     """
@@ -183,6 +184,14 @@ def create_key(user, name, *, request=None, body_is_object=True):
     try:
         key, raw = create_key_within_cap(
             workspace, name, member=current_member(workspace, user)
+        )
+    except MemberKeyCapReached:
+        return Answer(
+            400,
+            {
+                "error": "You have reached the API key allowance your administrator set. Revoke one of your keys, or ask your administrator to raise it.",
+                "code": "member_key_allowance_reached",
+            },
         )
     except KeyCapReached:
         return Answer(

@@ -47,10 +47,10 @@ class AnnualPricesTests(SimpleTestCase):
 
     def test_the_monthly_plans_are_unchanged(self):
         self.assertEqual(PLANS, {
-            "free": {"uploads": 100, "ttl_days": 7, "keys": 1, "price_usd": 0, "storage_gb": 1},
-            "team": {"uploads": 2000, "ttl_days": 90, "keys": 5, "price_usd": 4, "storage_gb": 25},
-            "team_plus": {"uploads": 4000, "ttl_days": 90, "keys": 10, "price_usd": 6, "storage_gb": 40},
-            "scale": {"uploads": 10000, "ttl_days": 365, "keys": None, "price_usd": 12, "storage_gb": 100},
+            "free": {"uploads": 100, "ttl_days": 7, "keys": 1, "seats": 1, "price_usd": 0, "storage_gb": 1},
+            "team": {"uploads": 2000, "ttl_days": 90, "keys": 5, "seats": 5, "price_usd": 4, "storage_gb": 25},
+            "team_plus": {"uploads": 4000, "ttl_days": 90, "keys": 10, "seats": 10, "price_usd": 6, "storage_gb": 40},
+            "scale": {"uploads": 10000, "ttl_days": 365, "keys": None, "seats": None, "price_usd": 12, "storage_gb": 100},
         }, f"{PLANS_PY}: yearly billing adds prices and changes no plan, cap or monthly price")
 
 

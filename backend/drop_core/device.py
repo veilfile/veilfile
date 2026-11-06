@@ -50,6 +50,7 @@ from . import funnel
 from .email_verification import client_ip, is_email_verified
 from .key_caps import (
     KeyCapReached,
+    MemberKeyCapReached,
     active_keys,
     create_key_within_cap,
     key_cap,
@@ -457,6 +458,12 @@ def _redeem(device_code):
                     device_issued=True,
                     replacing=device_code.replace_key,
                     member=member,
+                )
+            except MemberKeyCapReached:
+                refused = (
+                    "You have reached the API key allowance your administrator "
+                    "set. Revoke one of your keys in the dashboard, or ask your "
+                    "administrator to raise it."
                 )
             except KeyCapReached:
                 # The plan's cap changed (or another key was created) after

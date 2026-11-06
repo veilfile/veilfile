@@ -6,7 +6,6 @@ import uuid
 
 from django.conf import settings
 from django.db import models
-from django.db.models import Q
 from django.utils import timezone
 
 
@@ -77,6 +76,10 @@ class Membership(models.Model):
     role = models.CharField(max_length=16, choices=ROLE_CHOICES, default=MEMBER)
     created_at = models.DateTimeField(auto_now_add=True)
     removed_at = models.DateTimeField(null=True, blank=True)
+    # Per-member allowances; NULL means no allowance.
+    upload_allowance = models.PositiveIntegerField(null=True, blank=True)
+    storage_allowance_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    key_allowance = models.PositiveIntegerField(null=True, blank=True)
 
     class Meta:
         constraints = [
@@ -139,9 +142,11 @@ class APIKey(models.Model):
     device_issued = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True)
-    # The person who made the key. A NULL member belongs to the workspace's
-    # administrator. RESTRICT: deleting a user still removes the whole
-    # account, but a membership row alone cannot be deleted under its keys.
+    # The person who made the key. After migration 0014 no key names no
+    # member, and a stray key with none is refused. The field stays
+    # blank=True only so that existing rows and admin forms load. RESTRICT:
+    # deleting a user still removes the whole account, but a membership row
+    # alone cannot be deleted under its keys.
     member = models.ForeignKey(
         Membership,
         related_name="api_keys",
@@ -171,8 +176,8 @@ class APIKey(models.Model):
 
     @property
     def acting_member(self):
-        """The membership the key acts as: its own, else the administrator's."""
-        return self.member or administrator_of(self.workspace)
+        """The membership the key acts as."""
+        return self.member
 
     @property
     def person(self):
@@ -183,17 +188,16 @@ class APIKey(models.Model):
     def verify(cls, raw):
         """Return the active APIKey for ``raw``, or None. Fast-path rejects
         anything that isn't a ``vlf_`` key without touching the database.
-        A key verifies while its person is active and still a member; a key
-        with no member follows the account's owner."""
+        A key verifies while its person is active and still a member."""
         if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
             return None
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         try:
             return cls.objects.select_related("member__user").get(
-                Q(member__isnull=True, workspace__owner__is_active=True)
-                | Q(member__user__is_active=True, member__removed_at__isnull=True),
                 key_hash=digest,
                 is_active=True,
+                member__user__is_active=True,
+                member__removed_at__isnull=True,
             )
         except cls.DoesNotExist:
             return None
@@ -221,8 +225,9 @@ class Artifact(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     secret_flags = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
-    # The person who uploaded the file. A NULL member belongs to the
-    # workspace's administrator. RESTRICT, so a file never loses its uploader.
+    # The person who uploaded the file. After migration 0014 no file names no
+    # member. The field stays blank=True only so that existing rows and admin
+    # forms load. RESTRICT, so a file never loses its uploader.
     member = models.ForeignKey(
         Membership,
         related_name="artifacts",
@@ -291,8 +296,10 @@ class PendingUpload(models.Model):
     expires_at = models.DateTimeField(db_index=True)
     used = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    # The person whose credential minted the URL. CASCADE, as for api_key:
-    # a URL dies with its minter.
+    # The person whose credential minted the URL. After migration 0014 no
+    # upload URL names no member, and a stray URL with none is refused. The
+    # field stays blank=True only so that existing rows and admin forms load.
+    # CASCADE, as for api_key: a URL dies with its minter.
     member = models.ForeignKey(
         Membership,
         related_name="pending_uploads",
@@ -319,6 +326,23 @@ class UsageCounter(models.Model):
 
     def __str__(self):
         return f"{self.workspace_id} {self.year_month}: {self.uploads}"
+
+
+class MemberUsageCounter(models.Model):
+    """Per-member monthly upload counter for allowances. It has no foreign
+    key to the workspace, so inserting a row never touches the workspace row."""
+
+    member = models.ForeignKey(
+        Membership, related_name="usage_counters", on_delete=models.CASCADE
+    )
+    year_month = models.CharField(max_length=7)  # e.g. '2026-10'
+    uploads = models.IntegerField(default=0)
+
+    class Meta:
+        unique_together = [("member", "year_month")]
+
+    def __str__(self):
+        return f"{self.member_id} {self.year_month}: {self.uploads}"
 
 
 class BlockedHash(models.Model):

@@ -298,13 +298,11 @@ class CredentialPersonTests(TestCase):
         self.assertEqual((key.member, key.person), (grace, grace.user))
         self.assertEqual(APIKey.create_key(workspace, "other")[0].member, administrator_of(workspace))
 
-    def test_a_key_with_no_member_verifies_for_an_active_owner(self):
+    def test_a_key_with_no_member_is_refused(self):
         workspace = get_or_create_workspace(make_user("ada"))
         key, raw = APIKey.create_key(workspace, "agent")
         APIKey.objects.filter(pk=key.pk).update(member=None)
-        self.assertEqual(APIKey.verify(raw).pk, key.pk)
-        self.assertEqual(APIKey.verify(raw).person, workspace.owner)
-        User.objects.filter(pk=workspace.owner.pk).update(is_active=False)
+        self.assertTrue(workspace.owner.is_active)
         self.assertIsNone(APIKey.verify(raw))
 
     def test_a_suspended_owner_loses_their_own_keys(self):
@@ -446,16 +444,15 @@ class UploaderTests(TestCase):
         self.assertEqual(response.status_code, 201)
         self.assertEqual(SafetyEvent.objects.get().member, self.grace)
 
-    def test_an_upload_url_with_no_member_tests_the_owner(self):
+    def test_an_upload_url_with_no_member_is_refused(self):
         key, _ = APIKey.create_key(self.workspace, "agent")
         pending = mint_upload_url(self.workspace, key, "a.txt")
         PendingUpload.objects.filter(pk=pending.pk).update(member=None)
-        self.assertEqual(self._put(pending.token).status_code, 201)
-        self.assertEqual(Artifact.objects.get().member, administrator_of(self.workspace))
-        second = mint_upload_url(self.workspace, key, "b.txt")
-        PendingUpload.objects.filter(pk=second.pk).update(member=None)
-        User.objects.filter(pk=self.ada.pk).update(is_active=False)
-        self.assertEqual(self._put(second.token).status_code, 404)
+        unknown = self._put("no-such-token")
+        response = self._put(pending.token)
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json(), unknown.json())
+        self.assertFalse(Artifact.objects.exists())
 
     def test_an_upload_url_follows_its_members_grant_not_the_owners(self):
         app = _make_app()
@@ -482,7 +479,7 @@ class UploaderTests(TestCase):
 
 
 BACKEND = Path(__file__).resolve().parent.parent
-ALLOWED = {"drop_core/models.py": 1, "drop_core/views.py": 2}
+ALLOWED = {}
 
 
 class PersonReadsTests(TestCase):
@@ -525,6 +522,16 @@ class OwnerReadsTests(SimpleTestCase):
             "A credential or file check reads workspace.owner. Use .acting_member or .person "
             "(AGENTS.md, People inside an account), or, for a new NULL-member fallback, add it to ALLOWED.",
         )
+
+    def test_no_code_treats_a_missing_member_specially(self):
+        found = []
+        for path in BACKEND.rglob("*.py"):
+            rel = path.relative_to(BACKEND).as_posix()
+            if "/migrations/" in rel or path.name.startswith("tests"):
+                continue
+            if "member__isnull" in path.read_text():
+                found.append(rel)
+        self.assertEqual(found, [])
 
 
 class ResolveMemberBeforeLockTests(TransactionTestCase):

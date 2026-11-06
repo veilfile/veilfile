@@ -28,7 +28,7 @@ from django.utils import timezone
 from oauth2_provider.models import get_access_token_model, get_application_model
 
 from drop_billing.models import Subscription
-from drop_core.models import APIKey, Artifact, EmailVerification, UsageCounter, get_or_create_workspace
+from drop_core.models import APIKey, Artifact, EmailVerification, UsageCounter, administrator_of, get_or_create_workspace
 from drop_core.oauth import OAUTH_SCOPE_MCP_USE
 
 if not settings.DEBUG or (connection.vendor != "sqlite"
@@ -90,7 +90,7 @@ def add_key(workspace, name, *, used_hours=None, active=True):
 def add_file(workspace, name, *, hours=0, days=7, flags=(), held=False, size=1500):
     """A file the list shows: made `hours` ago, expiring in `days` (negative: expired). Its bytes are not stored: nothing here downloads one, and a revoke of
     a file the storage does not have is a delete of nothing."""
-    artifact = Artifact.objects.create(workspace=workspace, filename=name, size_bytes=size, expires_at=NOW + timedelta(days=days), secret_flags=list(flags),
+    artifact = Artifact.objects.create(workspace=workspace, member=administrator_of(workspace), filename=name, size_bytes=size, expires_at=NOW + timedelta(days=days), secret_flags=list(flags),
                                        safety_status="held" if held else "clear")
     Artifact.objects.filter(pk=artifact.pk).update(created_at=NOW - timedelta(hours=hours))
 

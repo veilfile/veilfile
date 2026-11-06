@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import APIKey, Artifact, EmailVerification, Membership, UsageCounter, Workspace
+from .models import APIKey, Artifact, EmailVerification, MemberUsageCounter, Membership, UsageCounter, Workspace
 
 
 @admin.register(Workspace)
@@ -16,6 +16,11 @@ class APIKeyAdmin(admin.ModelAdmin):
     readonly_fields = ("key_hash", "key_prefix")
     raw_id_fields = ("member",)
 
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields["member"].required = True
+        return form
+
 
 @admin.register(Artifact)
 class ArtifactAdmin(admin.ModelAdmin):
@@ -23,6 +28,11 @@ class ArtifactAdmin(admin.ModelAdmin):
     list_filter = ("mime_type",)
     readonly_fields = ("token",)
     raw_id_fields = ("member",)
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields["member"].required = True
+        return form
 
 
 @admin.register(UsageCounter)
@@ -39,6 +49,21 @@ class EmailVerificationAdmin(admin.ModelAdmin):
 
 @admin.register(Membership)
 class MembershipAdmin(admin.ModelAdmin):
-    list_display = ("workspace", "user", "role", "created_at", "removed_at")
+    list_display = (
+        "workspace",
+        "user",
+        "role",
+        "created_at",
+        "removed_at",
+        "upload_allowance",
+        "storage_allowance_bytes",
+        "key_allowance",
+    )
     list_filter = ("role",)
     raw_id_fields = ("workspace", "user")
+
+
+@admin.register(MemberUsageCounter)
+class MemberUsageCounterAdmin(admin.ModelAdmin):
+    list_display = ("member", "year_month", "uploads")
+    raw_id_fields = ("member",)

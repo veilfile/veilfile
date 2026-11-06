@@ -655,14 +655,21 @@ The design is `docs/superpowers/specs/2026-11-05-team-seats-design.md` and the f
 - A workspace is an account. `Membership` (in `backend/drop_core/models.py`) joins a person to it as an administrator or a member. A workspace has at most one current administrator and a person has at most one row per workspace; two constraints enforce both.
 - `Workspace.owner` stays the administrator and the payer. Billing, Stripe lookups and `get_or_create_workspace` are unchanged.
 - Every workspace gets its administrator row from the `post_save` receiver in `backend/drop_core/signals.py` and from the backfill in `backend/drop_core/migrations/0013_backfill_members.py`. `administrator_of(workspace)` returns it, creating it if it is missing, and `current_member(workspace, user)` returns a person's current membership or None.
-- Keys, upload URLs, files and safety events record `member`. A NULL `member` means the administrator, permanently, because the previous release writes rows without it during a deploy. Every reader treats NULL that way.
-- A credential exposes `.acting_member` and `.person`: `APIKey` has both, and `OAuthCredentialAdapter` in `backend/drop_core/oauth.py` has both. Each person's account state governs only their own credentials, so a check tests the person who made the key, token or upload URL, never the owner unless the row's member is NULL. No code reads `workspace.owner` for a credential or file check except the two NULL-member fallbacks that `OwnerReadsTests` in `backend/drop_core/tests_members.py` allows in its `ALLOWED` table. A new fallback needs an entry there.
+- Keys, upload URLs, files and safety events record `member`. After the second backfill, `backend/drop_core/migrations/0014_backfill_members_again.py`, no key, file or upload URL names no member. A stray key or upload URL is refused; a stray file still lists, serves and revokes, but it counts toward nobody's allowance. `SafetyEvent.member` can be NULL because it is `SET_NULL`. The second backfill runs once, and it stops the deploy if it cannot finish.
+- A credential exposes `.acting_member` and `.person`: `APIKey` has both, and `OAuthCredentialAdapter` in `backend/drop_core/oauth.py` has both. Each person's account state governs only their own credentials, so a check tests the person who made the key, token or upload URL, never the owner. No code reads `workspace.owner` for a credential or file check, and `OwnerReadsTests` in `backend/drop_core/tests_members.py` keeps its `ALLOWED` table empty.
 - Application code never deletes a membership row; removal sets `removed_at`. That is why keys and files point at it with `RESTRICT`. A safety event uses `SET_NULL`, and an upload URL dies with its minting key.
 - `Artifact.visibility` is stored (`only_me` for every file so far) and nothing reads it yet. `serve_artifact` makes no membership or visibility check.
 - The migrations are additive for a live Postgres table: `0011_members.py` creates the table, `0012_member_columns.py` adds nullable columns, and the backfill is idempotent with a no-op reverse.
-- The backfill is non-atomic and commits in batches of `BATCH_SIZE` rows, so it holds no long row locks while the previous release serves requests, and it can resume after being killed because a NULL `member` already means the administrator.
+- The backfill is non-atomic and commits in batches of `BATCH_SIZE` rows, so it holds no long row locks while the previous release serves requests, and it can resume after being killed because a second run fills whatever the first did not reach.
 - Code resolves a member with `administrator_of` before it takes a workspace row lock, never under it, because creating the administrator row under that lock can deadlock with a concurrent request that does the same. `upload_artifact` and `create_key_within_cap` follow this rule, and a test in `backend/drop_core/tests_members.py` checks that neither calls `administrator_of` inside a transaction.
 - A release older than this section cannot delete a user or a workspace once membership rows exist, because the foreign keys from those rows raise an `IntegrityError`. After a code-only rollback, account deletions must wait until the code rolls forward again or `migrate drop_core 0010` has run.
+- A member's allowances are nullable columns on `Membership`, NULL means no allowance, and only staff can set them until PR C.
+- `MemberUsageCounter` counts every upload per member per month, from this deploy on.
+- When both limits are reached, the team's code is returned, because the team's limits are tested first. In a race the member's code can appear while the team's storage has just filled, and the team's limit is still enforced.
+- The lock order is the team counter, the member counter, then the workspace row, with the give-back in the same order.
+- The member counter's insert takes a key-share lock on `Membership`, so code that later locks a `Membership` row must use `select_for_update(no_key=True)` or take the counters first.
+- A request in flight honours the allowance it loaded when it started.
+- A release older than this one cannot delete a user, workspace or membership once member counters exist, because it does not know the table. This affects staff in the admin only, during the deploy or after a code-only rollback. Staff should also not delete an account with live traffic: a Postgres rehearsal showed that deleting a user while its keys upload can deadlock, on this release and the one before it.
 
 ## Pricing changes
 
@@ -694,6 +701,8 @@ functions behind both the JSON endpoints and the dashboard),
 `backend/dashboard/billing_page.py` (the Billing page's sentences and plan figures),
 and `backend/pages/registry.py` (page descriptions). The dashboard's pages are
 under the templates glob above and take every figure from `plans.py`.
+
+Seats live in `PLANS` as `seats`, where None means unlimited, and they are not advertised until team seats launch.
 
 Checklist: edit `plans.py`; update every file above; ask the owner to update
 the Terms of Service wording and the Stripe prices; run the backend suite.
