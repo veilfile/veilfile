@@ -33,6 +33,7 @@ from drop_core.models import (
     Artifact,
     EmailVerification,
     UsageCounter,
+    administrator_of,
     get_or_create_workspace,
 )
 from drop_core.oauth import OAUTH_SCOPE_MCP_USE
@@ -286,7 +287,7 @@ class ArtifactAnswerTests(JsonAnswerCase):
         rows = []
         for i in range(n):
             row = Artifact.objects.create(
-                workspace=self.workspace, filename=f"f{i}.txt", mime_type="text/plain", size_bytes=i, expires_at=expires
+                workspace=self.workspace, member=administrator_of(self.workspace), filename=f"f{i}.txt", mime_type="text/plain", size_bytes=i, expires_at=expires
             )
             Artifact.objects.filter(pk=row.pk).update(created_at=base + timedelta(minutes=i))
             rows.append(row)
@@ -337,10 +338,10 @@ class ArtifactAnswerTests(JsonAnswerCase):
     def test_expired_and_held_files_are_listed(self):
         self.make_files(1)
         Artifact.objects.create(
-            workspace=self.workspace, filename="old.txt", size_bytes=1, expires_at=timezone.now() - timedelta(days=1)
+            workspace=self.workspace, member=administrator_of(self.workspace), filename="old.txt", size_bytes=1, expires_at=timezone.now() - timedelta(days=1)
         )
         Artifact.objects.create(
-            workspace=self.workspace, filename="held.txt", size_bytes=1,
+            workspace=self.workspace, member=administrator_of(self.workspace), filename="held.txt", size_bytes=1,
             expires_at=timezone.now() + timedelta(days=1), safety_status="held",
         )
         names = {r["filename"] for r in self.session.get("/api/v1/artifacts/").json()}

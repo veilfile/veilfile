@@ -378,7 +378,7 @@ class ArtifactListCreateView(APIView):
             request.user,
             cursor=request.query_params.get("cursor"),
             limit=request.query_params.get("limit"),
-            workspace=_request_workspace(request),
+            member=_request_member(request),
         )
         response = answer_response(answer)
         next_cursor = answer.headers.get("X-Next-Cursor")
@@ -452,7 +452,7 @@ class ArtifactDeleteView(APIView):
     def delete(self, request, artifact_id):
         return answer_response(
             account.revoke_artifact(
-                request.user, artifact_id, workspace=_request_workspace(request)
+                request.user, artifact_id, member=_request_member(request)
             )
         )
 

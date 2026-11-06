@@ -184,6 +184,7 @@ curl -s -X DELETE https://YOUR-DEPLOY/api/v1/artifacts/b3f7c2a1-4d5e-4f6a-9b1c-2
 
 Response `204 No Content` on success. Unknown ids (or ids in another
 workspace) return `404` with `{"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"}`.
+A file you can see but may not revoke returns `403` with `{"error": "Only the person who uploaded a file, or the administrator of a team it is shared with, can revoke it.", "code": "not_your_file"}`.
 If the storage backend is unreachable, the URL still dies at once and the
 file is deleted by the next expiry sweep; the artifact shows as expired in
 the list until then.

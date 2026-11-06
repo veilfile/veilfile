@@ -24,7 +24,8 @@ from dashboard import billing_page
 from dashboard.file_rows import file_rows, state_of
 from drop_billing import account as billing_account
 from drop_core import account
-from drop_core.models import Artifact, current_membership
+from drop_core.file_access import NotYourFile, file_to_revoke
+from drop_core.models import current_membership
 from pages.errors import not_found
 
 
@@ -94,12 +95,16 @@ def files(request):
 
 
 def _own_file(user, artifact_id):
-    """The user's own file, else the shell's 404: another workspace's file and a missing one cannot be told apart.
+    """A file the user may revoke, else the shell's 404: a file they may not see, one they may not revoke and a missing one
+    cannot be told apart.
 
-    It looks in the person's current place, the workspace the list and account.revoke_artifact read, so the page, the
-    confirmation and the revoke agree on which files are the user's.
+    It asks drop_core/file_access.py, the module the list and account.revoke_artifact ask, so the page, the confirmation
+    and the revoke agree on which files are the user's.
     """
-    artifact = Artifact.objects.filter(id=artifact_id, workspace=current_membership(user).workspace).first()
+    try:
+        artifact = file_to_revoke(current_membership(user), artifact_id)
+    except NotYourFile:
+        artifact = None
     if artifact is None:
         raise Http404("No such file.")
     return artifact
@@ -120,8 +125,8 @@ def file_revoke(request, artifact_id):
     if request.method != "POST":
         return render(request, "dashboard/file_revoke.html", {"artifact": artifact})
     answer = account.revoke_artifact(request.user, artifact_id)
-    if answer.status == 404:
-        raise Http404("No such file.")  # gone between the lookup and the revoke
+    if answer.status != 204:
+        raise Http404("No such file.")  # gone between the lookup and the revoke, or refused
     if answer.body["storage_deleted"]:
         messages.success(request, REVOKED)
     else:

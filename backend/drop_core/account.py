@@ -26,10 +26,10 @@ from oauth2_provider.models import get_application_model, get_grant_model
 
 from . import funnel
 from .email_verification import is_email_verified
+from .file_access import NotYourFile, file_to_revoke, files_visible_to
 from .key_caps import KeyCapReached, MemberKeyCapReached, active_key_count, create_key_within_cap
 from .models import (
     APIKey,
-    Artifact,
     UsageCounter,
     current_membership,
 )
@@ -288,15 +288,15 @@ def _artifact_page(artifacts, raw_limit, raw_cursor):
     return page, _artifact_cursor(page[-1])
 
 
-def list_artifacts(user, *, cursor=None, limit=None, workspace=None):
-    """GET /api/v1/artifacts/: the workspace's files, newest first, expired and held ones included (their link
-    answers 404).
+def list_artifacts(user, *, cursor=None, limit=None, member=None):
+    """GET /api/v1/artifacts/: the files this person may see (drop_core/file_access.py), newest first, expired and held
+    ones included (their link answers 404).
 
     With neither ``limit`` nor ``cursor`` the whole list comes back. With either, a page: ``limit`` (1 to 200,
     default 50) in keyset order, and when more follow, the header ``X-Next-Cursor`` holds the ``cursor`` of the next
     page. ``limit`` and ``cursor`` are the plain values of the query string; bad ones are 400 ``invalid_request``."""
-    workspace = _workspace_of(user, workspace)
-    artifacts = Artifact.objects.filter(workspace=workspace).order_by("-created_at").all()
+    member = member if member is not None else current_membership(user)
+    artifacts = files_visible_to(member).order_by("-created_at")
     page = _artifact_page(artifacts, limit, cursor)
     if page is None:
         return Answer(
@@ -325,14 +325,25 @@ def list_artifacts(user, *, cursor=None, limit=None, workspace=None):
     return Answer(200, body, headers)
 
 
-def revoke_artifact(user, artifact_id, *, workspace=None):
-    """DELETE /api/v1/artifacts/<id>/: revoke one of the workspace's files. Its link stops working at once and
-    its file and row are deleted (204), or 404 for a file that is not the workspace's.
+def revoke_artifact(user, artifact_id, *, member=None):
+    """DELETE /api/v1/artifacts/<id>/: revoke one of this person's files, or one shared with the team they administer.
+    Its link stops working at once and its file and row are deleted (204). A file the person cannot see is 404, and one
+    they can see but may not revoke is 403 ``not_your_file``.
 
     If the storage delete fails the link is still dead and the row stays, expired, for the sweeper to retry. That is
     a 204 too, as the REST API has always answered it, and the body says ``"storage_deleted": False``."""
-    workspace = _workspace_of(user, workspace)
-    result = revoke_stored_artifact(workspace, artifact_id)
+    member = member if member is not None else current_membership(user)
+    try:
+        artifact = file_to_revoke(member, artifact_id)
+    except NotYourFile:
+        return Answer(
+            403,
+            {
+                "error": "Only the person who uploaded a file, or the administrator of a team it is shared with, can revoke it.",
+                "code": "not_your_file",
+            },
+        )
+    result = revoke_stored_artifact(artifact.workspace, artifact.id) if artifact is not None else False
     if not result:
         return Answer(404, {"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"})
     return Answer(204, {"storage_deleted": result != REVOKE_PENDING_DELETE})

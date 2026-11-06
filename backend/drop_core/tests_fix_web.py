@@ -31,6 +31,7 @@ from drop_core.models import (
     Artifact,
     EmailVerification,
     FunnelEvent,
+    administrator_of,
     get_or_create_workspace,
 )
 from drop_core.services import mint_upload_url
@@ -1075,6 +1076,7 @@ class ArtifactListPaginationTests(TestCase):
         for i in range(7):
             a = Artifact.objects.create(
                 workspace=self.workspace,
+                member=administrator_of(self.workspace),
                 filename=f"f{i}.txt",
                 mime_type="text/plain",
                 size_bytes=i,

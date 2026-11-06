@@ -7,7 +7,8 @@ from datetime import datetime
 
 from django.utils import timezone
 
-from drop_core.models import Artifact, current_membership
+from drop_core.file_access import files_visible_to
+from drop_core.models import current_membership
 
 # The secret scanner's flag names (drop_core/secrets.py) in words. A test keeps this table as long as the scanner's list:
 # a new pattern there needs its words here, or the page would print the name with its underscores.
@@ -50,7 +51,7 @@ def held_ids(user, body):
     ids = [item["id"] for item in body]
     if not ids:
         return set()
-    held = Artifact.objects.filter(workspace=current_membership(user).workspace, id__in=ids, safety_status="held")
+    held = files_visible_to(current_membership(user)).filter(id__in=ids, safety_status="held")
     return {str(pk) for pk in held.values_list("id", flat=True)}
 
 
