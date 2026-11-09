@@ -153,7 +153,12 @@ class McpEndpointTests(TestCase):
 
     # -- auth ---------------------------------------------------------------
     def test_missing_key_returns_401_unauthorized(self):
-        response, data = self.post(_rpc('tools/list'), raw_key=None)
+        # tools/call needs a key; the public methods (initialize,
+        # tools/list, ping, notifications/initialized) answer without one.
+        response, data = self.post(
+            _rpc('tools/call', {'name': 'list_artifacts', 'arguments': {}}),
+            raw_key=None,
+        )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(data['error']['code'], -32001)
 

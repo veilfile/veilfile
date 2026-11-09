@@ -20,12 +20,13 @@ from datetime import timedelta
 from urllib.parse import urlsplit
 
 from django.conf import settings
+from django.core.cache import cache
 from django.http import HttpResponse, JsonResponse, UnreadablePostError
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from drop_core import funnel
-from drop_core.email_verification import client_ip
+from drop_core.email_verification import client_ip, throttle_ip
 from drop_core.file_access import NotYourFile, file_to_revoke, files_visible_to
 from drop_core.models import APIKey, Artifact
 from drop_core.oauth import resolve_oauth_credential
@@ -86,6 +87,19 @@ ERR_METHOD_NOT_FOUND = -32601
 ERR_INVALID_PARAMS = -32602
 ERR_INTERNAL = -32603
 ERR_UNAUTHORIZED = -32001  # server-defined: bad/missing API key
+ERR_RATE_LIMITED = -32000  # server-defined: unauthenticated request rate
+
+# Methods that need no credential: they return only what the docs already
+# publish (the handshake, the tool catalog, an empty ping). Everything else
+# on /mcp, including tools/call, still needs a current API key or OAuth
+# token. A credential that is presented but does not validate still gets
+# 401 on every method, including these four.
+_PUBLIC_METHODS = frozenset({'initialize', 'tools/list', 'ping', 'notifications/initialized'})
+# Unauthenticated requests per IP per minute on /mcp (a real client
+# handshakes a handful of times). Counted under the throttle_ip key, so an
+# IPv6 client counts as its /64, as the account throttles do.
+UNAUTHENTICATED_MCP_WINDOW_SECONDS = 60
+UNAUTHENTICATED_MCP_MAX_PER_IP = 60
 
 # The order the approved words list the extensions in. Which extensions are
 # listed comes from ALLOWED_EXTENSIONS, so the words follow the code.
@@ -388,13 +402,15 @@ def _valid_id(value):
     return value is None or isinstance(value, (str, int))
 
 
-def _peek_request_id(request):
-    """Best-effort request id for a 401.
+def _peek_payload(request):
+    """Best-effort parsed payload of an unauthenticated request, or None.
 
     Only a body of at most MAX_UNAUTHENTICATED_BODY_BYTES is kept and
     parsed, so an unauthenticated caller never makes the server buffer or
     parse much. A larger body within MAX_BODY_BYTES is read and thrown away
-    in chunks first, so the client sees the 401 (see _discard_body).
+    in chunks first, so the client sees the answer (see _discard_body).
+    An unparseable body, or one that is not a JSON object, is not a
+    payload: the caller answers 401 with no id.
     """
     try:
         body = _read_body(request, MAX_UNAUTHENTICATED_BODY_BYTES)
@@ -404,9 +420,123 @@ def _peek_request_id(request):
     except UnreadablePostError:
         return None
     payload = _parse_json(body)
-    if isinstance(payload, dict) and _valid_id(payload.get('id')):
+    if payload is _PARSE_FAILED or not isinstance(payload, dict):
+        return None
+    return payload
+
+
+def _peek_request_id(request):
+    """Best-effort request id for a 401, from _peek_payload."""
+    payload = _peek_payload(request)
+    if payload is not None and _valid_id(payload.get('id')):
         return payload.get('id')
     return None
+
+
+def _authorization_presented(request):
+    """True when the request carries an Authorization header at all.
+
+    Distinguishes "no credential" (the public methods answer) from "a
+    credential that does not validate" (401 on every method, so a stale
+    token never silently looks like anonymous access and the client learns
+    to refresh). Any header value counts as presented, including a wrong
+    scheme or an empty Bearer token.
+    """
+    return bool(request.headers.get('Authorization', '').strip())
+
+
+def _unauthenticated_mcp_allowed(request):
+    """Per-IP throttle for requests with no credential presented.
+
+    Cache-backed fixed window, following drop_core.throttle's pattern:
+    ``throttle_ip`` for the key (an IPv6 client counts as its /64) and
+    ``cache.add`` plus ``cache.incr``, which the production cache backend
+    keeps inside the window. A cache outage fails open with a warning,
+    as the account throttles do, rather than locking everyone out.
+    """
+    network = throttle_ip(client_ip(request))
+    if not network:
+        return True
+    key = f'mcp-unauth:ip:{network}'
+    try:
+        if cache.add(key, 1, timeout=UNAUTHENTICATED_MCP_WINDOW_SECONDS):
+            return True
+        return cache.incr(key) <= UNAUTHENTICATED_MCP_MAX_PER_IP
+    except Exception:
+        logger.warning('mcp unauthenticated throttle cache failed; failing open', exc_info=True)
+        return True
+
+
+def _rate_limited(request_id):
+    """429 for the unauthenticated throttle, as a JSON-RPC error with
+    Retry-After, so a client that overdoes the handshake knows how long
+    to wait. The error code is server-defined, like -32001 for auth."""
+    response = _rpc_error(
+        request_id,
+        ERR_RATE_LIMITED,
+        'Too many unauthenticated requests. Wait a minute, then try again.',
+        http_status=429,
+        data={'code': 'rate_limited', 'retry_after': UNAUTHENTICATED_MCP_WINDOW_SECONDS},
+    )
+    response['Retry-After'] = str(UNAUTHENTICATED_MCP_WINDOW_SECONDS)
+    return response
+
+
+def _handle_unauthenticated(request):
+    """Answer a request that presented no credential.
+
+    The four public methods are dispatched with key=None (they use no key:
+    initialize builds a dict, tools/list returns the TOOLS constant, ping
+    returns {}, notifications/initialized returns 202). Anything else
+    gets the same 401 as before, with the request id echoed when the body
+    was small enough to peek at.
+    """
+    if not _unauthenticated_mcp_allowed(request):
+        # Small bodies are drained so the client sees the 429 instead of a
+        # reset; a body over the peek cap is refused unread, as the 401
+        # path refuses it.
+        _discard_body(request, MAX_UNAUTHENTICATED_BODY_BYTES)
+        return _rate_limited(None)
+    payload = _peek_payload(request)
+    if payload is None:
+        return _unauthenticated(None)
+    request_id = payload.get('id')
+    if not _valid_id(request_id):
+        return _rpc_error(None, ERR_INVALID_REQUEST, 'Send id as a string or a number.', http_status=400)
+    method = payload.get('method')
+    if method is None and ('result' in payload or 'error' in payload):
+        # A client's response to a server request. This server sends none;
+        # accept and ignore it, as Streamable HTTP requires.
+        return HttpResponse(status=202)
+    if payload.get('jsonrpc') != '2.0' or not isinstance(method, str):
+        return _rpc_error(
+            request_id, ERR_INVALID_REQUEST,
+            'Send "jsonrpc": "2.0" and a string "method".',
+            http_status=400,
+        )
+    if method not in _PUBLIC_METHODS:
+        return _unauthenticated(request_id)
+    if method != 'initialize':
+        # Sent by clients after the handshake; initialize negotiates in-band.
+        version = request.headers.get('MCP-Protocol-Version')
+        if version and version.strip() not in SUPPORTED_PROTOCOL_VERSIONS:
+            return _rpc_error(
+                request_id, ERR_INVALID_REQUEST,
+                f'This MCP-Protocol-Version is not supported; send one of '
+                f'{", ".join(SUPPORTED_PROTOCOL_VERSIONS)}.',
+                http_status=400,
+            )
+    if 'id' not in payload:
+        # A notification: never answered (JSON-RPC); Streamable HTTP wants
+        # 202 with no body, whatever the notification is.
+        return HttpResponse(status=202)
+    # The 401-to-200 shift stays visible in the logs.
+    logger.info('mcp: unauthenticated %s', method)
+    try:
+        return _dispatch(request, request_id, None, method, payload.get('params'))
+    except Exception:
+        logger.exception('mcp: unhandled error in %r', method)
+        return _rpc_error(request_id, ERR_INTERNAL, 'The server could not complete the request. Try again later.', http_status=500)
 
 
 def _service_api_key(key):
@@ -773,10 +903,15 @@ def _handle_post(request):
         )
 
     # Authenticate from the header before reading the body, so anonymous
-    # callers never make the server buffer or parse a large request.
+    # callers never make the server buffer or parse a large request. A
+    # credential that is presented but does not validate still gets 401
+    # on every method; with no credential at all, the four public methods
+    # answer and everything else gets 401.
     key = _authenticate(request)
     if key is None:
-        return _unauthenticated(_peek_request_id(request))
+        if _authorization_presented(request):
+            return _unauthenticated(_peek_request_id(request))
+        return _handle_unauthenticated(request)
 
     try:
         body = _read_body(request, MAX_BODY_BYTES)

@@ -47,7 +47,7 @@ If the base URL above still reads YOUR-DEPLOY, replace it with the address of yo
 - `GET /api/v1/artifacts`: list own artifacts, newest first, as a bare JSON array (key auth). It accepts an optional `limit` (1 to 200) and `cursor`. The `X-Next-Cursor` and `Link: rel="next"` headers point to the next page.
 - `DELETE /api/v1/artifacts/<id>`: revoke early (key auth). It returns 204 on success.
 - `GET /api/v1/usage`: return the plan, the monthly upload count, and the key and storage meters (key or session auth).
-- `POST /mcp`: accept MCP requests (key auth). The methods are `initialize`, `notifications/initialized`, `ping`, `tools/list` and `tools/call`.
+- `POST /mcp`: accept MCP requests (key auth, except `initialize`, `notifications/initialized`, `ping` and `tools/list`, which need no credential). The methods are `initialize`, `notifications/initialized`, `ping`, `tools/list` and `tools/call`.
 - `/api/v1/keys` and `/api/v1/billing/*` need dashboard session auth. An API key may list keys and revoke itself.
 - `GET /healthz`: check liveness. It returns `200 {"status":"ok"}`.
 
