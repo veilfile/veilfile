@@ -391,7 +391,16 @@ class McpErrorHandlingTests(McpFixTestBase):
             self.assertEqual(data['error']['code'], -32001)
 
     def test_unauthenticated_small_request_echoes_id(self):
-        response = self.post(self.rpc_payload('tools/list', rpc_id=42), raw_key=None)
+        # tools/call with no key: 401, and the id is echoed. (tools/list
+        # with no key now answers 200; see McpPublicMethodsTests.)
+        response = self.post(
+            self.rpc_payload(
+                'tools/call',
+                {'name': 'list_artifacts', 'arguments': {}},
+                rpc_id=42,
+            ),
+            raw_key=None,
+        )
         data = self.assertJsonRpc(response, status=401)
         self.assertEqual(data['id'], 42)
         self.assertIn('WWW-Authenticate', response)
@@ -448,6 +457,111 @@ class McpErrorHandlingTests(McpFixTestBase):
         self.assertEqual(data['error']['code'], -32602)
         data = self.assertJsonRpc(self.call('no_such_tool', {}))
         self.assertEqual(data['error']['code'], -32602)
+
+
+class McpPublicMethodsTests(McpFixTestBase):
+    """The four public methods answer with no credential; tools/call does
+    not, and a presented but invalid credential still 401s on every
+    method (mcptry score fix: unauthenticated initialize/tools/list)."""
+
+    def test_unauthenticated_initialize_returns_200_with_negotiated_version(self):
+        response = self.post(
+            self.rpc_payload(
+                'initialize',
+                {'protocolVersion': '2024-11-05', 'capabilities': {}, 'clientInfo': {'name': 'probe', 'version': '0'}},
+                rpc_id=1,
+            ),
+            raw_key=None,
+        )
+        data = self.assertJsonRpc(response)
+        self.assertEqual(data['id'], 1)
+        self.assertEqual(data['result']['protocolVersion'], '2024-11-05')
+        self.assertEqual(data['result']['serverInfo']['name'], 'veilfile-mcp')
+
+    def test_unauthenticated_tools_list_returns_200_with_four_tools(self):
+        response = self.post(self.rpc_payload('tools/list', rpc_id=2), raw_key=None)
+        data = self.assertJsonRpc(response)
+        self.assertEqual(data['id'], 2)
+        names = {t['name'] for t in data['result']['tools']}
+        self.assertEqual(
+            names, {'upload_artifact', 'create_upload_url', 'list_artifacts', 'revoke_artifact'}
+        )
+
+    def test_unauthenticated_ping_returns_200(self):
+        response = self.post(self.rpc_payload('ping', rpc_id=3), raw_key=None)
+        data = self.assertJsonRpc(response)
+        self.assertEqual(data['id'], 3)
+        self.assertEqual(data['result'], {})
+
+    def test_unauthenticated_notifications_initialized_returns_202(self):
+        response = self.post(
+            {'jsonrpc': '2.0', 'method': 'notifications/initialized'},
+            raw_key=None,
+        )
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.content, b'')
+
+    def test_unauthenticated_tools_call_is_401(self):
+        response = self.post(
+            self.rpc_payload(
+                'tools/call',
+                {'name': 'list_artifacts', 'arguments': {}},
+                rpc_id=4,
+            ),
+            raw_key=None,
+        )
+        data = self.assertJsonRpc(response, status=401)
+        self.assertEqual(data['id'], 4)
+        self.assertEqual(data['error']['code'], -32001)
+        self.assertIn('WWW-Authenticate', response)
+
+    def test_invalid_key_on_tools_list_is_still_401(self):
+        response = self.post(
+            self.rpc_payload('tools/list', rpc_id=5),
+            raw_key='vlf_this-key-does-not-exist',
+        )
+        data = self.assertJsonRpc(response, status=401)
+        self.assertEqual(data['id'], 5)
+        self.assertEqual(data['error']['code'], -32001)
+
+    def test_invalid_key_on_initialize_is_still_401(self):
+        response = self.post(
+            self.rpc_payload('initialize', {'protocolVersion': '2025-06-18'}, rpc_id=6),
+            raw_key='vlf_this-key-does-not-exist',
+        )
+        data = self.assertJsonRpc(response, status=401)
+        self.assertEqual(data['id'], 6)
+        self.assertEqual(data['error']['code'], -32001)
+
+    def test_unauthenticated_initialize_with_oversized_body_is_401(self):
+        body = json.dumps({'jsonrpc': '2.0', 'id': 7, 'method': 'initialize',
+                           'params': {'pad': 'x' * (200 * 1024)}}).encode()
+        request = self.factory.post('/mcp', data=body, content_type='application/json')
+        response = mcp_endpoint(request)
+        data = self.assertJsonRpc(response, status=401)
+        self.assertIsNone(data['id'])  # too big to parse for the id
+        self.assertIn('WWW-Authenticate', response)
+        self.assertEqual(request.read(), b'')  # nothing left unread
+
+    def test_unauthenticated_requests_are_throttled_per_ip(self):
+        for rpc_id in range(1, 61):
+            response = self.post(
+                self.rpc_payload('initialize', {'protocolVersion': '2025-06-18'}, rpc_id=rpc_id),
+                raw_key=None,
+            )
+            self.assertEqual(response.status_code, 200, rpc_id)
+        response = self.post(
+            self.rpc_payload('initialize', {'protocolVersion': '2025-06-18'}, rpc_id=61),
+            raw_key=None,
+        )
+        data = self.assertJsonRpc(response, status=429)
+        self.assertEqual(data['error']['code'], -32000)
+        self.assertEqual(response['Retry-After'], '60')
+        # Authenticated calls are not charged to the unauthenticated budget.
+        response = self.post(
+            self.rpc_payload('tools/list', rpc_id=62),
+        )
+        self.assertEqual(response.status_code, 200)
 
 
 class McpToolDescriptionTests(McpFixTestBase):

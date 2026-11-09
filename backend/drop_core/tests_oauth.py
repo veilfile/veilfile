@@ -421,10 +421,13 @@ class OAuthMcpIntegrationTests(OAuthBaseTestCase):
         self.assertEqual(response.json()["plan"], self.workspace.plan)
 
     def test_unauthenticated_mcp_has_www_authenticate(self):
+        # tools/call with no key: 401 with the OAuth challenge. (The public
+        # methods answer without a key; see McpPublicMethodsTests.)
         response = self.client.post(
             "/mcp",
             data=json.dumps(
-                {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}
+                {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                 "params": {"name": "list_artifacts", "arguments": {}}}
             ),
             content_type="application/json",
         )

@@ -453,9 +453,13 @@ DCR client rows are kept in every case, so the client can re-authorize.
 A revoked token can never authorize again: access tokens are deleted on
 revoke, and validation looks up the live row.
 
-**Unauthenticated `/mcp`.** Returns `401` with a
+**Unauthenticated `/mcp`.** A request with no credential gets `401` with a
 `WWW-Authenticate: Bearer resource_metadata="<base>/.well-known/oauth-protected-resource"`
-challenge (MCP spec) alongside the JSON-RPC error body.
+challenge (MCP spec) alongside the JSON-RPC error body, except for the four
+public methods `initialize`, `tools/list`, `ping` and
+`notifications/initialized`, which answer without a credential. A
+credential that is presented but does not validate gets the same `401` on
+every method, including the four public ones.
 
 ---
 
@@ -557,9 +561,18 @@ workspace to Free.
 Hosted MCP server at **`POST /mcp`**: plain JSON-RPC 2.0 over HTTP.
 Single request object in, single response object out, no SSE.
 `Content-Type: application/json`. Auth is the same API key scheme:
-`Authorization: Bearer vlf_...` (or an OAuth access token). Credentials are
-checked before the body is parsed, so an unauthenticated request always gets
-`401` (`-32001`), even with malformed JSON.
+`Authorization: Bearer vlf_...` (or an OAuth access token). Four methods
+need no credential: `initialize`, `tools/list`, `ping` and
+`notifications/initialized` answer the handshake and the tool catalog
+without one, since they return only what this page already publishes.
+Everything else, including `tools/call`, needs a current API key or
+OAuth token. A credential that is presented but is invalid, expired or
+revoked still gets `401` (`-32001`) on every method, including the four
+public ones, so a stale token never silently looks like anonymous
+access. Unauthenticated requests are limited to 60 per minute per IP
+(`429` with `Retry-After: 60` past that). Credentials are checked
+before the body is parsed, and a body over 64 KiB from an unauthenticated
+caller is answered `401` without being parsed.
 
 The server exposes **four tools**: `upload_artifact`, `create_upload_url`,
 `list_artifacts`, `revoke_artifact`.
@@ -723,6 +736,9 @@ extension, and the allowed list.
   alike (each has its own throttle identity), to REST `POST /api/v1/artifacts`
   and to the MCP `upload_artifact` and `create_upload_url` tools. Exceeding it
   returns `429` with a `Retry-After` header (seconds).
+- **60 unauthenticated `/mcp` requests/minute per IP.** Applies to requests
+  with no credential, on any method. Exceeding it returns `429` with
+  `Retry-After: 60`. Authenticated requests are not charged to it.
 - Only successful uploads (`201`) count against the monthly cap. Rejected
   uploads (`4xx`) never consume quota.
 - Listing, downloads, and revokes are not upload-counted.
