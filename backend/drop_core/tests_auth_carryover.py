@@ -26,7 +26,7 @@ MCP_MANIFEST = {
     "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
     "title": "Veilfile",
     "name": "io.github.veilfile/veilfile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Private, expiring artifact hosting for AI agents. Upload via API or MCP; links die on their own.",
     "websiteUrl": "https://veilfile.com",
     "remotes": [
