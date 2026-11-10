@@ -88,7 +88,7 @@ class McpEndpointTests(TestCase):
         self.assertEqual(result['protocolVersion'], '2025-06-18')
         self.assertEqual(result['capabilities'], {'tools': {}})
         self.assertEqual(result['serverInfo']['name'], 'veilfile-mcp')
-        self.assertEqual(result['serverInfo']['version'], '0.1.0')
+        self.assertEqual(result['serverInfo']['version'], '1.0.1')
 
     def test_initialize_negotiates_requested_new_version(self):
         response, data = self.post(
