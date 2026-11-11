@@ -37,6 +37,7 @@ VIEW = "backend/dashboard/members.py"
 PAGE = "backend/templates/dashboard/members.html"
 ALLOWANCE_PAGE = "backend/templates/dashboard/member_allowance.html"
 CANCEL_PAGE = "backend/templates/dashboard/invitation_cancel.html"
+REMOVE_PAGE = "backend/templates/dashboard/member_remove.html"
 URL = "/app/members/"
 SETTING_URL = "/app/members/visibility/"
 MAX_INT = 2_147_483_647
@@ -92,6 +93,7 @@ class AccessTests(MembersCase):
             (URL, ("get", "post")),
             (f"{URL}{self.member.pk}/allowance/", ("get", "post")),
             (f"{URL}invitations/{self.invitation.pk}/cancel/", ("get", "post")),
+            (f"{URL}{self.member.pk}/remove/", ("get", "post")),
             (SETTING_URL, ("post",)),
         ]
 
@@ -481,6 +483,154 @@ class HelperTests(MembersCase):
         Membership.objects.filter(pk=self.admin.pk).update(removed_at=timezone.now())
         self.assertFalse(teams.set_allowances(self.admin, member.pk, uploads=1, storage_bytes=None, keys=None))
         self.assertFalse(teams.set_file_visibility_setting(self.admin, FILE_VISIBILITY_ALWAYS_TEAM))
+
+
+class RemoveTests(MembersCase):
+    def setUp(self):
+        super().setUp()
+        self.member = second_member(self.workspace, "lin")
+        self.file = live_file(self.member, "secret-plans.txt", size=2048)
+        live_file(self.member, "shared.txt", size=1024, visibility=FILE_VISIBILITY_ALWAYS_TEAM)
+        self.url = f"{URL}{self.member.pk}/remove/"
+
+    def post(self, **fields):
+        return self.client.post(self.url, fields, follow=True)
+
+    def closed(self):
+        self.member.refresh_from_db()
+        return self.member.removed_at is not None
+
+    def expiries(self):
+        return [a.expires_at > timezone.now() for a in Artifact.objects.filter(member=self.member)]
+
+    def test_removing_asks_first_and_changes_nothing_on_a_get(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        text = visible(response.content.decode())
+        self.assertIn("Do you want to remove lin@example.com from the team?", text)
+        self.assertFalse(self.closed(), f"{VIEW}: a GET changes nothing")
+        self.assertEqual(self.expiries(), [True, True])
+
+    def test_removing_with_files_kept_and_with_files_revoked(self):
+        response = self.post(files="keep")
+        self.assertEqual(response.redirect_chain, [(URL, 302)])
+        self.assertIn("lin@example.com is no longer on the team.", visible(response.content.decode()))
+        self.assertNotIn("their files are revoked", visible(response.content.decode()))
+        self.assertTrue(self.closed())
+        self.assertEqual(self.expiries(), [True, True])
+        other = second_member(self.workspace, "kay")
+        live_file(other, "k.txt")
+        response = self.client.post(f"{URL}{other.pk}/remove/", {"files": "revoke"}, follow=True)
+        self.assertIn("kay@example.com is no longer on the team, and their files are revoked.", visible(response.content.decode()))
+        self.assertEqual([a.expires_at > timezone.now() for a in Artifact.objects.filter(member=other)], [False])
+
+    def test_the_remove_page_starts_on_keeping_the_files(self):
+        html = self.client.get(self.url).content.decode()
+        radios = re.findall(r"<input[^>]*type=\"radio\"[^>]*>", html)
+        self.assertEqual([("checked" in tag, re.search(r'value="([^"]*)"', tag).group(1)) for tag in radios], [(True, "keep"), (False, "revoke")])
+        text = visible(html)
+        self.assertIn("Let them keep working until they expire", text)
+        self.assertIn("Revoke all of them now", text)
+        self.assertIn("Remove from the team", text)
+        self.assertIn("Keep them on the team", text)
+
+    def test_an_unknown_choice_keeps_the_files(self):
+        for value in ("", "REVOKE", "revoke ", "yes"):
+            with self.subTest(value=value):
+                self.post(files=value)
+                self.assertTrue(self.closed())
+                self.assertEqual(self.expiries(), [True, True], f"{VIEW}: only the exact value revoke revokes")
+                Membership.objects.filter(pk=self.member.pk).update(removed_at=None)
+
+    def test_no_file_name_appears_on_the_remove_page(self):
+        self.assertTrue(Artifact.objects.filter(filename="secret-plans.txt", visibility=VISIBILITY_ONLY_ME, member=self.member).exists())
+        self.assertTrue(self.file.token)
+        html = self.client.get(self.url).content.decode()
+        self.assertNotIn("secret-plans", html, f"{VIEW}: the page states a count and a size only")
+        self.assertNotIn("shared.txt", html)
+        self.assertNotIn(self.file.token, html)
+
+    def test_the_remove_page_states_count_and_size_only(self):
+        self.assertIn("They have 2 live files on this team, using 3.0 KB.", visible(self.client.get(self.url).content.decode()))
+
+    def test_a_person_with_no_live_files_gets_no_choice(self):
+        Artifact.objects.filter(member=self.member).delete()
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("They have no live files on this team.", visible(html))
+        self.assertNotIn('type="radio"', html)
+        self.assertNotIn("What happens to their files", html)
+        self.assertEqual(self.post().redirect_chain, [(URL, 302)])
+        self.assertTrue(self.closed())
+
+    def test_removing_twice_is_harmless(self):
+        self.post()
+        response = self.post()
+        self.assertEqual(response.redirect_chain, [(URL, 302)])
+        self.assertIn("That person is not on the team any more.", visible(response.content.decode()))
+        response = self.client.get(self.url, follow=True)
+        self.assertEqual(response.redirect_chain, [(URL, 302)])
+        self.assertIn("That person is not on the team any more.", visible(response.content.decode()))
+
+    def test_the_administrators_own_row_is_a_sentence_and_a_redirect(self):
+        for method in ("get", "post"):
+            response = getattr(self.client, method)(f"{URL}{self.admin.pk}/remove/", follow=True)
+            self.assertEqual(response.redirect_chain, [(URL, 302)])
+            self.assertIn("That person is not on the team any more.", visible(response.content.decode()))
+        self.admin.refresh_from_db()
+        self.assertIsNone(self.admin.removed_at)
+
+    def test_another_teams_member_is_the_shells_404(self):
+        other, _ = team_of("kay")
+        stranger = second_member(other, "mo")
+        for method in ("get", "post"):
+            self.assertEqual(getattr(self.client, method)(f"{URL}{stranger.pk}/remove/").status_code, 404)
+        self.assertEqual(self.client.get(f"{URL}999999/remove/").status_code, 404)
+        stranger.refresh_from_db()
+        self.assertIsNone(stranger.removed_at)
+
+    def test_the_administrators_own_row_has_no_remove_link(self):
+        html = self.get().content.decode()
+        self.assertIn(self.url, html)
+        self.assertNotIn(f"{URL}{self.admin.pk}/remove/", html)
+        self.assertIn("Remove<span class=\"visually-hidden\"> for lin@example.com</span>", html)
+
+    def test_a_suspended_team_gets_the_sentence(self):
+        Workspace.objects.filter(pk=self.workspace.pk).update(suspended_at=timezone.now())
+        response = self.post(files="revoke")
+        self.assertEqual(response.redirect_chain, [(URL, 302)])
+        self.assertIn(
+            "This team is suspended, so nobody can be removed or leave it until the suspension ends. Contact support@veilfile.com.",
+            visible(response.content.decode()),
+        )
+        self.assertFalse(self.closed())
+
+    def test_removing_the_last_member_of_a_free_team_goes_to_overview(self):
+        Workspace.objects.filter(pk=self.workspace.pk).update(plan=Workspace.PLAN_FREE)
+        response = self.post()
+        self.assertEqual(response.redirect_chain, [("/app/", 302)])
+        self.assertTrue(self.closed())
+        self.assertIn("lin@example.com is no longer on the team.", visible(response.content.decode()))
+
+    def test_a_post_without_its_token_is_form_not_sent(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin.user)
+        with self.assertLogs("django.security.csrf", level="WARNING"):
+            response = client.post(self.url, {"files": "revoke"})
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("Form not sent", response.content.decode())
+        self.assertFalse(self.closed())
+
+    def test_removing_works_with_csrf_enforced(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin.user)
+        page = client.get(self.url).content.decode()
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page).group(1)
+        response = client.post(self.url, {"files": "keep", "csrfmiddlewaretoken": token})
+        self.assertEqual(response.status_code, 302, f"{REMOVE_PAGE}: the form carries {{% csrf_token %}}")
+        self.assertTrue(self.closed())
+
+    def test_the_page_is_a_form_page_on_the_shell(self):
+        form_pages.FormPagesAreOnTheShellTests.check(self, self.url)
 
 
 @override_settings(TEAM_SEATS=True)

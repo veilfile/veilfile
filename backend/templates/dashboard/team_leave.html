@@ -1,0 +1,14 @@
+{% extends "layouts/form.html" %}
+{# Page: confirm leaving the team (spec 4.8, team seats). A GET only shows this form; the POST leaves and goes to Overview with "You have left the team. Connect your agents again with veilfile login.". #}
+{% block title %}Leave team | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Do you want to leave this team?</h1>
+<p>You leave the team that {{ admin_email }} administers, and this account becomes a Free account again.</p>
+<p>Your API keys and connected apps stop working at once. Files you uploaded here keep working until they expire, and you can still see and revoke them on Files. They count toward the team's storage until then.</p>
+<form method="post">
+{% csrf_token %}
+<button class="action interactive" type="submit">Leave the team</button>
+</form>
+<p class="form-links"><a class="label interactive" href="{% url 'app' %}">Stay on the team</a></p>
+{% endblock %}

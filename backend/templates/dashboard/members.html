@@ -28,7 +28,7 @@
 <td data-label="Uploads this month">{{ row.uploads_used }}{% if row.upload_allowance is not None %} of {{ row.upload_allowance }}{% if row.uploads_cap %}, capped at {{ row.uploads_cap }} by the team's limit{% endif %}{% endif %}</td>
 <td data-label="Storage">{{ row.storage_used|bytes }}{% if row.storage_allowance is not None %} of {{ row.storage_allowance|bytes }}{% if row.storage_cap %}, capped at {{ row.storage_cap|bytes }} by the team's limit{% endif %}{% endif %}</td>
 <td data-label="API keys">{{ row.keys_used }}{% if row.key_allowance is not None %} of {{ row.key_allowance }}{% if row.keys_cap %}, capped at {{ row.keys_cap }} by the team's limit{% endif %}{% endif %}</td>
-<td data-label="Actions"><a class="label interactive" href="{% url 'app-member-allowance' row.person.pk %}">Set allowance<span class="visually-hidden"> for {{ row.person.user.email }}</span></a></td>
+<td data-label="Actions"><a class="label interactive" href="{% url 'app-member-allowance' row.person.pk %}">Set allowance<span class="visually-hidden"> for {{ row.person.user.email }}</span></a>{% if not row.person.is_administrator %} <a class="label interactive" href="{% url 'app-member-remove' row.person.pk %}">Remove<span class="visually-hidden"> for {{ row.person.user.email }}</span></a>{% endif %}</td>
 </tr>
 {% endfor %}</tbody>
 </table>

@@ -380,6 +380,8 @@ Every address, with the name the menu and the tests know it by. The five section
 | `app-file-visibility-setting` | `/app/members/visibility/` | POST | Save who can see new files (a GET goes to Members) |
 | `app-member-allowance` | `/app/members/<int:member_id>/allowance/` | GET, POST | Set one person's allowance |
 | `app-invitation-cancel` | `/app/members/invitations/<int:invitation_id>/cancel/` | GET, POST | Confirm, then cancel a waiting invitation |
+| `app-member-remove` | `/app/members/<int:member_id>/remove/` | GET, POST | Confirm, with the choice for the person's files, then remove a member |
+| `app-team-leave` | `/app/team/leave/` | GET, POST | Confirm, then leave the team (a member's own page, behind the switch) |
 
 Any other address under `/app/` is the shell's 404, and `/app` without its slash goes to `/app/`.
 

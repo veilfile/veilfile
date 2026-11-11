@@ -11,6 +11,7 @@
 {% if verify_prompt %}<p class="notice"><strong>Verify your email to create API keys.</strong> {% if verify_prompt.sent_to %}We sent a link to {{ verify_prompt.sent_to }}.{% else %}Add an email address to your account.{% endif %} <a href="{% url 'email-verification' %}">Verify email</a></p>
 {% endif %}
 {% if waiting_invitation %}<p class="notice" role="status">An invitation to a team is waiting for this address. Open the link in the email to accept or decline it.</p>
+{% endif %}{% if left_team %}<p class="notice" role="status">You are no longer on a team, so this account is a Free account again.</p>
 {% endif %}{% if not member_view %}{% include "dashboard/over_limits.html" with status=status usage=usage only %}
 {% if not status %}<p class="notice" role="status">Plan limits could not be checked just now. Reload the page to check again.</p>
 {% endif %}{% endif %}
@@ -33,6 +34,7 @@
 {% if member_view %}<section aria-labelledby="overview-team">
 <h2 id="overview-team">Team</h2>
 <p>You are on the team that {{ team.admin_email }} administers, which has {{ team.people }} {{ team.people|pluralize:"person,people" }}.</p>
+<p class="form-links"><a class="label interactive" href="{% url 'app-team-leave' %}">Leave the team</a></p>
 </section>
 {% endif %}{% if member_view and team.own %}<section aria-labelledby="overview-own">
 <h2 id="overview-own">Your use</h2>
