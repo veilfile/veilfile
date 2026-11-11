@@ -11,6 +11,7 @@ from django.core import mail
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
+from . import admin as admin_module
 from . import holds
 from .admin import ArtifactAdmin
 from .key_caps import create_key_within_cap
@@ -109,6 +110,20 @@ class HoldTests(TestCase):
         holds.hold_files([artifact.pk])
         self.assertEqual([message.to for message in mail.outbox], [["grace@example.com"]])
 
+    def test_a_transfer_committed_between_the_read_and_the_lock_tells_the_new_administrator(self):
+        artifact = self.file(member=self.admin, key=None)
+        real = holds._hold_in_workspace
+
+        def transfer_first(workspace_id, artifact_ids):
+            # The transfer commits before the hold takes the lock.
+            Membership.objects.filter(pk=self.admin.pk).update(role=Membership.MEMBER)
+            Membership.objects.filter(pk=self.grace.pk).update(role=Membership.ADMINISTRATOR)
+            return real(workspace_id, artifact_ids)
+
+        with mock.patch.object(holds, "_hold_in_workspace", transfer_first):
+            holds.hold_files([artifact.pk])
+        self.assertEqual([message.to for message in mail.outbox], [["grace@example.com"]])
+
     def test_no_email_when_the_uploader_is_the_administrator(self):
         artifact = self.file(member=self.admin, key=None)
         result = holds.hold_files([artifact.pk])
@@ -137,11 +152,11 @@ class HoldTests(TestCase):
     def test_releasing_clears_the_hold_and_keeps_the_key_stopped(self):
         artifact = self.file()
         holds.hold_files([artifact.pk])
-        self.assertEqual(holds.release_files([artifact.pk]), 1)
+        self.assertEqual(holds.release_files([artifact.pk]), [artifact.pk])
         self.assertFalse(self.held(artifact))
         self.key.refresh_from_db()
         self.assertFalse(self.key.is_active)
-        self.assertEqual(holds.release_files([artifact.pk]), 0)
+        self.assertEqual(holds.release_files([artifact.pk]), [])
 
     def test_holding_works_with_the_switch_off(self):
         artifact = self.file()
@@ -195,6 +210,25 @@ class AdminActionTests(TestCase):
         text = " ".join(str(message) for message in response.context["messages"])
         self.assertIn("1 file released. The keys that uploaded them stay stopped.", text)
         self.assertEqual(LogEntry.objects.filter(object_id=str(self.artifact.pk), change_message__contains="Released").count(), 1)
+
+    def test_the_actions_log_only_what_they_changed(self):
+        real_hold, real_release = admin_module.hold_files, admin_module.release_files
+
+        def another_action_first(ids):
+            Artifact.objects.filter(pk__in=ids).update(safety_status="held")
+            return real_hold(ids)
+
+        with mock.patch.object(admin_module, "hold_files", another_action_first):
+            self.act("hold_selected_files")
+        self.assertEqual(LogEntry.objects.filter(object_id=str(self.artifact.pk), change_message__contains="Held").count(), 0)
+
+        def another_release_first(ids):
+            Artifact.objects.filter(pk__in=ids).update(safety_status="clear")
+            return real_release(ids)
+
+        with mock.patch.object(admin_module, "release_files", another_release_first):
+            self.act("release_selected_files")
+        self.assertEqual(LogEntry.objects.filter(object_id=str(self.artifact.pk), change_message__contains="Released").count(), 0)
 
     def test_a_failed_notice_warns_staff(self):
         with mock.patch.object(holds, "send_mail", side_effect=OSError):

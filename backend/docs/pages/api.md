@@ -65,7 +65,9 @@ The endpoint returns your workspace's artifacts, newest first, as a bare JSON ar
 
 `DELETE /api/v1/artifacts/<id>`
 
-The endpoint deletes the artifact at once. Its URL returns `404` immediately. Success is a `204` with an empty body. Unknown ids return `404` with `{"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"}`. A file that staff hold is not revoked: the answer is `403` with `{"error": "This file is held, so it was not revoked.", "code": "file_held"}`.
+The endpoint deletes the artifact at once. Its URL returns `404` immediately. Success is a `204` with an empty body. Unknown ids return `404` with `{"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"}`.
+
+A file that staff hold is not revoked: the answer is `403` with `{"error": "This file is held, so it was not revoked.", "code": "file_held"}`.
 
 ## Download
 

@@ -78,7 +78,8 @@ class ArtifactAdmin(admin.ModelAdmin):
         chosen = list(queryset.exclude(safety_status="held"))
         result = hold_files([artifact.pk for artifact in chosen])
         for artifact in chosen:
-            self.log_change(request, artifact, "Held.")
+            if artifact.pk in result.held_ids:
+                self.log_change(request, artifact, "Held.")
         told = result.told
         self.message_user(
             request,
@@ -96,9 +97,11 @@ class ArtifactAdmin(admin.ModelAdmin):
     @admin.action(description="Release the selected files", permissions=["change"])
     def release_selected_files(self, request, queryset):
         chosen = list(queryset.filter(safety_status="held"))
-        released = release_files([artifact.pk for artifact in chosen])
+        released_ids = release_files([artifact.pk for artifact in chosen])
+        released = len(released_ids)
         for artifact in chosen:
-            self.log_change(request, artifact, "Released.")
+            if artifact.pk in released_ids:
+                self.log_change(request, artifact, "Released.")
         self.message_user(
             request,
             f"{released} {'file' if released == 1 else 'files'} released. The keys that uploaded them stay stopped.",

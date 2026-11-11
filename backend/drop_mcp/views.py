@@ -34,6 +34,7 @@ from drop_core.plans import PLANS
 from drop_core.secrets import SECRET_FLAGS_WARNING
 from drop_core.services import (
     ALLOWED_EXTENSIONS,
+    REVOKE_HELD,
     REVOKE_PENDING_DELETE,
     StorageError,
     mint_upload_url,
@@ -828,6 +829,8 @@ def _tool_revoke_artifact(key, args, request):
     if artifact.safety_status == 'held':
         raise ValueError('This file is held, so it was not revoked.')
     revoked = revoke_artifact(artifact.workspace, artifact.id)
+    if revoked == REVOKE_HELD:
+        raise ValueError('This file is held, so it was not revoked.')
     result = {'revoked': bool(revoked)}
     if revoked == REVOKE_PENDING_DELETE:
         # Additive only: the URL is already dead; storage was unreachable,

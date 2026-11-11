@@ -125,9 +125,22 @@ def mark_held(workspace_id, artifact_ids):
     return changed
 
 
+def is_held(artifact_id):
+    """Whether the file is held now. A fresh read, for a caller that must not act on a stale one."""
+    return Artifact.objects.filter(pk=artifact_id, safety_status="held").exists()
+
+
 def mark_clear(artifact_ids):
-    """Clear the hold on the listed files and return how many were held."""
-    return Artifact.objects.filter(pk__in=list(artifact_ids), safety_status="held").update(safety_status="clear")
+    """Clear the hold on the listed files and return the ids that were held."""
+    with transaction.atomic():
+        changed = list(
+            Artifact.objects.select_for_update()
+            .filter(pk__in=list(artifact_ids), safety_status="held")
+            .order_by("pk")
+            .values_list("pk", flat=True)
+        )
+        Artifact.objects.filter(pk__in=changed).update(safety_status="clear")
+    return changed
 
 
 def held_file_count(workspace):

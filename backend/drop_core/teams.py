@@ -473,7 +473,7 @@ def offer_administrator(administrator, member_id):
         if workspace.suspended_at is not None:
             raise SeatChangeRefused("team_suspended")
         row = (
-            Membership.objects.select_for_update(no_key=True)
+            Membership.objects.select_for_update(no_key=True, of=("self",))
             .filter(pk=member_id, workspace_id=workspace.pk, role=Membership.MEMBER, removed_at__isnull=True)
             .select_related("user")
             .first()
@@ -552,7 +552,7 @@ def _accept_once(member):
     team = Workspace.objects.select_for_update().get(pk=member.workspace_id)
     now = timezone.now()
     row = (
-        Membership.objects.select_for_update(no_key=True)
+        Membership.objects.select_for_update(no_key=True, of=("self",))
         .filter(
             _offer_is_live(now), pk=member.pk, workspace_id=team.pk, role=Membership.MEMBER, removed_at__isnull=True
         )

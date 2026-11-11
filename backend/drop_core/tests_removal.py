@@ -85,6 +85,49 @@ class Base(TestCase):
 
 @override_settings(TEAM_SEATS=True)
 class RemovalTests(Base):
+    def test_removal_takes_its_steps_in_the_documented_order(self):
+        from django.db.models.query import QuerySet
+
+        calls = []
+        real_deny, real_still, real_lock = teams._deny_device_logins, teams._still_administrator, QuerySet.select_for_update
+
+        def deny(*args, **kwargs):
+            calls.append("deny")
+            return real_deny(*args, **kwargs)
+
+        def still(*args, **kwargs):
+            calls.append("still")
+            return real_still(*args, **kwargs)
+
+        def lock(queryset, *args, **kwargs):
+            calls.append(f"lock:{queryset.model.__name__}")
+            return real_lock(queryset, *args, **kwargs)
+
+        with mock.patch.object(teams, "_deny_device_logins", deny), mock.patch.object(
+            teams, "_still_administrator", still
+        ), mock.patch.object(QuerySet, "select_for_update", lock):
+            self.remove()
+        self.assertEqual(calls[:3], ["deny", "lock:Workspace", "still"])
+
+    def test_the_locks_on_rows_with_a_joined_person_lock_the_row_alone(self):
+        from django.db.models.sql.compiler import SQLCompiler
+
+        seen = []
+        real = SQLCompiler.as_sql
+
+        def spy(compiler, *args, **kwargs):
+            query = compiler.query
+            if query.select_for_update and query.select_related:
+                seen.append(query.select_for_update_of)
+            return real(compiler, *args, **kwargs)
+
+        with mock.patch.object(SQLCompiler, "as_sql", spy):
+            teams.offer_administrator(self.admin, self.grace.pk)
+            teams.accept_administrator_offer(Membership.objects.get(pk=self.grace.pk))
+            self.remove(member=Membership.objects.get(pk=self.admin.pk), caller=Membership.objects.get(pk=self.grace.pk))
+        self.assertTrue(seen)
+        self.assertEqual(set(seen), {("self",)})
+
     def test_removal_stops_everything_the_row_had(self):
         login = self.approved_login(self.grace.user, self.team)
         raw, _, _ = _issue_token(self.grace.user, _make_app())
@@ -340,6 +383,17 @@ class InactiveMemberTests(Base):
         app = _make_app()
         token, _, _ = _issue_token(self.grace.user, app)
         by_grant = mint_upload_url(self.team, None, "b.txt", oauth_application_id=app.pk, member=self.grace)
+        # While the person is active, a URL of each kind takes a file.
+        working_key_url = PendingUpload.objects.create(
+            workspace=self.team, api_key=self.key, member=self.grace, filename="c.txt", ttl_days=1,
+            token="active-key-url", expires_at=timezone.now() + timedelta(minutes=15),
+        )
+        working_grant_url = mint_upload_url(self.team, None, "d.txt", oauth_application_id=app.pk, member=self.grace)
+        for url in (working_key_url.token, working_grant_url.token):
+            answer = self.put(url)
+            self.assertEqual(answer.status_code, 201, answer.content)
+        self.assertEqual(Artifact.objects.count(), 2)
+        Artifact.objects.all().delete()
         type(self.grace.user).objects.filter(pk=self.grace.user_id).update(is_active=False)
         unknown = self.put("not-a-token")
         for url in (self.pending.token, by_grant.token):

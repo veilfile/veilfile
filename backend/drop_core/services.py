@@ -12,6 +12,7 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from . import file_access
 from .models import (
     FILE_VISIBILITY_ALWAYS_TEAM,
     VISIBILITY_ONLY_ME,
@@ -643,6 +644,8 @@ def _write_safety_alert(*, subject, body):
 # revoke_artifact result when the link is dead but the bytes are not yet
 # deleted. Truthy, so callers that only check "was it revoked" still work.
 REVOKE_PENDING_DELETE = "pending_delete"
+# revoke_artifact result for a held file: nothing was changed and no bytes were deleted.
+REVOKE_HELD = "held"
 
 
 def revoke_artifact(workspace, artifact_id):
@@ -656,8 +659,9 @@ def revoke_artifact(workspace, artifact_id):
     another revoke) retries the delete; the bytes are never lost track of.
 
     A suspended team's files stay until they expire, so a report's evidence
-    does, and a held file stays too: this returns False for them, whatever
-    route called it.
+    does: this returns False for them, whatever route called it. A held file
+    stays too, and this returns ``REVOKE_HELD`` for it, also when the hold
+    lands between the read and the expiry.
     """
     try:
         artifact = Artifact.objects.select_related("workspace").get(
@@ -665,12 +669,17 @@ def revoke_artifact(workspace, artifact_id):
         )
     except Artifact.DoesNotExist:
         return False
-    if artifact.workspace.suspended_at is not None or artifact.safety_status == "held":
-        # A suspended team's files and a held file stay until they expire, so a report's evidence does.
+    if artifact.safety_status == "held":
+        return REVOKE_HELD
+    if artifact.workspace.suspended_at is not None:
+        # A suspended team's files stay until they expire, so a report's evidence does.
         return False
-    # Kill the link first, so it is dead even while storage is slow or down.
+    # Kill the link first, so it is dead even while storage is slow or down. The held check is part of the update, so a hold
+    # that commits after the read above still wins.
     now = timezone.now()
-    Artifact.objects.filter(id=artifact.id, expires_at__gt=now).update(expires_at=now)
+    expired = Artifact.objects.filter(id=artifact.id, expires_at__gt=now).exclude(safety_status="held").update(expires_at=now)
+    if not expired and file_access.is_held(artifact.id):
+        return REVOKE_HELD
     try:
         get_storage().delete(artifact.token)
     except Exception as exc:

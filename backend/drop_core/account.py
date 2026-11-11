@@ -36,6 +36,7 @@ from .models import (
 from .oauth import list_user_oauth_connections, revoke_user_oauth_grants
 from .plans import PLANS
 from .services import (
+    REVOKE_HELD,
     REVOKE_PENDING_DELETE,
     _current_month,
     workspace_storage_bytes,
@@ -367,6 +368,8 @@ def revoke_artifact(user, artifact_id, *, member=None):
             },
         )
     result = revoke_stored_artifact(artifact.workspace, artifact.id) if artifact is not None else False
+    if result == REVOKE_HELD:
+        return Answer(403, {"error": "This file is held, so it was not revoked.", "code": "file_held"})
     if not result:
         return Answer(404, {"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"})
     return Answer(204, {"storage_deleted": result != REVOKE_PENDING_DELETE})

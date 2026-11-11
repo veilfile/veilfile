@@ -188,6 +188,7 @@ A file you can see but may not revoke returns `403` with `{"error": "Only the pe
 If the storage backend is unreachable, the URL still dies at once and the
 file is deleted by the next expiry sweep; the artifact shows as expired in
 the list until then.
+
 A file that staff hold is not revoked by any route: the answer is `403` with `{"error": "This file is held, so it was not revoked.", "code": "file_held"}`. The `revoke_artifact` MCP tool raises the same sentence as an invalid-params error.
 
 ---
