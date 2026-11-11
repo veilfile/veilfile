@@ -180,6 +180,12 @@ class MakeDashboardFixturesTests(TestCase):
         for path, words in ((URL_MEMBERS, "Waiting invitations"), (f"{URL_MEMBERS}{team['member_id']}/allowance/", "Set an allowance")):
             self.assertContains(admin_client.get(path), words, msg_prefix=f"{PREFIX}: the administrator at {path}")
         self.assertContains(member_client.get("/app/"), "Your use", msg_prefix=f"{PREFIX}: the member's Overview")
+        self.assertContains(member_client.get("/app/"), "Review the request", msg_prefix=f"{PREFIX}: the member has a request to become the administrator waiting, so Overview says so")
+        for path, words in ((f"{URL_MEMBERS}{team['member_id']}/remove/", "Do you want to remove"), (f"{URL_MEMBERS}{team['member_id']}/administrator/", "Do you want to make"),
+                            (f"{URL_MEMBERS}administrator/cancel/", "Do you want to cancel the request?")):
+            self.assertContains(admin_client.get(path), words, msg_prefix=f"{PREFIX}: the administrator at {path}")
+        for path, words in (("/app/team/leave/", "Do you want to leave this team?"), ("/app/team/administrator/", "Do you want to become the administrator of this team?")):
+            self.assertContains(member_client.get(path), words, msg_prefix=f"{PREFIX}: the member at {path}")
         self.assertEqual(member_client.get(URL_MEMBERS).status_code, 404, f"{PREFIX}: a member has no Members page")
 
     def test_a_second_run_starts_again_and_touches_nobody_else(self):

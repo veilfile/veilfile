@@ -10,7 +10,7 @@ It makes five verified users, who have no password and are reached only through 
   site-dash-over   a Free workspace after a downgrade, over its limits on keys, storage, link lifetime and uploads, with a stored unpaid subscription;
   site-dash-sub    a Team subscriber whose last payment failed, with a switch to Scale waiting for payment (a session hint) for the Billing page;
   site-dash-admin  a Team workspace with people on it, for the Members page (the switch for team seats must be on in the server): its administrator, and
-  site-dash-member a member of it, with an allowance of each kind (the keys one above the plan's cap) and some use; one invitation waits for an address, made directly so that
+  site-dash-member a member of it, with an allowance of each kind (the keys one above the plan's cap) and some use; the member has a request to become the administrator waiting, and one invitation waits for an address, made directly so that
                    the raw token is known. A run deletes the team's invitations and its people other than the administrator first. The owner's files and keys are not touched.
 It also writes spare sessions of the owner for the Sign out checks, which each use one up. A run first resets what an earlier one left, so a run is the same every time.
 It refuses to run unless DEBUG is on and the database is SQLite or on this machine, and refuses while a Stripe variable is set or the storage is not the local one: the
@@ -162,6 +162,7 @@ Invitation.objects.filter(workspace=admin_workspace).delete()   # the team's inv
 Membership.objects.filter(workspace=admin_workspace).exclude(user=admin).delete()
 person = Membership.objects.create(workspace=admin_workspace, user=make_account(MEMBER), role=Membership.MEMBER,
                                    upload_allowance=50, storage_allowance_bytes=2 * 1024**3, key_allowance=9)   # nine keys: above the Team plan's five, so a cell is capped
+Membership.objects.filter(pk=person.pk).update(offered_administrator_at=NOW)   # a request to take over waits for the member: the Overview notice, the accept page and the administrator's cancel page need it
 MemberUsageCounter.objects.create(member=person, year_month=NOW.strftime("%Y-%m"), uploads=12)
 APIKey.create_key(admin_workspace, "members-agent", member=person)
 add_file(admin_workspace, "members-notes.txt", size=3_500_000, member=person)
