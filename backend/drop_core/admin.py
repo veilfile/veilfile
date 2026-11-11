@@ -9,8 +9,12 @@ class WorkspaceAdmin(admin.ModelAdmin):
     list_display = ("name", "owner", "plan", "suspended_at", "created_at")
     list_filter = ("plan",)
     # Changed only by the actions below. A full form save would write back a stale plan and stale Stripe values.
-    readonly_fields = ("suspended_at", "file_visibility")
+    readonly_fields = ("owner", "suspended_at", "file_visibility")
     actions = ("suspend_workspaces", "lift_suspensions")
+
+    def has_add_permission(self, request):
+        # A workspace comes from signup, and its owner moves only through an accepted administrator offer.
+        return False
 
     @admin.action(description="Suspend the selected workspaces", permissions=["change"])
     def suspend_workspaces(self, request, queryset):
@@ -80,7 +84,11 @@ class MembershipAdmin(admin.ModelAdmin):
         "key_allowance",
     )
     list_filter = ("role",)
-    raw_id_fields = ("workspace", "user")
+    # The person, team, role, closing and offer each carry rules of their own, so staff change allowances only.
+    readonly_fields = ("workspace", "user", "role", "removed_at", "offered_administrator_at")
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(MemberUsageCounter)

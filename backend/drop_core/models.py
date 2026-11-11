@@ -97,11 +97,18 @@ class Membership(models.Model):
     upload_allowance = models.PositiveIntegerField(null=True, blank=True)
     storage_allowance_bytes = models.PositiveBigIntegerField(null=True, blank=True)
     key_allowance = models.PositiveIntegerField(null=True, blank=True)
+    # Set on a member's row while the administrator's offer of the role waits for them.
+    offered_administrator_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
                 fields=["workspace", "user"], name="membership_one_per_person"
+            ),
+            models.UniqueConstraint(
+                fields=["workspace"],
+                condition=models.Q(offered_administrator_at__isnull=False),
+                name="membership_one_offer",
             ),
             models.UniqueConstraint(
                 fields=["workspace"],
@@ -141,9 +148,10 @@ def _administrator_row(workspace):
 
 
 def administrator_of(workspace):
-    """The workspace's current administrator, created if the row is missing."""
+    """The workspace's current administrator, created if the row is missing. A workspace loaded before the role moved still names
+    the old person, whose row is then a member's, so it raises NoCurrentAdministrator too."""
     membership = _administrator_row(workspace)
-    if membership.removed_at is not None:
+    if membership.removed_at is not None or membership.role != Membership.ADMINISTRATOR:
         raise NoCurrentAdministrator(workspace.pk)
     return membership
 

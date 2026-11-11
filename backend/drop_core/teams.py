@@ -11,7 +11,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.core.validators import validate_email
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Sum
+from django.db.models import Count, Q, Sum
 from django.template.loader import render_to_string
 from django.utils import timezone
 
@@ -46,6 +46,7 @@ MAX_WAITING = 25
 SITE_INVITES_PER_DAY = 100
 DECLINE_WAIT = timedelta(days=30)
 GONE_NOTICE = timedelta(days=7)
+OFFER_TTL = timedelta(days=7)
 FILE_VISIBILITY_SETTINGS = (FILE_VISIBILITY_MEMBERS_CHOOSE, FILE_VISIBILITY_ALWAYS_TEAM, FILE_VISIBILITY_ALWAYS_ONLY_ME)
 
 
@@ -246,8 +247,8 @@ def cancel_invitation(member, invitation_id):
 
 
 class SeatChangeRefused(Exception):
-    """A person was not removed, or did not leave. `code` names why: person_gone, team_suspended, administrator_has_people or
-    not_on_a_team."""
+    """A person was not removed, did not leave, or was not given the administrator role. `code` names why: person_gone,
+    team_suspended, administrator_has_people, not_on_a_team, chosen_suspended, chosen_not_verified or offer_not_waiting."""
 
     def __init__(self, code):
         super().__init__(code)
@@ -395,7 +396,7 @@ def _close_member_row(row, now):
     """Stop what a member's row made, then close it. Call it under the team's workspace lock."""
     APIKey.objects.filter(member=row, is_active=True).update(is_active=False)
     file_access.end_upload_urls_of(row)
-    Membership.objects.filter(pk=row.pk).update(removed_at=now)
+    Membership.objects.filter(pk=row.pk).update(removed_at=now, offered_administrator_at=None)
 
 
 def remove_member(administrator, member_id, *, revoke_files):
@@ -452,6 +453,161 @@ def leave_team(member):
             raise SeatChangeRefused("team_suspended")
         _close_member_row(row, now)
         revoke_user_oauth_grants(member.user)
+
+
+def _offer_is_live(now):
+    return Q(offered_administrator_at__gt=now - OFFER_TTL)
+
+
+def offer_administrator(administrator, member_id):
+    """Offer the administrator role to one current member of the team, replacing any offer already waiting. Returns the member's row.
+
+    Raises PermissionDenied for anyone but the administrator and SeatChangeRefused (person_gone, team_suspended,
+    chosen_suspended, chosen_not_verified) otherwise. Call it outside a transaction."""
+    if not settings.TEAM_SEATS or not administrator.is_administrator:
+        raise PermissionDenied
+    with transaction.atomic():
+        workspace = Workspace.objects.select_for_update().get(pk=administrator.workspace_id)
+        if not _still_administrator(administrator):
+            raise PermissionDenied
+        if workspace.suspended_at is not None:
+            raise SeatChangeRefused("team_suspended")
+        row = (
+            Membership.objects.select_for_update(no_key=True)
+            .filter(pk=member_id, workspace_id=workspace.pk, role=Membership.MEMBER, removed_at__isnull=True)
+            .select_related("user")
+            .first()
+        )
+        if row is None:
+            raise SeatChangeRefused("person_gone")
+        if not row.user.is_active:
+            raise SeatChangeRefused("chosen_suspended")
+        if not is_email_verified(row.user):
+            raise SeatChangeRefused("chosen_not_verified")
+        # The old offer goes first, so that the one-offer constraint never sees two.
+        Membership.objects.filter(workspace_id=workspace.pk, offered_administrator_at__isnull=False).update(
+            offered_administrator_at=None
+        )
+        Membership.objects.filter(pk=row.pk).update(offered_administrator_at=timezone.now())
+    row.refresh_from_db()
+    return row
+
+
+def cancel_administrator_offer(administrator):
+    """End the offer waiting on the administrator's team. True when one was waiting."""
+    if not settings.TEAM_SEATS or not administrator.is_administrator:
+        return False
+    with transaction.atomic():
+        Workspace.objects.select_for_update().get(pk=administrator.workspace_id)
+        if not _still_administrator(administrator):
+            return False
+        return bool(
+            Membership.objects.filter(workspace_id=administrator.workspace_id, offered_administrator_at__isnull=False).update(
+                offered_administrator_at=None
+            )
+        )
+
+
+def waiting_administrator_offer(workspace):
+    """The offer waiting on the team, as `email` (the chosen person's) and `expires`, or None. None before any query while the
+    switch is off."""
+    if not settings.TEAM_SEATS:
+        return None
+    row = (
+        Membership.objects.filter(
+            _offer_is_live(timezone.now()), workspace=workspace, role=Membership.MEMBER, removed_at__isnull=True
+        )
+        .select_related("user")
+        .first()
+    )
+    if row is None:
+        return None
+    return {"email": row.user.email, "expires": row.offered_administrator_at + OFFER_TTL}
+
+
+def administrator_offer_for(member):
+    """The offer waiting for this member, as `admin_email` (from the administrator's row) and `expires`, or None. None before any
+    query while the switch is off."""
+    if not settings.TEAM_SEATS or member.is_administrator:
+        return None
+    offered_at = (
+        Membership.objects.filter(_offer_is_live(timezone.now()), pk=member.pk, role=Membership.MEMBER, removed_at__isnull=True)
+        .values_list("offered_administrator_at", flat=True)
+        .first()
+    )
+    if offered_at is None:
+        return None
+    administrator = (
+        Membership.objects.filter(workspace_id=member.workspace_id, role=Membership.ADMINISTRATOR, removed_at__isnull=True)
+        .select_related("user")
+        .first()
+    )
+    if administrator is None:
+        return None
+    return {"admin_email": administrator.user.email, "expires": offered_at + OFFER_TTL}
+
+
+def _accept_once(member):
+    """Everything accepting decides and writes, under the workspace lock."""
+    team = Workspace.objects.select_for_update().get(pk=member.workspace_id)
+    now = timezone.now()
+    row = (
+        Membership.objects.select_for_update(no_key=True)
+        .filter(
+            _offer_is_live(now), pk=member.pk, workspace_id=team.pk, role=Membership.MEMBER, removed_at__isnull=True
+        )
+        .select_related("user")
+        .first()
+    )
+    administrator = (
+        Membership.objects.select_for_update(no_key=True)
+        .filter(workspace_id=team.pk, role=Membership.ADMINISTRATOR, removed_at__isnull=True)
+        .first()
+    )
+    if row is None or administrator is None or administrator.user_id != team.owner_id:
+        raise SeatChangeRefused("offer_not_waiting")
+    if not row.user.is_active:
+        raise SeatChangeRefused("chosen_suspended")
+    if not is_email_verified(row.user):
+        raise SeatChangeRefused("chosen_not_verified")
+    if team.suspended_at is not None:
+        raise SeatChangeRefused("team_suspended")
+    # Demote first: the one-administrator index is not deferrable.
+    Membership.objects.filter(pk=administrator.pk).update(role=Membership.MEMBER)
+    Membership.objects.filter(pk=row.pk).update(
+        role=Membership.ADMINISTRATOR,
+        offered_administrator_at=None,
+        upload_allowance=None,
+        storage_allowance_bytes=None,
+        key_allowance=None,
+    )
+    Workspace.objects.filter(pk=team.pk).update(owner_id=row.user_id)
+
+
+def accept_administrator_offer(member):
+    """Make the member the team's administrator and the administrator a member, keeping both rows. Raises SeatChangeRefused
+    (offer_not_waiting, chosen_suspended, chosen_not_verified, team_suspended). Call it outside a transaction."""
+    if not settings.TEAM_SEATS:
+        raise SeatChangeRefused("offer_not_waiting")
+    try:
+        with transaction.atomic():
+            _accept_once(member)
+    except IntegrityError:
+        # The former administrator holds a member row on another team, so they cannot hold one here.
+        raise SeatChangeRefused("offer_not_waiting") from None
+
+
+def decline_administrator_offer(member):
+    """End the offer waiting for this member. True when one was waiting. Call it outside a transaction."""
+    if not settings.TEAM_SEATS or member.is_administrator:
+        return False
+    with transaction.atomic():
+        Workspace.objects.select_for_update().get(pk=member.workspace_id)
+        return bool(
+            Membership.objects.filter(
+                pk=member.pk, workspace_id=member.workspace_id, role=Membership.MEMBER, offered_administrator_at__isnull=False
+            ).update(offered_administrator_at=None)
+        )
 
 
 def no_longer_on_team(member):

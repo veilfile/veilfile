@@ -214,6 +214,12 @@ class RemovalTests(Base):
         leave_team(lin)
         self.assertIsNotNone(Membership.objects.get(pk=lin.pk).removed_at)
 
+    def test_removal_ends_a_waiting_offer_to_that_person(self):
+        teams.offer_administrator(self.admin, self.grace.pk)
+        self.remove()
+        self.assertIsNone(Membership.objects.get(pk=self.grace.pk).offered_administrator_at)
+        self.assertIsNone(teams.waiting_administrator_offer(self.team))
+
 
 @override_settings(TEAM_SEATS=True)
 class InFlightTests(Base):
