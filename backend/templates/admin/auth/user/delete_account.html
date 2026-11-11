@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+
+{% block content %}
+<p>This deletes the account, its own workspace, and its files and keys on {{ summary.teams }} {% if summary.teams == 1 %}team{% else %}teams{% endif %}: {{ summary.files }} {% if summary.files == 1 %}file{% else %}files{% endif %} and {{ summary.keys }} {% if summary.keys == 1 %}key{% else %}keys{% endif %} in all. It cannot be undone.</p>
+<form method="post">{% csrf_token %}
+<div>
+<input type="hidden" name="post" value="yes">
+<input type="submit" value="Delete the account">
+<a href="{{ change_url }}">Go back</a>
+</div>
+</form>
+{% endblock %}

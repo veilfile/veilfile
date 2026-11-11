@@ -20,7 +20,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import transaction
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -310,17 +310,6 @@ class CascadeDeleteTests(_Base):
             )
         self.assertEqual(response.status_code, 302)
         self.assertFalse(Artifact.objects.filter(id=artifact.id).exists())
-        self.assertFalse(self._stored(artifact))
-
-    def test_admin_user_delete_removes_bytes(self):
-        artifact = self._upload()
-        admin = User.objects.create_superuser("root", "root@example.com", "pw12345678")
-        self.client.force_login(admin)
-        with self.captureOnCommitCallbacks(execute=True):
-            response = self.client.post(
-                f"/admin/auth/user/{self.user.pk}/delete/", {"post": "yes"}
-            )
-        self.assertEqual(response.status_code, 302)
         self.assertFalse(self._stored(artifact))
 
     def test_storage_failure_is_logged_with_id_and_key_and_delete_completes(self):
@@ -1457,3 +1446,21 @@ class SecretFlagResponseTests(_Base):
         )
         self.assertEqual(len(result["secret_flag_locations"]["aws_access_key"]), 20)
         self.assertIs(result["secret_flag_locations_truncated"], True)
+
+
+class AdminUserDeleteTests(TransactionTestCase):
+    """The admin's account delete runs outside any transaction, so this cannot be a TestCase, whose own transaction would trip
+    delete_account's check. It reuses _Base's setup and helpers."""
+
+    setUp = _Base.setUp
+    _hold_lazy_sweep = _Base._hold_lazy_sweep
+    _upload = _Base._upload
+    _stored = _Base._stored
+
+    def test_admin_user_delete_removes_bytes(self):
+        artifact = self._upload()
+        admin = User.objects.create_superuser("root", "root@example.com", "pw12345678")
+        self.client.force_login(admin)
+        response = self.client.post(f"/admin/auth/user/{self.user.pk}/delete/", {"post": "yes"})
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(self._stored(artifact))

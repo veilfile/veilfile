@@ -1,4 +1,5 @@
 """Which files a person may see and revoke. Every list and revoke goes through here, so that "only me" holds on every surface."""
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
@@ -132,3 +133,32 @@ def mark_clear(artifact_ids):
 def held_file_count(workspace):
     """How many live files of this team are held, whoever uploaded them, a current member or a removed one."""
     return Artifact.objects.filter(workspace=workspace, safety_status="held", expires_at__gt=timezone.now()).count()
+
+
+def held_files_at_stake(owned_workspace_ids, row_ids):
+    """Whether any held file would go with an account: one in a workspace the account owns, or one uploaded by any of its
+    rows. A held file counts whether it is live or expired and not yet swept, because staff keep it as evidence until it is gone."""
+    return Artifact.objects.filter(safety_status="held").filter(
+        Q(workspace_id__in=list(owned_workspace_ids)) | Q(member_id__in=list(row_ids))
+    ).exists()
+
+
+def files_at_stake(owned_workspace_ids, row_ids):
+    """How many files would go with an account: those in a workspace it owns and those uploaded by any of its rows. It reads no
+    file name."""
+    return Artifact.objects.filter(
+        Q(workspace_id__in=list(owned_workspace_ids)) | Q(member_id__in=list(row_ids))
+    ).count()
+
+
+def delete_files_of(row, batch=500):
+    """Delete every file one row uploaded, `batch` rows at a time and one transaction for each, so that the receiver removes each
+    batch's bytes right after its commit. Returns how many files it deleted. Call it outside a transaction."""
+    deleted = 0
+    while True:
+        ids = list(Artifact.objects.filter(member=row).values_list("pk", flat=True)[:batch])
+        if not ids:
+            return deleted
+        with transaction.atomic():
+            Artifact.objects.filter(pk__in=ids).delete()
+        deleted += len(ids)

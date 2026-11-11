@@ -1,0 +1,90 @@
+"""Deleting an account for staff (team seats, ways out).
+
+The admin's stock delete runs one transaction and stops at the files and keys that point at a membership row. This service
+stops the account's credentials on every team first, then deletes its files and keys there in batches, so that the bytes go
+after each batch, and last deletes the account, which takes its own workspaces with it. It refuses what would lose a team,
+a subscription or evidence."""
+from django.db import connection, transaction
+from django.db.models import Q
+from django.utils import timezone
+
+from . import file_access
+from .models import APIKey, Invitation, Membership, Workspace
+from .oauth import revoke_user_oauth_grants
+from .teams import _close_member_row, _deny_device_logins
+
+REFUSALS = {
+    "administers_people": "This account administers a team with other people on it. Make someone else the administrator first.",
+    "pays_through_stripe": "This account pays for a plan through Stripe. Cancel the subscription in Stripe first.",
+    "has_held_files": "Deleting this account would delete files that are held. Release or delete them first.",
+}
+
+
+class DeletionRefused(Exception):
+    """The account was not deleted. `code` is administers_people, pays_through_stripe or has_held_files."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
+def _owned_ids(user):
+    return list(Workspace.objects.filter(owner=user).values_list("pk", flat=True))
+
+
+def _row_ids(user):
+    return list(Membership.objects.filter(user=user).values_list("pk", flat=True))
+
+
+def why_not_delete(user):
+    """The code of the first reason this account cannot be deleted now, or None. Its sentence is in REFUSALS."""
+    owned = _owned_ids(user)
+    if Membership.objects.filter(workspace_id__in=owned, removed_at__isnull=True).exclude(user=user).exists():
+        return "administers_people"
+    if Workspace.objects.filter(pk__in=owned).exclude(stripe_subscription_id="").exists():
+        return "pays_through_stripe"
+    if file_access.held_files_at_stake(owned, _row_ids(user)):
+        return "has_held_files"
+    return None
+
+
+def deletion_summary(user):
+    """What deleting the account takes, as counts only: the teams it has a row on, and the files and keys in all, its own
+    workspace's included. It reads no file name."""
+    owned = _owned_ids(user)
+    rows = _row_ids(user)
+    return {
+        "teams": Membership.objects.filter(user=user).values("workspace_id").distinct().count(),
+        "files": file_access.files_at_stake(owned, rows),
+        "keys": APIKey.objects.filter(Q(workspace_id__in=owned) | Q(member_id__in=rows)).count(),
+    }
+
+
+def delete_account(user):
+    """Delete the account and what goes with it. Raises DeletionRefused when why_not_delete names a reason.
+
+    Step by step, outside any transaction: on each team the account is on and does not own, one transaction stops its
+    credentials; then its files, keys and waiting invitations go; then the account, with its own workspaces. A failure after
+    the first step leaves the stopped credentials stopped, which is safe."""
+    assert not connection.in_atomic_block, "delete_account must run outside any transaction"
+    code = why_not_delete(user)
+    if code is not None:
+        raise DeletionRefused(code)
+    now = timezone.now()
+    owned = _owned_ids(user)
+    elsewhere = list(Membership.objects.filter(user=user).exclude(workspace_id__in=owned))
+    for row in elsewhere:
+        with transaction.atomic():
+            _deny_device_logins(row.workspace_id, user.pk)
+            Workspace.objects.select_for_update().get(pk=row.workspace_id)
+            current = Membership.objects.filter(pk=row.pk, removed_at__isnull=True).first()
+            if current is not None:
+                _close_member_row(current, now)
+                revoke_user_oauth_grants(user)
+    for row in elsewhere:
+        file_access.delete_files_of(row)
+        APIKey.objects.filter(member=row).delete()
+    Invitation.objects.filter(
+        invited_by=user, accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True
+    ).update(revoked_at=now)
+    user.delete()
