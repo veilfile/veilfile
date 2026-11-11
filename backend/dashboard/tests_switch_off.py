@@ -26,6 +26,8 @@ MASKS = [
     (re.compile(r'(name="token" value=")[^"]*'), r"\1TOKEN"),
     (re.compile(r"(/a/)[A-Za-z0-9_-]{20,}"), r"\1ARTIFACT"),
     (re.compile(r"\bvlf_[A-Za-z0-9_-]+"), "KEY"),
+    # A key's id depends on the database: SQLite restarts the count in each test, and Postgres keeps counting.
+    (re.compile(r"(/app/keys/)\d+(/)"), r"\1ID\2"),
     (re.compile(r"(<time[^>]*>)[^<]*"), r"\1TIME"),
     (re.compile(r"\b20\d\d-\d\d-\d\d[T ][0-9:.+Z-]+"), "TIME"),
     (re.compile(r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}, 20\d\d(?:,? [0-9:]+(?: ?[ap]\.?m\.?)?(?: UTC)?)?"), "TIME"),

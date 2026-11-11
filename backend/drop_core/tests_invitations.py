@@ -515,6 +515,17 @@ class DeclineTests(Base):
         self.assertEqual(response.status_code, 200, f"{PAGE}: the decline form must carry the CSRF token")
         self.assertIsNotNone(Invitation.objects.get(pk=self.invitation.pk).declined_at)
 
+    def test_an_expired_invitation_cannot_be_declined(self):
+        # The sweep closes expired rows later, so an expired row can still look waiting. Declining it would start the 30-day
+        # block for that address, and the answer would differ from the not-valid page that GET and accept give.
+        Invitation.objects.filter(pk=self.invitation.pk).update(expires_at=timezone.now() - timedelta(seconds=1))
+        invalid = self.client.get(url(self.raw))
+        response = self.post(self.raw, "decline")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.content, invalid.content, f"{VIEW}: an expired link gets the not-valid answer to a decline too")
+        self.assertIsNone(Invitation.objects.get(pk=self.invitation.pk).declined_at, f"{HERE}: decline_invitation must skip an expired row")
+        self.assertFalse(decline_invitation(self.raw))
+
     def test_declining_cannot_undo_an_acceptance(self):
         grace = make_user("grace")
         self.sign_in(grace)

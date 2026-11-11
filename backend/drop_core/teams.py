@@ -350,7 +350,8 @@ def accept_invitation(user, raw_token):
 
 
 def decline_invitation(raw_token):
-    """Close a waiting invitation as declined, on the strength of the link alone. True when one was closed."""
+    """Close a waiting, unexpired invitation as declined, on the strength of the link alone. True when one was closed. An
+    expired row the sweep has not reached yet is not waiting, so it gets the not-valid answer that GET and accept give."""
     if not settings.TEAM_SEATS:
         return False
     digest = _digest(raw_token)
@@ -361,7 +362,11 @@ def decline_invitation(raw_token):
         Workspace.objects.select_for_update().get(pk=team_id)
         return bool(
             Invitation.objects.filter(
-                token_hash=digest, accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True
+                token_hash=digest,
+                accepted_at__isnull=True,
+                declined_at__isnull=True,
+                revoked_at__isnull=True,
+                expires_at__gt=timezone.now(),
             ).update(declined_at=timezone.now())
         )
 

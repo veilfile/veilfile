@@ -664,6 +664,15 @@ This is the only evidence on locks, because the suite runs on SQLite. Nothing he
 
 - [ ] **Step 12: Stop for the owner.** Report the results and the rulings, and show the screenshots. The pull request's description repeats C1's deploy note: `0018`'s `ALTER TABLE` on the workspace table waits for any transaction holding a workspace row, including one waiting on Stripe, and new reads queue behind it. `0019` is a new table. Pushing, opening the pull request and merging each need the owner's go-ahead.
 
+## Changed during the build
+
+- **A member's Team section comes before their meters,** after Plan, so that they read whose team it is first. An administrator's Team section stays last on Overview.
+- **Share with the team is the flex item, not its form,** so that it has the same height as Copy and Revoke. `file_list.css` gives `.files__actions form` `display: contents`. The only form in that cell is the share form, which exists only with the switch on.
+- **A decline needs a waiting, unexpired invitation.** The Postgres rehearsal found that an expired row the sweep had not reached could still be declined, which answered differently from GET and accept and started the 30-day block for that address.
+- **`SwitchOffTests` masks key ids** in the revoke links, and the golden files were masked in place. SQLite restarts the count in each test and Postgres does not, so the full suite on Postgres failed these two tests.
+- **The switch off is not byte-identical in three ways that nobody sees,** and the rehearsal's attack found them. An address without its trailing slash answers 301 to the slashed address, which answers the shell's 404. A POST without a CSRF token to a new address answers 403. The stylesheet link's hash changes because `file_list.css` gained a rule. Each one says only that a route or a rule exists, and the repository is public. The admin site also lists invitations, for staff only.
+- **Rollback is the code alone.** `0018` has `db_default` and the old release never reads `drop_core_invitation`, so the old release runs on the new schema. `migrate drop_core 0017` deadlocked with the old release's key lookup in about 2 of 65 rollbacks under load, because dropping the invitation table locks `auth_user` and the workspace table. Run it at a quiet time if it is ever needed, and run it again if it reports a deadlock.
+
 ## Carried to C3 and D
 
 These are not part of this plan.
@@ -677,5 +686,7 @@ These are not part of this plan.
 - **E:** agents choose visibility on upload, and `upload_artifact` honours it only under `members_choose`. The REST and MCP error sentences a member can reach still say "upgrade your plan", and E words them for a member.
 - **F, once the switch is on for good:** remove `dashboard/golden/` and `SwitchOffTests`.
 - **F, before the switch turns on:** move the site's mail to a dedicated sending service under veilfile.com, and then raise `SITE_INVITES_PER_DAY`. Invitations go to strangers, so spam reports would count against the account that sends the site's mail now, and a suspension there would also stop signup verification.
+- **F, before the switch turns on:** four paying accounts can spend the site-wide 100 invitations a day between them, because each team may send 30. That pauses invitations for every team until the day ends, with a WARNING in the log. A sending service allows a much higher `SITE_INVITES_PER_DAY`, which makes this cost many more accounts, and F sets it from what the service permits.
+- **F:** a relay that accepts a message and then times out deletes the row, so the recipient can hold a link that is not valid. Check this against the sending service's behaviour.
 - **F:** `render.yaml`'s comment becomes a real setting, the Plans page states seats, and the owner's Terms and Privacy words cover invitations, stored invited addresses and how long they are kept, and what an administrator sees.
 - **PRODUCT.md** still says a workspace has one member. It is local and uncommitted, and needs a refresh when the switch turns on.
