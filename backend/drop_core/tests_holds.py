@@ -70,6 +70,18 @@ class HoldTests(TestCase):
         self.assertEqual((result.held, result.told, result.not_told), (0, 0, 0))
         self.assertEqual(mail.outbox, [])
 
+    def test_a_file_a_revoke_already_expired_is_not_held(self):
+        # A revoke expires the row first and deletes the bytes after. A hold that lands between the two must not mark the
+        # row, or the revoke would go on to delete a held file's bytes. The revoke won, so the hold reports nothing held.
+        artifact = self.file()
+        Artifact.objects.filter(pk=artifact.pk).update(expires_at=timezone.now())
+        result = holds.hold_files([artifact.pk])
+        self.assertEqual((result.held, result.told, result.not_told), (0, 0, 0), "drop_core/file_access.py: mark_held must hold live files only")
+        self.assertFalse(self.held(artifact))
+        self.key.refresh_from_db()
+        self.assertTrue(self.key.is_active)
+        self.assertEqual(mail.outbox, [])
+
     def test_one_email_per_team_whatever_the_count(self):
         ids = [self.file(name=f"f{i}.txt").pk for i in range(3)]
         other, _ = team_of("kay")

@@ -114,10 +114,15 @@ def uploads_of(artifact_ids):
 
 
 def mark_held(workspace_id, artifact_ids):
-    """Hold the listed files of one workspace that are not held yet, and return the ids it changed. Call it under that
-    workspace's lock."""
+    """Hold the listed files of one workspace that are live and not held yet, and return the ids it changed. Call it under
+    that workspace's lock.
+
+    The rows are locked as they are chosen. A revoke expires its row before it deletes the bytes, and its expiry skips a
+    held row, so on the same row exactly one of the two wins: a file a revoke has already expired is not held here, and a
+    revoke that comes after the hold finds the file held and deletes nothing."""
     changed = list(
-        Artifact.objects.filter(workspace_id=workspace_id, pk__in=list(artifact_ids))
+        Artifact.objects.select_for_update()
+        .filter(workspace_id=workspace_id, pk__in=list(artifact_ids), expires_at__gt=timezone.now())
         .exclude(safety_status="held")
         .values_list("pk", flat=True)
     )
