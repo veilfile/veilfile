@@ -497,6 +497,19 @@ class OverviewTests(TestCase):
             off = self.page(free.user)
         self.assertEqual(on, off, "backend/dashboard/overview_page.py: a Free one-person account sees the page it saw before")
 
+    def test_a_members_team_sentence_comes_before_their_meters(self):
+        body = self.as_member()
+        self.assertIn('id="overview-team"', body, "backend/templates/dashboard/overview.html: a member's Overview has the Team section")
+        self.assertLess(body.index('id="overview-team"'), body.index('id="overview-own"'),
+                        "backend/templates/dashboard/overview.html: a member reads whose team it is before their own use (spec decision 14)")
+        self.assertEqual(body.count('id="overview-team"'), 1, "backend/templates/dashboard/overview.html: one Team section, not two")
+
+    def test_an_administrators_team_section_comes_after_the_account(self):
+        body = self.page(self.admin.user)
+        self.assertLess(body.index('id="overview-account"'), body.index('id="overview-team"'),
+                        "backend/templates/dashboard/overview.html: an administrator's Team section stays last, where it moves nothing under the open sheet")
+        self.assertEqual(body.count('id="overview-team"'), 1, "backend/templates/dashboard/overview.html: one Team section, not two")
+
     def test_a_paid_administrator_gets_the_team_section_and_a_link(self):
         _, alone = team_of("sam", plan=Workspace.PLAN_TEAM)
         html = self.page(alone.user)

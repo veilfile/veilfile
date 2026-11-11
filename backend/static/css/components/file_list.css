@@ -19,6 +19,12 @@
   gap: var(--space-2) var(--space-4);
 }
 
+/* Share with the team sits in its own form, which must not be the flex item: the button is, so that it gets the same height and
+   hit area as Copy and Revoke beside it. */
+.files__actions form {
+  display: contents;
+}
+
 /* Copy needs a script. Without one the page has Revoke and nothing to copy with. */
 :root:not(.js) .files__copy {
   display: none;
