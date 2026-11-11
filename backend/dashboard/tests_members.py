@@ -704,7 +704,8 @@ class AdministratorRequestTests(MembersCase):
 
     def test_the_row_has_make_administrator_between_the_allowance_and_remove(self):
         html = self.get().content.decode()
-        cell = re.search(rf'<td data-label="Actions"><a[^>]*href="{URL}{self.member.pk}/allowance/".*?</td>', html, re.S).group(0)
+        # The links sit in one row of quiet links, so that the three read as three and not as one run of capitals.
+        cell = re.search(rf'<td data-label="Actions"><p class="form-links"><a[^>]*href="{URL}{self.member.pk}/allowance/".*?</td>', html, re.S).group(0)
         self.assertLess(cell.index("Set allowance"), cell.index("Make administrator"))
         self.assertLess(cell.index("Make administrator"), cell.index("Remove"))
         self.assertIn("Make administrator<span class=\"visually-hidden\"> for lin@example.com</span>", cell)
