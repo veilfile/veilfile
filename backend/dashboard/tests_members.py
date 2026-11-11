@@ -397,6 +397,19 @@ class AllowanceTests(MembersCase):
                 self.assertIn('class="field__error"', response.content.decode())
         self.assertEqual(self.allowances(), (None, None, None))
 
+    def test_the_field_errors_use_the_approved_words(self):
+        # The owner approved these on 2026-11-11: the database's own limits are not numbers a person needs to read.
+        for case, words in (
+            ({"uploads": "many"}, "Enter a whole number, or leave this empty."),
+            ({"keys": str(MAX_INT + 1)}, "Enter a whole number, or leave this empty."),
+            ({"storage_gb": "lots"}, "Enter a number of GB, such as 5 or 0.5, or leave this empty."),
+            ({"storage_gb": "9" * 30}, "Enter a number of GB, such as 5 or 0.5, or leave this empty."),
+        ):
+            with self.subTest(case=case):
+                html = self.save(**case).content.decode()
+                self.assertIn(words, html, f"{VIEW}: the field error for {case} is the approved sentence")
+                self.assertNotIn("2,147,483,647", html)
+
     def test_the_largest_values_are_accepted(self):
         response = self.save(str(MAX_INT), "8589934591.99", str(MAX_INT))
         self.assertEqual(response.status_code, 302)

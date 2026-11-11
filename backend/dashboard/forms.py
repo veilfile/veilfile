@@ -82,8 +82,8 @@ MAX_COUNT = 2_147_483_647  # the largest a PositiveIntegerField holds on Postgre
 MAX_BYTES = 2**63  # a PositiveBigIntegerField holds less than this
 WHOLE_NUMBER = re.compile(r"[0-9]+")
 GB_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?")
-COUNT_ERROR = f"Enter a whole number from 0 to {MAX_COUNT:,}, or leave this empty."
-GB_ERROR = f"Enter a number of GB, such as 5 or 0.5, below {MAX_BYTES // GB:,}, or leave this empty."
+COUNT_ERROR = "Enter a whole number, or leave this empty."
+GB_ERROR = "Enter a number of GB, such as 5 or 0.5, or leave this empty."
 
 
 def gb_text(size_bytes):
