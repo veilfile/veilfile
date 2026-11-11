@@ -382,6 +382,9 @@ Every address, with the name the menu and the tests know it by. The five section
 | `app-invitation-cancel` | `/app/members/invitations/<int:invitation_id>/cancel/` | GET, POST | Confirm, then cancel a waiting invitation |
 | `app-member-remove` | `/app/members/<int:member_id>/remove/` | GET, POST | Confirm, with the choice for the person's files, then remove a member |
 | `app-team-leave` | `/app/team/leave/` | GET, POST | Confirm, then leave the team (a member's own page, behind the switch) |
+| `app-member-administrator` | `/app/members/<int:member_id>/administrator/` | GET, POST | Confirm, then ask a member to become the administrator |
+| `app-administrator-offer-cancel` | `/app/members/administrator/cancel/` | GET, POST | Confirm, then cancel the waiting request |
+| `app-team-administrator` | `/app/team/administrator/` | GET, POST | The chosen member's page for the request; the POST takes `action=accept` or `action=decline` (a member's own page, behind the switch) |
 
 Any other address under `/app/` is the shell's 404, and `/app` without its slash goes to `/app/`.
 

@@ -24,6 +24,9 @@ urlpatterns = [
     path("members/visibility/", members.file_visibility_setting, name="app-file-visibility-setting"),
     path("members/<int:member_id>/allowance/", members.member_allowance, name="app-member-allowance"),
     path("members/<int:member_id>/remove/", members.member_remove, name="app-member-remove"),
+    path("members/<int:member_id>/administrator/", members.member_administrator, name="app-member-administrator"),
+    path("members/administrator/cancel/", members.administrator_offer_cancel, name="app-administrator-offer-cancel"),
+    path("team/administrator/", team.team_administrator, name="app-team-administrator"),
     path("team/leave/", team.team_leave, name="app-team-leave"),
     path("members/invitations/<int:invitation_id>/cancel/", members.invitation_cancel, name="app-invitation-cancel"),
 ]

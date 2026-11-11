@@ -13,7 +13,7 @@ from drop_core import account as core_account
 from drop_core.email_verification import is_email_verified
 from drop_core.models import EmailVerification, current_membership
 from drop_core.plans import PLANS, plan_name
-from drop_core.teams import no_longer_on_team, team_summary, waiting_invitation_for
+from drop_core.teams import administrator_offer_for, no_longer_on_team, team_summary, waiting_invitation_for
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +63,7 @@ def overview_context(request):
         "team": team,
         "member_view": member_view,
         "left_team": settings.TEAM_SEATS and no_longer_on_team(member),
+        "administrator_offer": administrator_offer_for(member) if settings.TEAM_SEATS else None,
         "waiting_invitation": waiting_invitation_for(user),
         "get_connected": bool(usage) and own_keys == 0,
         "billing_notice": billing_notice(request.GET),

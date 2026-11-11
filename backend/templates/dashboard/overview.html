@@ -12,6 +12,7 @@
 {% endif %}
 {% if waiting_invitation %}<p class="notice" role="status">An invitation to a team is waiting for this address. Open the link in the email to accept or decline it.</p>
 {% endif %}{% if left_team %}<p class="notice" role="status">You are no longer on a team, so this account is a Free account again.</p>
+{% endif %}{% if administrator_offer %}<p class="notice" role="status">{{ administrator_offer.admin_email }} asked you to become the administrator of this team. The request ends on {{ administrator_offer.expires|utc_time }}. <a class="label interactive" href="{% url 'app-team-administrator' %}">Review the request</a></p>
 {% endif %}{% if not member_view %}{% include "dashboard/over_limits.html" with status=status usage=usage only %}
 {% if not status %}<p class="notice" role="status">Plan limits could not be checked just now. Reload the page to check again.</p>
 {% endif %}{% endif %}

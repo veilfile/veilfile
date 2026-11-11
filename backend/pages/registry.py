@@ -162,6 +162,9 @@ DASHBOARD_SECTIONS = {
     "app-invitation-cancel": "app",
     "app-member-remove": "app",
     "app-team-leave": "app",
+    "app-member-administrator": "app",
+    "app-administrator-offer-cancel": "app",
+    "app-team-administrator": "app",
 }
 
 

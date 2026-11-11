@@ -1,0 +1,14 @@
+{% extends "layouts/form.html" %}
+{# Page: confirm asking a member to become the administrator (spec 4.8, team seats). A GET only shows this form; the POST asks them and goes back to Members. #}
+{% block title %}Make administrator | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Do you want to make {{ email }} the administrator?</h1>
+<p>They become the administrator when they accept, and you become a member of the team. The administrator manages who is on the team and pays for its plan. Files that only you can see stay that way.</p>
+<p>They have 7 days to accept, on their Overview page.</p>
+<form method="post">
+{% csrf_token %}
+<button class="action interactive" type="submit">Ask them</button>
+</form>
+<p class="form-links"><a class="label interactive" href="{% url 'app-members' %}">Go back</a></p>
+{% endblock %}

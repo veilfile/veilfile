@@ -4,6 +4,7 @@ Every class sets longMessage = False (pages.tests_site_rules holds this module t
 """
 import re
 from datetime import timedelta
+from html import unescape
 from unittest import mock
 
 from django.core import mail
@@ -22,6 +23,7 @@ from drop_core.models import (
     VISIBILITY_ONLY_ME,
     APIKey,
     Artifact,
+    EmailVerification,
     Invitation,
     Membership,
     MemberUsageCounter,
@@ -94,6 +96,8 @@ class AccessTests(MembersCase):
             (f"{URL}{self.member.pk}/allowance/", ("get", "post")),
             (f"{URL}invitations/{self.invitation.pk}/cancel/", ("get", "post")),
             (f"{URL}{self.member.pk}/remove/", ("get", "post")),
+            (f"{URL}{self.member.pk}/administrator/", ("get", "post")),
+            (f"{URL}administrator/cancel/", ("get", "post")),
             (SETTING_URL, ("post",)),
         ]
 
@@ -631,6 +635,138 @@ class RemoveTests(MembersCase):
 
     def test_the_page_is_a_form_page_on_the_shell(self):
         form_pages.FormPagesAreOnTheShellTests.check(self, self.url)
+
+
+ASK_PAGE = "backend/templates/dashboard/member_administrator.html"
+CANCEL_REQUEST_PAGE = "backend/templates/dashboard/administrator_offer_cancel.html"
+NOT_WAITING = "That request is not waiting any more."
+
+
+class AdministratorRequestTests(MembersCase):
+    def setUp(self):
+        super().setUp()
+        self.member = second_member(self.workspace, "lin")
+        self.url = f"{URL}{self.member.pk}/administrator/"
+        self.cancel_url = f"{URL}administrator/cancel/"
+
+    def offered(self):
+        return teams.waiting_administrator_offer(self.workspace)
+
+    def said(self, response):
+        return unescape(visible(response.content.decode()))
+
+    def test_asking_asks_first_and_says_so(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        text = self.said(response)
+        self.assertIn("Do you want to make lin@example.com the administrator?", text)
+        self.assertIn("They become the administrator when they accept, and you become a member of the team. The administrator manages who is "
+                      "on the team and pays for its plan. Files that only you can see stay that way.", text)
+        self.assertIn("They have 7 days to accept, on their Overview page.", text)
+        self.assertIn("Ask them", text)
+        self.assertIn("Go back", text)
+        self.assertIsNone(self.offered(), f"{VIEW}: a GET changes nothing")
+        response = self.client.post(self.url, follow=True)
+        self.assertEqual(response.redirect_chain, [(URL, 302)])
+        self.assertIn("lin@example.com can now accept the request on their Overview page.", self.said(response))
+        self.assertEqual(self.offered()["email"], "lin@example.com")
+
+    def test_the_waiting_request_shows_on_members_with_a_cancel_link(self):
+        self.assertNotIn("You asked", self.said(self.get()))
+        teams.offer_administrator(self.admin, self.member.pk)
+        response = self.get()
+        text, html = self.said(response), response.content.decode()
+        expires = self.offered()["expires"]
+        self.assertIn("You asked lin@example.com to become the administrator. The request ends on", text)
+        self.assertIn("Cancel the request", text)
+        self.assertIn(f'href="{self.cancel_url}"', html)
+        self.assertLess(html.index("You asked"), html.index("<table"), f"{PAGE}: the request is a paragraph above the table")
+        self.assertIn(expires.strftime("%Y-%m-%dT%H:%MZ"), html)
+
+    def test_the_row_has_make_administrator_between_the_allowance_and_remove(self):
+        html = self.get().content.decode()
+        cell = re.search(rf'<td data-label="Actions"><a[^>]*href="{URL}{self.member.pk}/allowance/".*?</td>', html, re.S).group(0)
+        self.assertLess(cell.index("Set allowance"), cell.index("Make administrator"))
+        self.assertLess(cell.index("Make administrator"), cell.index("Remove"))
+        self.assertIn("Make administrator<span class=\"visually-hidden\"> for lin@example.com</span>", cell)
+        self.assertNotIn(f"{URL}{self.admin.pk}/administrator/", html)
+
+    def test_cancelling_the_request_asks_first(self):
+        teams.offer_administrator(self.admin, self.member.pk)
+        response = self.client.get(self.cancel_url)
+        self.assertEqual(response.status_code, 200)
+        text = self.said(response)
+        self.assertIn("Do you want to cancel the request?", text)
+        self.assertIn("lin@example.com can no longer accept the administrator role.", text)
+        self.assertIn("Keep the request", text)
+        self.assertIsNotNone(self.offered(), f"{VIEW}: a GET changes nothing")
+        response = self.client.post(self.cancel_url, follow=True)
+        self.assertEqual(response.redirect_chain, [(URL, 302)])
+        self.assertIn("The request is canceled.", self.said(response))
+        self.assertIsNone(self.offered())
+
+    def test_cancelling_with_no_request_waiting_gives_the_sentence(self):
+        for method in ("get", "post"):
+            response = getattr(self.client, method)(self.cancel_url, follow=True)
+            self.assertEqual(response.redirect_chain, [(URL, 302)])
+            self.assertIn(NOT_WAITING, self.said(response))
+
+    def test_each_refusal_gives_its_sentence_and_changes_nothing(self):
+        def suspend_team():
+            Workspace.objects.filter(pk=self.workspace.pk).update(suspended_at=timezone.now())
+
+        def suspend_person():
+            self.member.user.is_active = False
+            self.member.user.save(update_fields=["is_active"])
+
+        def unverify():
+            EmailVerification.objects.filter(user=self.member.user).update(is_verified=False)
+
+        def remove():
+            Membership.objects.filter(pk=self.member.pk).update(removed_at=timezone.now())
+
+        cases = (
+            (suspend_team, members.TEAM_SUSPENDED),
+            (suspend_person, "That person's account is suspended, so they cannot become the administrator."),
+            (unverify, "That person has not verified their email address, so they cannot become the administrator yet."),
+            (remove, "That person is not on the team any more."),
+        )
+        for setup, sentence in cases:
+            with self.subTest(sentence=sentence):
+                setup()
+                response = self.client.post(self.url, follow=True)
+                self.assertEqual(response.redirect_chain, [(URL, 302)])
+                self.assertIn(sentence, self.said(response))
+                self.assertIsNone(self.offered())
+                Workspace.objects.filter(pk=self.workspace.pk).update(suspended_at=None)
+                Membership.objects.filter(pk=self.member.pk).update(removed_at=None)
+                EmailVerification.objects.filter(user=self.member.user).update(is_verified=True)
+                self.member.user.is_active = True
+                self.member.user.save(update_fields=["is_active"])
+
+    def test_the_administrators_own_row_and_other_teams_people_are_refused(self):
+        response = self.client.post(f"{URL}{self.admin.pk}/administrator/", follow=True)
+        self.assertIn("That person is not on the team any more.", self.said(response))
+        other, _ = team_of("kay")
+        stranger = second_member(other, "mo")
+        self.assertEqual(self.client.post(f"{URL}{stranger.pk}/administrator/").status_code, 404)
+        self.assertEqual(self.client.get(f"{URL}999999/administrator/").status_code, 404)
+        self.assertIsNone(Membership.objects.get(pk=stranger.pk).offered_administrator_at)
+
+    def test_both_forms_work_with_the_token_the_page_carries(self):
+        client = Client(enforce_csrf_checks=True)
+        client.force_login(self.admin.user)
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', client.get(self.url).content.decode()).group(1)
+        self.assertEqual(client.post(self.url, {"csrfmiddlewaretoken": token}).status_code, 302, f"{ASK_PAGE}: the form carries {{% csrf_token %}}")
+        self.assertIsNotNone(self.offered())
+        token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', client.get(self.cancel_url).content.decode()).group(1)
+        self.assertEqual(client.post(self.cancel_url, {"csrfmiddlewaretoken": token}).status_code, 302, f"{CANCEL_REQUEST_PAGE}: the form carries {{% csrf_token %}}")
+        self.assertIsNone(self.offered())
+
+    def test_the_pages_are_form_pages_on_the_shell(self):
+        form_pages.FormPagesAreOnTheShellTests.check(self, self.url)
+        teams.offer_administrator(self.admin, self.member.pk)
+        form_pages.FormPagesAreOnTheShellTests.check(self, self.cancel_url)
 
 
 @override_settings(TEAM_SEATS=True)

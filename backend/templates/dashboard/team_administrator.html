@@ -1,0 +1,26 @@
+{% extends "layouts/form.html" %}
+{# Page: the request to become the administrator (spec 4.8, team seats). A GET only shows it; the POST accepts or declines with the action field. A person with an unverified address is sent to verify first. #}
+{% block title %}Become administrator | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Do you want to become the administrator of this team?</h1>
+{% if not verified %}<p>Verify your email first, then open this page again.</p>
+<p class="form-links"><a class="action interactive" href="{% url 'email-verification' %}">Verify email</a></p>
+{% else %}<p>{{ admin_email }} asked you to take over the team. If you accept:</p>
+<ul>
+<li>You manage who is on the team, what each person can use and who can see new files.</li>
+<li>You pay for the team's plan, and Billing is yours to manage.</li>
+<li>{{ admin_email }} becomes a member, and the files that only they can see stay private.</li>
+<li>You cannot leave the team while other people are on it, until you hand the role on.</li>
+</ul>
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="action" value="accept">
+<button class="action interactive" type="submit">Become the administrator</button>
+</form>
+{% endif %}<form method="post">
+{% csrf_token %}
+<input type="hidden" name="action" value="decline">
+<p class="form-links"><button class="label interactive" type="submit">Decline</button></p>
+</form>
+{% endblock %}

@@ -32,7 +32,9 @@ from drop_billing.account import ALREADY_SUBSCRIBED_MESSAGES
 from drop_billing.models import Subscription
 from drop_billing.tests_fix_billing import ENV, FixBillingBase, make_sub, missing_customer_error, sub_list
 from drop_core.account import Answer
-from drop_core.models import APIKey, Artifact, Membership, Workspace, administrator_of
+from drop_core import teams
+from drop_core.key_caps import create_key_within_cap
+from drop_core.models import VISIBILITY_ONLY_ME, APIKey, Artifact, Membership, Workspace, administrator_of
 from drop_core.plans import ANNUAL_PRICE_USD, PLANS, plan_name
 from drop_core.tests_members import second_member
 from pages import registry
@@ -1213,3 +1215,53 @@ class MemberBillingPageTests(BillingCase):
             off = page()
         self.assertEqual(on, off, f"{PAGE}: an administrator sees the page they saw before")
         self.assertNotIn(MEMBER_SENTENCE, on)
+
+
+@override_settings(TEAM_SEATS=True)
+class TransferFollowsTheRoleTests(BillingCase):
+    """After the administrator role moves, every page follows the role and not the person."""
+
+    def test_after_the_transfer_everything_follows_the_role(self):
+        self.set_billing("team", customer="cus_A", sub_id="sub_A")
+        old = Membership.objects.get(workspace=self.ws, role=Membership.ADMINISTRATOR)
+        new = second_member(self.ws, "lin")
+        create_key_within_cap(self.ws, "ada-own-key", member=old)
+        create_key_within_cap(self.ws, "lin-own-key", member=new)
+        Artifact.objects.create(
+            workspace=self.ws, member=old, filename="only-me-plans.txt", mime_type="text/plain", size_bytes=3, content_sha256="0" * 64,
+            expires_at=timezone.now() + timedelta(days=3), visibility=VISIBILITY_ONLY_ME,
+        )
+        teams.offer_administrator(old, new.pk)
+        teams.accept_administrator_offer(Membership.objects.get(pk=new.pk))
+        former, chosen = Client(), Client()
+        former.force_login(old.user)
+        chosen.force_login(new.user)
+
+        def text(client, url):
+            response = client.get(url)
+            self.assertEqual(response.status_code, 200, url)
+            return visible_text(response.content.decode())
+
+        overview = text(former, "/app/")
+        self.assertIn(f"You are on the team that {new.user.email} administers", overview)
+        self.assertNotIn("/app/members/", former.get("/app/").content.decode())
+        self.assertIn(MEMBER_SENTENCE, text(former, self.billing))
+        calls = self.no_stripe()
+        for path in (self.checkout, self.portal, self.switch_url("scale")):
+            response = former.post(path, {"plan": "scale"}, follow=True)
+            self.assertIn(MEMBER_SENTENCE, visible_text(response.content.decode()))
+        self.assertNoStripe(calls, "the former administrator reached Stripe")
+        self.assertEqual(former.get("/app/members/").status_code, 404)
+        keys = text(former, "/app/keys/")
+        self.assertIn("ada-own-key", keys)
+        self.assertNotIn("lin-own-key", keys)
+
+        self.assertIn("You are the administrator.", text(chosen, "/app/"))
+        self.assertNotIn(MEMBER_SENTENCE, text(chosen, self.billing))
+        self.assertEqual(chosen.get("/app/members/").status_code, 200)
+        keys = text(chosen, "/app/keys/")
+        self.assertIn("lin-own-key", keys)
+        self.assertIn("ada-own-key", keys)
+        for url in ("/app/", "/app/files/", "/app/keys/", self.billing, "/app/members/"):
+            with self.subTest(url=url):
+                self.assertNotIn("only-me-plans.txt", text(chosen, url))
