@@ -17,6 +17,7 @@ from django.utils import timezone
 
 from pages.errors import not_found
 
+from . import file_access
 from .email_verification import is_email_verified
 from .models import (
     FILE_VISIBILITY_ALWAYS_ONLY_ME,
@@ -24,6 +25,7 @@ from .models import (
     FILE_VISIBILITY_MEMBERS_CHOOSE,
     APIKey,
     Artifact,
+    DeviceCode,
     Invitation,
     Membership,
     MemberUsageCounter,
@@ -43,6 +45,7 @@ INVITES_PER_ADDRESS_PER_DAY = 3
 MAX_WAITING = 25
 SITE_INVITES_PER_DAY = 100
 DECLINE_WAIT = timedelta(days=30)
+GONE_NOTICE = timedelta(days=7)
 FILE_VISIBILITY_SETTINGS = (FILE_VISIBILITY_MEMBERS_CHOOSE, FILE_VISIBILITY_ALWAYS_TEAM, FILE_VISIBILITY_ALWAYS_ONLY_ME)
 
 
@@ -242,6 +245,15 @@ def cancel_invitation(member, invitation_id):
         )
 
 
+class SeatChangeRefused(Exception):
+    """A person was not removed, or did not leave. `code` names why: person_gone, team_suspended, administrator_has_people or
+    not_on_a_team."""
+
+    def __init__(self, code):
+        super().__init__(code)
+        self.code = code
+
+
 class JoinRefused(Exception):
     """A person was not joined. `code` is one of why_not_join's, or not_valid for a link that no longer works."""
 
@@ -369,6 +381,90 @@ def decline_invitation(raw_token):
                 expires_at__gt=timezone.now(),
             ).update(declined_at=timezone.now())
         )
+
+
+def _deny_device_logins(workspace_id, user_id):
+    """Deny the device logins the person approved on this team and no terminal has collected. Call it inside the transaction and
+    before the workspace lock, the order a device poll takes the two."""
+    DeviceCode.objects.filter(workspace_id=workspace_id, approved_by_id=user_id, status=DeviceCode.STATUS_APPROVED).update(
+        status=DeviceCode.STATUS_DENIED
+    )
+
+
+def _close_member_row(row, now):
+    """Stop what a member's row made, then close it. Call it under the team's workspace lock."""
+    APIKey.objects.filter(member=row, is_active=True).update(is_active=False)
+    file_access.end_upload_urls_of(row)
+    Membership.objects.filter(pk=row.pk).update(removed_at=now)
+
+
+def remove_member(administrator, member_id, *, revoke_files):
+    """Remove one member from the administrator's team and stop everything their row had. Returns how many files it ended, which
+    is 0 unless `revoke_files` is true; otherwise the files run out on their own.
+
+    Raises PermissionDenied for anyone but the administrator and SeatChangeRefused (person_gone, team_suspended) otherwise. Call it
+    outside a transaction."""
+    if not settings.TEAM_SEATS or not administrator.is_administrator:
+        raise PermissionDenied
+    target = Membership.objects.filter(
+        pk=member_id, workspace_id=administrator.workspace_id, role=Membership.MEMBER, removed_at__isnull=True
+    ).select_related("user").first()
+    if target is None:
+        raise SeatChangeRefused("person_gone")
+    now = timezone.now()
+    with transaction.atomic():
+        _deny_device_logins(administrator.workspace_id, target.user_id)
+        workspace = Workspace.objects.select_for_update().get(pk=administrator.workspace_id)
+        if not _still_administrator(administrator):
+            raise PermissionDenied
+        if workspace.suspended_at is not None:
+            raise SeatChangeRefused("team_suspended")
+        row = Membership.objects.filter(
+            pk=member_id, workspace_id=workspace.pk, role=Membership.MEMBER, removed_at__isnull=True
+        ).first()
+        if row is None:
+            raise SeatChangeRefused("person_gone")
+        _close_member_row(row, now)
+        ended = file_access.expire_files_of(row, now) if revoke_files else 0
+        revoke_user_oauth_grants(target.user)
+    return ended
+
+
+def leave_team(member):
+    """Take the person off the team their row is on, and stop everything the row had. Their files run out on their own.
+
+    Raises SeatChangeRefused: administrator_has_people for an administrator of a team with other people, not_on_a_team for anyone
+    else whose row is not a member's, and team_suspended. Call it outside a transaction."""
+    if not settings.TEAM_SEATS:
+        raise SeatChangeRefused("not_on_a_team")
+    if member.is_administrator:
+        raise SeatChangeRefused("administrator_has_people" if has_other_members(member.workspace) else "not_on_a_team")
+    now = timezone.now()
+    with transaction.atomic():
+        _deny_device_logins(member.workspace_id, member.user_id)
+        workspace = Workspace.objects.select_for_update().get(pk=member.workspace_id)
+        row = Membership.objects.filter(
+            pk=member.pk, workspace_id=workspace.pk, role=Membership.MEMBER, removed_at__isnull=True
+        ).first()
+        if row is None:
+            raise SeatChangeRefused("not_on_a_team")
+        if workspace.suspended_at is not None:
+            raise SeatChangeRefused("team_suspended")
+        _close_member_row(row, now)
+        revoke_user_oauth_grants(member.user)
+
+
+def no_longer_on_team(member):
+    """Whether Overview tells the person they are no longer on a team: their current row is the administrator row of their own
+    place, and one of their member rows closed less than GONE_NOTICE ago. It names nobody. False before any query while the switch
+    is off."""
+    if not settings.TEAM_SEATS or not member.is_administrator:
+        return False
+    if not Workspace.objects.filter(pk=member.workspace_id, owner_id=member.user_id).exists():
+        return False
+    return Membership.objects.filter(
+        user_id=member.user_id, role=Membership.MEMBER, removed_at__gt=timezone.now() - GONE_NOTICE
+    ).exists()
 
 
 def has_team_features(workspace):

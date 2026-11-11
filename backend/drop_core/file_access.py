@@ -1,8 +1,15 @@
 """Which files a person may see and revoke. Every list and revoke goes through here, so that "only me" holds on every surface."""
-from django.db.models import Q
+from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
-from .models import FILE_VISIBILITY_MEMBERS_CHOOSE, VISIBILITY_CHOICES, VISIBILITY_TEAM, Artifact, Membership
+from .models import (
+    FILE_VISIBILITY_MEMBERS_CHOOSE,
+    VISIBILITY_CHOICES,
+    VISIBILITY_TEAM,
+    Artifact,
+    Membership,
+    PendingUpload,
+)
 
 
 class NotYourFile(Exception):
@@ -73,3 +80,27 @@ def file_details(member, ids):
             "can_change_visibility": mine and here and choose and live,
         }
     return details
+
+
+def expire_files_of(row, now):
+    """End the live files one person uploaded to their team, of either visibility, by setting their expiry to `now`. Held
+    files are left alone, so staff keep them as evidence. Returns how many files it ended. It reads no file name."""
+    return (
+        Artifact.objects.filter(member=row, workspace_id=row.workspace_id, expires_at__gt=now)
+        .exclude(safety_status="held")
+        .update(expires_at=now)
+    )
+
+
+def live_files_of(row, now):
+    """How many live files one person has on their team, and their bytes, as a tuple. Held files count, because they still
+    take room. It reads no file name."""
+    totals = Artifact.objects.filter(member=row, workspace_id=row.workspace_id, expires_at__gt=now).aggregate(
+        count=Count("pk"), total=Sum("size_bytes")
+    )
+    return totals["count"], totals["total"] or 0
+
+
+def end_upload_urls_of(row):
+    """Mark the unused upload URLs one person minted on their team as used, so that none of them takes a file again."""
+    PendingUpload.objects.filter(member=row, workspace_id=row.workspace_id, used=False).update(used=True)
