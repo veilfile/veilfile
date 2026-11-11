@@ -4,13 +4,16 @@ Run from backend/ inside Django, with SITE_SESSION_FILE as for make_staff_sessio
   SITE_SESSION_FILE=../site-tests/session.txt python manage.py shell -c "exec(open('../site-tests/make_form_fixtures.py').read())"
 
 It makes verified users and their sessions (one with the longest values the models take), a user whose verification link went a moment ago, a user to reset, device codes,
-OAuth clients registered through /o/register/, the links of the reset and verification emails, and the 404 and the 500 as production draws them: the dev server runs with
+OAuth clients registered through /o/register/, the links of the reset and verification emails, a team with two waiting invitations (made directly, so that the raw tokens are
+known; the invitation page answers only while the switch for team seats is on in the server), and the 404 and the 500 as production draws them: the dev server runs with
 DEBUG on, which never calls the site's error handlers, so those two are drawn here with DEBUG off, by the whole request stack, and the checks serve those bytes.
 A run first deletes what an earlier one left. It refuses to run unless DEBUG is on and the database is SQLite or on this machine: it sets a known password on users.
 """
+import hashlib
 import json
 import logging
 import os
+import secrets
 from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlencode
@@ -29,7 +32,7 @@ from oauth2_provider.models import get_application_model
 
 from drop_core import device
 from drop_core.email_verification import make_verification_token
-from drop_core.models import APIKey, DeviceCode, EmailSendLog, EmailVerification, get_or_create_workspace
+from drop_core.models import APIKey, DeviceCode, EmailSendLog, EmailVerification, Invitation, Membership, Workspace, get_or_create_workspace
 
 if not settings.DEBUG or (connection.vendor != "sqlite"
                           and connection.settings_dict.get("HOST", "") not in ("", "localhost", "127.0.0.1", "::1")):
@@ -56,6 +59,14 @@ def make_user(username, email, verified=None, last_sent_at=None):
         EmailVerification.objects.update_or_create(user=user, defaults={"email": email, "is_verified": verified, "last_sent_at": last_sent_at,
                                                                          "verified_at": timezone.now() if verified else None})
     return user
+
+
+def invite(workspace, inviter, address):
+    """A waiting invitation of `address`, made directly (nothing is mailed); the raw token that opens it."""
+    raw = secrets.token_urlsafe(32)
+    Invitation.objects.create(workspace=workspace, email=address, token_hash=hashlib.sha256(raw.encode()).hexdigest(), invited_by=inviter,
+                              expires_at=timezone.now() + Invitation.TTL)
+    return raw
 
 
 def session_for(user):
@@ -125,8 +136,18 @@ reset = make_user("site-reset", "site-reset@example.com", verified=False)
 APIKey.objects.filter(workspace__owner__in=[verified, long_user]).delete()
 APIKey.create_key(get_or_create_workspace(long_user), "K" * 255)   # the free plan allows one key: the long user is at the limit
 
+team_admin = make_user("site-team-admin", "site-team-admin@example.com", verified=True)
+team = get_or_create_workspace(team_admin)
+Workspace.objects.filter(pk=team.pk).update(plan="team")
+Invitation.objects.filter(workspace=team).delete()   # the team's invitations and people other than its administrator, so that a run is the same every time
+Membership.objects.filter(workspace=team).exclude(user=team_admin).delete()
+invitee = make_user("site-invitee", "site-invitee@example.com", verified=True)   # the address of the first invitation, verified: the invitation page offers to join
+unverified_invitee = make_user("site-invitee-unverified", "site-invitee-unverified@example.com", verified=False, last_sent_at=timezone.now() + timedelta(hours=1))   # a resend is too soon: no mail
+
 fixtures = {
-    "sessions": {"verified": session_for(verified), "long": session_for(long_user), "pending": session_for(pending)},
+    "sessions": {"verified": session_for(verified), "long": session_for(long_user), "pending": session_for(pending),
+                 "invitee": session_for(invitee), "invitee_unverified": session_for(unverified_invitee)},
+    "invite": {"token": invite(team, team_admin, invitee.email), "unverified_token": invite(team, team_admin, unverified_invitee.email), "missing": "site-checks-not-a-token"},
     "accounts": {"verified": {"username": verified.username, "password": PASSWORD}},
     "device": {"consent": make_code("veilfile-cli/0.4.0 (site checks)"), "long": make_code("U" * 256),
                "expired": make_code("veilfile-cli/0.4.0 (site checks)", lasts=timedelta(seconds=-30)), "unknown": "ZZZZ-2222",

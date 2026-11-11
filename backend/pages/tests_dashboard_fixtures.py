@@ -18,11 +18,13 @@ from django.test import Client, TestCase, override_settings
 from drop_billing import account as billing_account
 from drop_core import account
 from drop_core.key_caps import key_cap
-from drop_core.models import APIKey, Artifact, get_or_create_workspace
+from drop_core.models import APIKey, Artifact, Invitation, Membership, get_or_create_workspace
+from drop_core.teams import find_invitation, member_rows
 
 ROOT = Path(settings.BASE_DIR).parent
 SCRIPT, HARNESS = ROOT / "site-tests" / "make_dashboard_fixtures.py", ROOT / "site-tests" / "run_site_checks.py"
 PREFIX = "site-tests/make_dashboard_fixtures.py"
+URL_MEMBERS = "/app/members/"
 SECTIONS = ("/app/", "/app/files/", "/app/keys/", "/app/apps/", "/app/billing/")
 
 
@@ -102,8 +104,8 @@ class MakeDashboardFixturesTests(TestCase):
 
     def test_it_writes_the_sessions_and_the_names_the_harness_reads_and_each_session_opens_every_section(self):
         f = self.f
-        self.assertEqual(sorted(f), ["over", "owner", "sessions", "sub"], f"{PREFIX}: the keys the dashboard part reads")
-        self.assertEqual(sorted(f["sessions"]), ["over", "owner", "sign_out", "sub"], f"{PREFIX}: the sessions the dashboard part reads")
+        self.assertEqual(sorted(f), ["over", "owner", "sessions", "sub", "team"], f"{PREFIX}: the keys the dashboard part reads")
+        self.assertEqual(sorted(f["sessions"]), ["admin", "member", "over", "owner", "sign_out", "sub"], f"{PREFIX}: the sessions the dashboard part reads")
         self.assertEqual(len(f["sessions"]["sign_out"]), 14, f"{PREFIX}: the Sign out checks end 14 sessions of the owner (dashboard_sign_out_problems and dashboard_slow_frames_problems), so there are 14")
         missing = []
         for path in sorted(fixture_paths() - {("run",)}):
@@ -115,7 +117,7 @@ class MakeDashboardFixturesTests(TestCase):
                 here = here[step]
         self.assertEqual(missing, [], f"{PREFIX}: site-tests/run_site_checks.py reads fixtures it does not write: add them to the fixtures dict, or take the read out")
         self.assertTrue(fixture_paths(), "pages/tests_dashboard_fixtures.py: fixture_paths() found no read of fixtures[...] in the dashboard part's functions, so nothing was compared")
-        for name, key in (("owner", f["sessions"]["owner"]), ("over", f["sessions"]["over"]), ("sub", f["sessions"]["sub"]), ("a spare", f["sessions"]["sign_out"][0]), ("the last spare", f["sessions"]["sign_out"][13])):
+        for name, key in (("owner", f["sessions"]["owner"]), ("over", f["sessions"]["over"]), ("sub", f["sessions"]["sub"]), ("the team's administrator", f["sessions"]["admin"]), ("the team's member", f["sessions"]["member"]), ("a spare", f["sessions"]["sign_out"][0]), ("the last spare", f["sessions"]["sign_out"][13])):
             client = signed_in(key)
             for path in SECTIONS:
                 self.assertEqual(client.get(path).status_code, 200, f"{PREFIX}: the {name} session should open {path}")
@@ -155,11 +157,40 @@ class MakeDashboardFixturesTests(TestCase):
         pending = signed_in(self.f["sessions"]["sub"]).session["dashboard_pending_switch"]
         self.assertEqual((pending["plan"], pending["invoice_url"].startswith("https://")), ("scale", True), f"{PREFIX}: a switch to Scale waits for payment (dashboard/billing_page.py remember_pending)")
 
+    @override_settings(TEAM_SEATS=True)
+    def test_the_team_has_an_administrator_a_member_with_allowances_and_a_waiting_invitation(self):
+        team, User = self.f["team"], get_user_model()
+        admin = User.objects.get(username="site-dash-admin")
+        workspace = get_or_create_workspace(admin)
+        self.assertEqual(workspace.plan, "team", f"{PREFIX}: the team is on the Team plan, which allows five people")
+        rows = member_rows(workspace)
+        self.assertEqual([row["role"] for row in rows], ["administrator", "member"], f"{PREFIX}: an administrator and one member")
+        member = rows[1]
+        self.assertEqual(member["person"].pk, team["member_id"], f"{PREFIX}: the allowance page is opened for this member")
+        self.assertEqual((member["upload_allowance"], member["storage_allowance"], member["key_allowance"]), (50, 2 * 1024**3, 9),
+                         f"{PREFIX}: the member has all three allowances, the keys one above the plan's five, so that a cell reads 'capped at'")
+        self.assertGreater(member["uploads_used"], 0, f"{PREFIX}: the member has used some of the month's uploads")
+        self.assertGreater(member["storage_used"], 0, f"{PREFIX}: the member has files, so the Storage cell has a figure")
+        invitation = find_invitation(team["token"])
+        self.assertEqual((invitation.workspace_id, invitation.email), (workspace.pk, team["invitee"]), f"{PREFIX}: the raw token opens the waiting invitation, which was made directly")
+        self.assertEqual(Invitation.objects.filter(workspace=workspace).count(), 1, f"{PREFIX}: one invitation waits")
+        self.assertEqual(Membership.objects.filter(user__username__in=["site-dash-admin", "site-dash-member"], removed_at__isnull=True).count(), 2,
+                         f"{PREFIX}: the new users are the team's two people and nobody else's")
+        admin_client, member_client = signed_in(self.f["sessions"]["admin"]), signed_in(self.f["sessions"]["member"])
+        for path, words in ((URL_MEMBERS, "Waiting invitations"), (f"{URL_MEMBERS}{team['member_id']}/allowance/", "Set an allowance")):
+            self.assertContains(admin_client.get(path), words, msg_prefix=f"{PREFIX}: the administrator at {path}")
+        self.assertContains(member_client.get("/app/"), "Your use", msg_prefix=f"{PREFIX}: the member's Overview")
+        self.assertEqual(member_client.get(URL_MEMBERS).status_code, 404, f"{PREFIX}: a member has no Members page")
+
     def test_a_second_run_starts_again_and_touches_nobody_else(self):
         bystander = get_user_model().objects.create(username="site-dash-bystander")
         APIKey.create_key(get_or_create_workspace(bystander), "not-theirs")
         again = run_script()
         self.assertNotEqual(again["sessions"], self.f["sessions"], f"{PREFIX}: a run makes new sessions")
+        admin = get_user_model().objects.get(username="site-dash-admin")
+        self.assertEqual((Membership.objects.filter(workspace__owner=admin, removed_at__isnull=True).count(), Invitation.objects.filter(workspace__owner=admin).count()), (2, 1),
+                         f"{PREFIX}: a run starts by deleting the team's invitations and members, so a second leaves two people and one invitation")
+        self.assertNotEqual(again["team"]["token"], self.f["team"]["token"], f"{PREFIX}: a run makes a new invitation, with a token of its own")
         owner = get_user_model().objects.get(username="site-dash-owner")
         self.assertEqual((Artifact.objects.filter(workspace__owner=owner).count(), APIKey.objects.filter(workspace__owner=owner).count()), (53, 4),
                          f"{PREFIX}: a run starts by deleting what an earlier one made, so a second leaves 53 files and 4 keys and not twice as many")

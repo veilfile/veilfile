@@ -1,0 +1,18 @@
+{% extends "layouts/form.html" %}
+{% load shell %}
+{# Page: set one person's allowance (spec 4.8, team seats). A GET shows the form; the POST saves and goes back to Members with "The allowance is saved.". Each field is prefilled with a string, because the field component prints a value only when it is truthy, which a zero is not. #}
+{% block title %}Set an allowance | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>Set an allowance</h1>
+<p>You are setting the allowance for {{ email }}.</p>
+{% focus_field form "uploads" "storage_gb" "keys" as focus %}
+<form method="post">
+{% csrf_token %}
+{% include "components/field.html" with id="id_uploads" name="uploads" label="Uploads a month" value=form.uploads.value autocomplete="off" help="Leave this empty for no allowance." errors=form.uploads.errors focus=focus extra='inputmode="numeric"' only %}
+{% include "components/field.html" with id="id_storage_gb" name="storage_gb" label="Storage in GB" value=form.storage_gb.value autocomplete="off" help="Leave this empty for no allowance." errors=form.storage_gb.errors focus=focus extra='inputmode="decimal"' only %}
+{% include "components/field.html" with id="id_keys" name="keys" label="API keys" value=form.keys.value autocomplete="off" help="Leave this empty for no allowance." errors=form.keys.errors focus=focus extra='inputmode="numeric"' only %}
+<button class="action interactive" type="submit">Save</button>
+</form>
+<p class="form-links"><a class="label interactive" href="{% url 'app-members' %}">Go back</a></p>
+{% endblock %}

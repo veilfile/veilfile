@@ -1,0 +1,55 @@
+{% extends "layouts/form.html" %}
+{# An invitation to a team: what it offers, in the states of the Words table. Context: inviter, address, here (this page's path), code (the refusal, or None for a person who can join) and signed_in. A signed-out visitor is told nothing of whether the address has an account. #}
+{% block title %}Invitation | Veilfile{% endblock %}
+{% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block form_page %}
+<h1>You are invited to a team</h1>
+<p>{{ inviter }} invited {{ address }} to join their team on Veilfile.</p>
+{% if not signed_in %}
+<p>Sign in with that address, or sign up with it, to accept.</p>
+<p>A new account must verify its address first, then open this link again.</p>
+<p class="form-links"><a class="action interactive" href="{% url 'login' %}?next={{ here|urlencode }}">Sign in</a> <a class="label interactive" href="{% url 'signup' %}?next={{ here|urlencode }}">Sign up</a></p>
+{% elif code == "wrong_person" %}
+<p>You are signed in as {{ user.email }}. This invitation is for {{ address }}, so sign out and sign in with that address to accept it.</p>
+<form method="post" action="{% url 'logout' %}">
+{% csrf_token %}
+<input type="hidden" name="next" value="{{ here }}">
+<button class="action interactive" type="submit">Sign out</button>
+</form>
+{% elif code == "email_verification_required" %}
+<p>Verify {{ address }} first, then open this link again.</p>
+<p class="form-links"><a class="action interactive" href="{% url 'email-verification' %}">Verify email</a></p>
+{% elif code == "on_this_team" %}
+<p>You are already on this team.</p>
+{% elif code == "on_another_team" %}
+<p>You are already on a team. Leave it before you join another.</p>
+{% elif code == "administers_people" %}
+<p>You administer a team with other people on it, so you cannot join another one until you hand the role to someone else.</p>
+{% elif code == "account_suspended" %}
+<p>This account is suspended, so it cannot join a team. Contact support@veilfile.com.</p>
+{% elif code == "has_paid_plan" %}
+<p>This account has its own paid plan, so it cannot join a team yet.</p>
+{% elif code == "no_free_seat" %}
+<p>This team has no free seat. Ask {{ inviter }} to make room, then open this link again.</p>
+{% else %}
+<h2>What joining means</h2>
+<ul>
+<li>You share the team's limits with everyone on it.</li>
+<li>Your API keys stop working, and your connected apps are disconnected. Connect your agents again with veilfile login.</li>
+<li>Files you already have keep working until they expire. Only you can see them, and they do not count toward the team's limits.</li>
+<li>The administrator chooses whether your new files are shared with the team or stay only yours.</li>
+<li>The administrator can see how much you use, but not the names of files that only you can see.</li>
+<li>If you leave the team or are removed, this account is a Free account again.</li>
+</ul>
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="action" value="accept">
+<button class="action interactive" type="submit">Join the team</button>
+</form>
+{% endif %}
+<form method="post">
+{% csrf_token %}
+<input type="hidden" name="action" value="decline">
+<p class="form-links"><button class="label interactive" type="submit">Decline</button></p>
+</form>
+{% endblock %}

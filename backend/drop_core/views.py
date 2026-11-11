@@ -74,6 +74,7 @@ from .services import (
     stricter_on_secret,
     upload_artifact,
 )
+from .teams import is_plain_member
 from .secrets import SECRET_FLAGS_WARNING
 from .storage import get_storage
 
@@ -894,6 +895,8 @@ def signup(request):
     # only shows a confirm step (links and prefetchers follow GETs); the
     # POST starts checkout. Subscribers switch plans from the dashboard.
     if request.user.is_authenticated and paid:
+        if is_plain_member(request.user):
+            return redirect("app-billing")
         if request.method == "POST":
             return redirect(_paid_signup_checkout(request.user, plan, interval))
         if current_membership(request.user).workspace.stripe_subscription_id:

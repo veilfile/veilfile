@@ -75,4 +75,5 @@ services:
       #   DJANGO_CONN_MAX_AGE [60], EMAIL_TIMEOUT [10],
       #   DJANGO_SECURE_HSTS_SECONDS [31536000],
       #   DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS [False],
-      #   DJANGO_CSRF_TRUSTED_ORIGINS [derived from DJANGO_ALLOWED_HOSTS].
+      #   DJANGO_CSRF_TRUSTED_ORIGINS [derived from DJANGO_ALLOWED_HOSTS],
+      #   VEILFILE_TEAM_SEATS [unset, which is off; "on" turns on team seats].

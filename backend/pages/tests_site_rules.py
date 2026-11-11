@@ -327,7 +327,9 @@ READING_TEST_MODULES = ("pages.tests_reading_family", "pages.tests_reading", "pa
                         "dashboard.tests_annual_billing",
                         "drop_core.tests_annual",
                         "pages.tests_dashboard_fixtures",
-                        "dashboard.tests_recipe")
+                        "dashboard.tests_recipe",
+                        "drop_core.tests_teams", "dashboard.tests_switch_off",
+                        "drop_core.tests_invitations", "dashboard.tests_members")
 
 
 def cases_defined_in(module):

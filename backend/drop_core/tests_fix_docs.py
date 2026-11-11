@@ -146,6 +146,8 @@ def _cap_facts(text):
             facts.append((plan, "ttl_days", _num(m.group(1))))
         for m in re.finditer(r"\b(\d+)\s+(?:API\s+)?keys\b", clause):
             facts.append((plan, "keys", _num(m.group(1))))
+        for m in re.finditer(r"(\d[\d,]*)\s+(?:seats|people)\b", clause):
+            facts.append((plan, "seats", _num(m.group(1))))
         if re.search(r"\bunlimited\b[^.|\n]{0,12}\bkeys\b", clause):
             facts.append((plan, "keys", None))
     return facts
@@ -306,6 +308,14 @@ class PlanCopyMatchesPlansTests(SimpleTestCase):
         self.assertEqual(_cap_facts(text), [("free", "ttl_days", 7), ("team", "ttl_days", 90), ("scale", "ttl_days", 365),
                                             ("team", "ttl_days", 90)])
         self.assertEqual(_cap_facts("6 days on Team Plus"), [("team_plus", "ttl_days", 6)], "Team Plus is its own plan here too")
+
+    def test_a_seat_figure_next_to_a_plan_name_is_read_and_a_wrong_one_fails(self):
+        self.assertEqual(_cap_facts("Team has 5 seats. Team Plus has 10 people. Scale has no limit on seats."),
+                         [("team", "seats", 5), ("team_plus", "seats", 10)])
+        wrong = [(plan, what, value) for plan, what, value in _cap_facts("Team has 6 seats, and Scale has 10,000 seats.")
+                 if PLANS[plan][what] != value]
+        self.assertEqual(wrong, [("team", "seats", 6), ("scale", "seats", 10000)],
+                         "backend/drop_core/tests_fix_docs.py: _cap_facts reads the figure before seats or people after a plan name, so a wrong one is found")
 
 
 class McpToolDocsTests(SimpleTestCase):

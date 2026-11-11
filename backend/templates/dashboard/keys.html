@@ -36,7 +36,8 @@
 <tr>
 <th scope="col">Name</th>
 <th scope="col">Prefix</th>
-<th scope="col">Created</th>
+{% if show_people %}<th scope="col">Person</th>
+{% endif %}<th scope="col">Created</th>
 <th scope="col">Last used</th>
 <th scope="col">State</th>
 <th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -46,7 +47,8 @@
 {% for key in rows %}<tr>
 <td data-label="Name">{{ key.name }}</td>
 <td data-label="Prefix"><code>{{ key.key_prefix }}</code></td>
-<td data-label="Created">{{ key.created_at|utc_time }}</td>
+{% if show_people %}<td data-label="Person">{{ key.person }}</td>
+{% endif %}<td data-label="Created">{{ key.created_at|utc_time }}</td>
 <td data-label="Last used">{% if key.last_used_at %}{{ key.last_used_at|utc_time }}{% else %}Never{% endif %}</td>
 <td data-label="State">{% if key.is_active %}Active{% else %}Revoked{% endif %}</td>
 {% if key.is_active %}<td data-label="Actions"><a class="label interactive" href="{% url 'app-key-revoke' key.id %}">Revoke<span class="visually-hidden"> {{ key.name }}</span></a></td>{% else %}<td data-label="Actions"></td>{% endif %}

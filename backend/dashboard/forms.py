@@ -1,11 +1,14 @@
 """Forms of the dashboard: the new-key form and the one-time token that keeps a resent POST from making a second key."""
+import re
 import secrets
 import unicodedata
+from decimal import Decimal
 
 from django import forms
 from django.core.cache import cache
 
 from drop_core.models import APIKey
+from drop_core.plans import GB
 
 # The unspent form tokens of the Keys page, newest last, in request.session. A token is not a secret (it only says "this form has not been
 # sent yet"), but it must be one the page really issued, so a POST made up by hand, or sent twice, makes no key.
@@ -59,3 +62,63 @@ class KeyForm(forms.Form):
         if any(unicodedata.category(char) == "Cc" for char in name):
             raise forms.ValidationError("Use a single line of plain text.")
         return name
+
+
+class InviteForm(forms.Form):
+    """The address to invite. drop_core.teams.invite checks it, and a bad one comes back to this field."""
+
+    email = forms.CharField(
+        strip=True,
+        max_length=254,
+        error_messages={
+            "required": "Enter an email address.",
+            "max_length": "Enter a valid email address.",
+            "null_characters_not_allowed": "Enter a valid email address.",
+        },
+    )
+
+
+MAX_COUNT = 2_147_483_647  # the largest a PositiveIntegerField holds on Postgres
+MAX_BYTES = 2**63  # a PositiveBigIntegerField holds less than this
+WHOLE_NUMBER = re.compile(r"[0-9]+")
+GB_NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?")
+COUNT_ERROR = "Enter a whole number, or leave this empty."
+GB_ERROR = "Enter a number of GB, such as 5 or 0.5, or leave this empty."
+
+
+def gb_text(size_bytes):
+    """A stored size as the number of GB the allowance form shows, or an empty string for no allowance."""
+    return "" if size_bytes is None else f"{Decimal(size_bytes) / GB:f}"
+
+
+class AllowanceForm(forms.Form):
+    """What one person may use. An empty field is no allowance, so cleaned values are a number or None; GB are turned into bytes here."""
+
+    uploads = forms.CharField(required=False, strip=True, max_length=40, label="Uploads a month")
+    storage_gb = forms.CharField(required=False, strip=True, max_length=40, label="Storage in GB")
+    keys = forms.CharField(required=False, strip=True, max_length=40, label="API keys")
+
+    def _count(self, name):
+        value = self.cleaned_data[name]
+        if not value:
+            return None
+        if not WHOLE_NUMBER.fullmatch(value) or int(value) > MAX_COUNT:
+            raise forms.ValidationError(COUNT_ERROR)
+        return int(value)
+
+    def clean_uploads(self):
+        return self._count("uploads")
+
+    def clean_keys(self):
+        return self._count("keys")
+
+    def clean_storage_gb(self):
+        value = self.cleaned_data["storage_gb"]
+        if not value:
+            return None
+        if not GB_NUMBER.fullmatch(value):
+            raise forms.ValidationError(GB_ERROR)
+        size = int(Decimal(value) * GB)
+        if size >= MAX_BYTES:
+            raise forms.ValidationError(GB_ERROR)
+        return size

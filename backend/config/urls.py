@@ -4,6 +4,7 @@ from django.views.generic import RedirectView, TemplateView
 from config import health
 from drop_core import device as device_views
 from drop_core import oauth as oauth_views
+from drop_core import invitation_views
 from drop_core import views as core_views
 from pages import views as pages_views
 from drop_core.throttle import throttle_login
@@ -89,6 +90,7 @@ urlpatterns = [
     ),
     path('accounts/verify-email/', core_views.email_verification, name='email-verification'),
     path('accounts/verify-email/<str:token>/', core_views.verify_email, name='verify-email'),
+    path('accounts/invitations/<str:token>/', invitation_views.invitation, name='invitation'),
     path('api/v1/', include('drop_core.urls')),
     path('api/v1/billing/', include('drop_billing.urls')),
     path('', include('drop_mcp.urls')),  # POST /mcp — Streamable HTTP MCP endpoint

@@ -74,7 +74,8 @@ def _enable_plain_static_files():
     the runner process and in every spawned --parallel worker (which rebuilds
     settings from scratch)."""
     storages = {**settings.STORAGES, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}}
-    override = override_settings(STORAGES=storages)
+    # TEAM_SEATS is off for every run: settings read VEILFILE_TEAM_SEATS before the scrub below. A test turns it on with override_settings.
+    override = override_settings(STORAGES=storages, TEAM_SEATS=False)
     override.enable()
     return override
 

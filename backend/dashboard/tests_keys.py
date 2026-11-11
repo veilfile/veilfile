@@ -19,15 +19,16 @@ from django.contrib.messages import get_messages
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
-from django.test import Client, SimpleTestCase, TestCase
+from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 from oauth2_provider.models import AccessToken, Application, RefreshToken
 
 from dashboard import forms
 from drop_core import account, funnel
-from drop_core.models import APIKey, EmailVerification, FunnelEvent, get_or_create_workspace
+from drop_core.models import APIKey, EmailVerification, FunnelEvent, administrator_of, get_or_create_workspace
 from drop_core.oauth import OAUTH_SCOPE_MCP_USE
 from drop_core.plans import PLANS
+from drop_core.tests_members import second_member
 from pages import tests_forms_on_the_shell as form_pages
 from pages.tests_forms import tags
 
@@ -1092,3 +1093,47 @@ class DisconnectAppTests(SignedInCase):
             self.assertEqual(method(self.url).status_code, 405, f"{KEYS_VIEW}: app_disconnect takes GET, HEAD and POST only")
         self.refresh.refresh_from_db()
         self.assertIsNone(self.refresh.revoked)
+
+
+@override_settings(TEAM_SEATS=True)
+class TeamKeysTests(SignedInCase):
+    """The Keys page on a team: the administrator sees whose each key is, and a member sees only their own."""
+
+    def setUp(self):
+        super().setUp()
+        self.ada = administrator_of(self.workspace)
+        self.grace = second_member(self.workspace, "grace")
+        self.mine, _ = APIKey.create_key(self.workspace, "ada-key", member=self.ada)
+        self.hers, _ = APIKey.create_key(self.workspace, "grace-key", member=self.grace)
+
+    def test_a_one_person_page_is_byte_identical_with_the_switch_on(self):
+        solo = make_user("solo", plan="team")
+        APIKey.create_key(get_or_create_workspace(solo), "solo-key")
+        client = Client()
+        client.force_login(solo)
+        mask = lambda html: re.sub(r'(name="(?:csrfmiddlewaretoken|token)" value=")[^"]*', r"\1", html)
+        on = mask(client.get(KEYS_URL).content.decode())
+        with override_settings(TEAM_SEATS=False):
+            off = mask(client.get(KEYS_URL).content.decode())
+        self.assertEqual(on, off, f"{KEYS_PAGE}: a page for one person is the same with the switch on")
+
+    def test_the_administrator_sees_whose_each_key_is(self):
+        html = self.keys_page().content.decode()
+        rows = {row["Name"]: row for row in TableRows(html).rows}
+        self.assertEqual((rows["ada-key"]["Person"], rows["grace-key"]["Person"]), ("owner@example.com", "grace@example.com"))
+        self.assertIn('<th scope="col">Person</th>', html)
+        page = self.client.get(f"{KEYS_URL}{self.hers.pk}/revoke/").content.decode()
+        self.assertIn("This key belongs to grace@example.com.", unescape(page))
+
+    def test_a_member_sees_only_their_own_with_no_person_column(self):
+        self.client.force_login(self.grace.user)
+        html = self.keys_page().content.decode()
+        self.assertEqual([row["Name"] for row in TableRows(html).rows], ["grace-key"])
+        self.assertNotIn("Person", html)
+        self.assertNotIn("This key belongs to", self.client.get(f"{KEYS_URL}{self.hers.pk}/revoke/").content.decode())
+
+    def test_the_rest_list_is_unchanged(self):
+        body = self.client.get("/api/v1/keys").json()
+        self.assertEqual(len(body), 1, "the REST list is the person's own keys")
+        for item in body:
+            self.assertEqual(set(item), {"id", "name", "key_prefix", "created_at", "last_used_at", "is_active"})

@@ -1,0 +1,10 @@
+{% autoescape off %}{{ inviter }} invited you to join their team on Veilfile, which hosts files for AI agents behind private links that expire.
+
+To accept or decline, open this link. It stops working on {{ expires }}.
+
+{{ url }}
+
+If you were not expecting this, you can ignore this email, and nothing will happen.
+
+veilfile
+{% endautoescape %}

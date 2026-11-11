@@ -1,6 +1,6 @@
 {% extends "layouts/app.html" %}
 {% load dashboard %}
-{# Overview: the return from Stripe, the prompt to verify an email, anything over a limit, the plan, the meters and the account, in that order (spec 4.8). The figures come from dashboard/overview_page.py; the words are here. #}
+{# Overview: the return from Stripe, the prompt to verify an email, anything over a limit, the plan, the meters and the account, in that order, a member's Team section after the plan, and an administrator's Team section last, so the meters stay where they were under the open sheet (spec 4.8). The figures come from dashboard/overview_page.py; the words are here. #}
 {% block app_main %}
 <h1>Overview</h1>
 {% if billing_notice.kind == "success" %}<p class="notice" role="status"><strong>Your subscription is updated.</strong> It can take a moment for the new plan to appear below. Refresh if it doesn't.</p>
@@ -10,10 +10,11 @@
 {% endif %}
 {% if verify_prompt %}<p class="notice"><strong>Verify your email to create API keys.</strong> {% if verify_prompt.sent_to %}We sent a link to {{ verify_prompt.sent_to }}.{% else %}Add an email address to your account.{% endif %} <a href="{% url 'email-verification' %}">Verify email</a></p>
 {% endif %}
-{% include "dashboard/over_limits.html" with status=status usage=usage only %}
+{% if waiting_invitation %}<p class="notice" role="status">An invitation to a team is waiting for this address. Open the link in the email to accept or decline it.</p>
+{% endif %}{% if not member_view %}{% include "dashboard/over_limits.html" with status=status usage=usage only %}
 {% if not status %}<p class="notice" role="status">Plan limits could not be checked just now. Reload the page to check again.</p>
-{% endif %}
-{% if usage and usage.keys_used == 0 %}<section aria-labelledby="overview-get-connected">
+{% endif %}{% endif %}
+{% if get_connected %}<section aria-labelledby="overview-get-connected">
 <h2 id="overview-get-connected">Get connected</h2>
 <p>The recommended way to connect is the CLI. Install it with pip install veilfile, run veilfile login, open the page it prints, and enter the code there. The key is stored in a credentials file only you can read. The CLI prints it only if you pass --print-key, and it does not write it to your shell history. Then run veilfile push screenshot.png. Your upload appears under Files.</p>
 {% include "components/code_block.html" with id="onboarding-pip" label="Copy the pip install command" code="pip install veilfile" only %}
@@ -26,11 +27,23 @@
 {% endif %}
 {% if plan %}<section aria-labelledby="overview-plan">
 <h2 id="overview-plan">Plan</h2>
-<p>You are on the <strong>{{ plan|plan_name }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a></p>
+<p>{% if member_view %}Your team is on the <strong>{{ plan|plan_name }}</strong> plan.{% else %}You are on the <strong>{{ plan|plan_name }}</strong> plan. <a href="{% url 'app-billing' %}">Billing</a>{% endif %}</p>
 </section>
 {% endif %}
-<section aria-labelledby="overview-usage">
-<h2 id="overview-usage">Usage</h2>
+{% if member_view %}<section aria-labelledby="overview-team">
+<h2 id="overview-team">Team</h2>
+<p>You are on the team that {{ team.admin_email }} administers, which has {{ team.people }} {{ team.people|pluralize:"person,people" }}.</p>
+</section>
+{% endif %}{% if member_view and team.own %}<section aria-labelledby="overview-own">
+<h2 id="overview-own">Your use</h2>
+<div class="meters">
+{% include "components/meter.html" with id="overview-own-uploads" label="Successful uploads this month" used=team.own.uploads_used cap=team.own.upload_allowance only %}
+{% include "components/meter.html" with id="overview-own-storage" label="Storage" used=team.own.storage_used cap=team.own.storage_allowance unit="bytes" only %}
+{% include "components/meter.html" with id="overview-own-keys" label="API keys" used=team.own.keys_used cap=team.own.key_allowance only %}
+</div>
+</section>
+{% endif %}<section aria-labelledby="overview-usage">
+<h2 id="overview-usage">{% if member_view %}The team's use{% else %}Usage{% endif %}</h2>
 {% if usage %}<div class="meters">
 {% include "components/meter.html" with id="overview-uploads" label="Successful uploads this month" used=usage.uploads_used cap=usage.uploads_cap note="Uploads are counted by calendar month, in UTC." only %}
 {% include "components/meter.html" with id="overview-storage" label="Storage" used=usage.storage_used_bytes cap=usage.storage_cap_bytes unit="bytes" only %}
@@ -44,5 +57,10 @@
 {% if email %}<p><strong>{{ email }}</strong> is {% if email_verified %}verified{% else %}not verified{% endif %}.</p>
 {% else %}<p>No email address is set.</p>
 {% endif %}<p class="form-links"><a class="label interactive" href="{% url 'email-verification' %}">{% if email %}Change email{% else %}Add email{% endif %}</a> <a class="label interactive" href="{% url 'password_change' %}">Change password</a></p>
-</section>
+</section>{% if team and team.is_administrator %}
+<section aria-labelledby="overview-team">
+<h2 id="overview-team">Team</h2>
+<p>You are the administrator. {% if team.seat_limit %}{{ team.seats_used }} of {{ team.seat_limit }} seats {{ team.seats_used|pluralize:"is,are" }} in use.{% else %}{{ team.seats_used }} seat{{ team.seats_used|pluralize }} {{ team.seats_used|pluralize:"is,are" }} in use.{% endif %}</p>
+<p class="form-links"><a class="label interactive" href="{% url 'app-members' %}">Members</a></p>
+</section>{% endif %}
 {% endblock %}

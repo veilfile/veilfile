@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script id="veilfile-shell-boot">
+(function () {
+  var root = document.documentElement, theme = null, motion = null;
+  try { theme = localStorage.getItem("veilfile-theme"); motion = localStorage.getItem("veilfile-motion"); } catch (error) {}
+  if (theme !== "light" && theme !== "dark") theme = "system";
+  if (motion !== "on" && motion !== "off") motion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "off" : "on";
+  try { if (sessionStorage.getItem("veilfile-veil-off") === "slow") { motion = "off"; root.setAttribute("data-veil-off", "slow"); } } catch (error) {}
+  try { if (motion !== "off" && Date.now() - performance.now() - sessionStorage.getItem("veilfile-faded-nav") < 1000) root.setAttribute("data-arriving", ""); } catch (error) {}
+  root.setAttribute("data-theme", theme);
+  root.setAttribute("data-motion", motion);
+  if ("noModule" in HTMLScriptElement.prototype) root.classList.add("js");
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Overview | Veilfile</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="/static/img/favicon.svg" type="image/svg+xml" sizes="any">
+<link rel="icon" href="/static/img/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="icon" href="/static/img/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="apple-touch-icon" href="/static/img/apple-touch-icon.png">
+
+<link rel="preload" href="/static/fonts/newsreader/normal-400-500-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/fonts/ibm-plex-mono/normal-400-latin.woff2" as="font" type="font/woff2" crossorigin>
+
+<link rel="preload" href="/static/fonts/cormorant-garamond/italic-300-latin.woff2" as="font" type="font/woff2" crossorigin>
+
+
+<link rel="stylesheet" href="/static/css/fonts.css">
+<link rel="stylesheet" href="/static/css/tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/components/mark.css">
+<link rel="stylesheet" href="/static/css/components/lockup.css">
+<link rel="stylesheet" href="/static/css/components/menu.css">
+<link rel="stylesheet" href="/static/css/components/controls.css">
+<link rel="stylesheet" href="/static/css/components/plan.css">
+<link rel="stylesheet" href="/static/css/components/install_line.css">
+<link rel="stylesheet" href="/static/css/components/code_block.css">
+<link rel="stylesheet" href="/static/css/components/sections.css">
+<link rel="stylesheet" href="/static/css/components/pager.css">
+<link rel="stylesheet" href="/static/css/components/entries.css">
+<link rel="stylesheet" href="/static/css/components/field.css">
+<link rel="stylesheet" href="/static/css/components/form_errors.css">
+<link rel="stylesheet" href="/static/css/components/file_list.css">
+<link rel="stylesheet" href="/static/css/components/meter.css">
+
+
+<script type="module" src="/static/js/shell.js" onerror="document.documentElement.classList.remove('js')"></script>
+<script type="module" src="/static/js/behaviors/tabs.js"></script>
+<script type="module" src="/static/js/behaviors/copy.js"></script>
+<script type="module" src="/static/js/behaviors/come-in.js"></script>
+<script type="module" src="/static/js/behaviors/local-time.js"></script>
+</head>
+<body class="layout-app" data-veil-src="/static/js/veil.js" data-layout="app" data-layout-paths="/app/ /app/files/ /app/keys/ /app/apps/ /app/billing/" data-faces="italic 300 1em Cormorant Garamond|1em Newsreader">
+<a class="skip-link label" href="#main">Skip to content</a>
+<header>
+<div class="shell-corner shell-corner--top-left">
+
+<a class="lockup label interactive" href="/">
+
+<svg class="mark" viewBox="0 0 560 560" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path fill="currentColor" d="M0 0H560V140H420V280H280V420H140V560H0Z M420 280H560V420H420Z M280 420H420V560H280Z"/></svg>
+<span class="visually-hidden">Veilfile</span></a>
+</div>
+<div class="shell-corner shell-corner--top-right">
+
+<nav class="menu" aria-label="Site" data-menu>
+<button class="menu__toggle label interactive" type="button" aria-expanded="false" aria-controls="shell-menu" data-menu-toggle>Menu</button>
+<div class="menu__list" id="shell-menu" data-menu-list>
+<ul class="menu__group">
+<li><a class="label interactive" href="/app/" aria-current="page">Overview</a></li>
+<li><a class="label interactive" href="/app/files/">Files</a></li>
+<li><a class="label interactive" href="/app/keys/">Keys</a></li>
+<li><a class="label interactive" href="/app/apps/">Connected apps</a></li>
+<li><a class="label interactive" href="/app/billing/">Billing</a></li>
+</ul>
+<ul class="menu__group">
+<li><a class="label interactive" href="/docs/">Docs</a></li>
+<li><a class="label interactive" href="/blog/">Journal</a></li>
+<li><a class="label interactive" href="/">Site</a></li>
+<li><form method="post" action="/accounts/logout/"><input type="hidden" name="csrfmiddlewaretoken" value="CSRF"><button class="label interactive" type="submit">Sign out</button></form></li>
+</ul>
+<ul class="menu__group">
+<li><a class="label interactive" href="/terms/">Terms</a></li>
+<li><a class="label interactive" href="/privacy/">Privacy</a></li>
+<li><a class="label interactive" href="/report-abuse/">Report abuse</a></li>
+<li><a class="label interactive" href="/llms.txt">llms.txt</a></li>
+</ul>
+</div>
+</nav>
+</div>
+</header>
+<main id="main" class="shell-main"><div class="app">
+<h1>Overview</h1>
+
+
+
+
+
+
+
+
+<section aria-labelledby="overview-plan">
+<h2 id="overview-plan">Plan</h2>
+<p>You are on the <strong>Team</strong> plan. <a href="/app/billing/">Billing</a></p>
+</section>
+
+<section aria-labelledby="overview-usage">
+<h2 id="overview-usage">Usage</h2>
+<div class="meters">
+
+
+<div class="meter">
+<p class="meter__label label" id="overview-uploads_label">Successful uploads this month</p>
+<p class="meter__figures" id="overview-uploads_figures">0 of 2,000</p>
+<div class="meter__bar" role="meter" aria-labelledby="overview-uploads_label" aria-describedby="overview-uploads_figures" aria-valuemin="0" aria-valuemax="2000" aria-valuenow="0">
+<svg viewBox="0 0 1000 1" preserveAspectRatio="none" aria-hidden="true"><rect class="meter__fill" width="0" height="1"/></svg>
+</div>
+<p class="meter__note">Uploads are counted by calendar month, in UTC.</p>
+</div>
+
+
+
+<div class="meter">
+<p class="meter__label label" id="overview-storage_label">Storage</p>
+<p class="meter__figures" id="overview-storage_figures">5 B of 25.0 GB</p>
+<div class="meter__bar" role="meter" aria-labelledby="overview-storage_label" aria-describedby="overview-storage_figures" aria-valuemin="0" aria-valuemax="26843545600" aria-valuenow="5">
+<svg viewBox="0 0 1000 1" preserveAspectRatio="none" aria-hidden="true"><rect class="meter__fill" width="0" height="1"/></svg>
+</div>
+</div>
+
+
+
+<div class="meter">
+<p class="meter__label label" id="overview-keys_label">API keys</p>
+<p class="meter__figures" id="overview-keys_figures">1 of 5</p>
+<div class="meter__bar" role="meter" aria-labelledby="overview-keys_label" aria-describedby="overview-keys_figures" aria-valuemin="0" aria-valuemax="5" aria-valuenow="1">
+<svg viewBox="0 0 1000 1" preserveAspectRatio="none" aria-hidden="true"><rect class="meter__fill" width="200" height="1"/></svg>
+</div>
+</div>
+
+
+
+<div class="meter">
+<p class="meter__label label" id="overview-ttl_label">Links last up to</p>
+<p class="meter__figures" id="overview-ttl_figures">90 days</p>
+</div>
+
+</div>
+</section>
+<section aria-labelledby="overview-account">
+<h2 id="overview-account">Account</h2>
+<p><strong>alan@example.com</strong> is verified.</p>
+<p class="form-links"><a class="label interactive" href="/accounts/verify-email/">Change email</a> <a class="label interactive" href="/accounts/password_change/">Change password</a></p>
+</section>
+</div></main>
+<footer>
+<div class="shell-corner shell-corner--bottom-left">
+
+<div class="controls">
+<button class="label interactive" type="button" aria-label="Appearance: Auto" data-appearance-toggle>Auto</button>
+</div>
+</div>
+<div class="shell-corner shell-corner--bottom-right">
+
+<div class="controls">
+<button class="label interactive" type="button" aria-pressed="true" aria-label="FX: motion" data-motion-toggle>FX <span aria-hidden="true" data-motion-state>· on</span></button>
+</div>
+</div>
+</footer>
+</body>
+</html>

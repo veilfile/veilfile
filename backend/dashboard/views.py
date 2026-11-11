@@ -21,11 +21,13 @@ from django.views.decorators.http import require_http_methods, require_safe
 from .overview_page import overview_context
 
 from dashboard import billing_page
-from dashboard.file_rows import file_rows, state_of
+from dashboard.file_rows import file_rows, shows_team, state_of
 from drop_billing import account as billing_account
 from drop_core import account
-from drop_core.file_access import NotYourFile, file_to_revoke
-from drop_core.models import current_membership
+from drop_core.account import Answer
+from drop_core.file_access import NotYourFile, file_to_revoke, set_visibility
+from drop_core.models import VISIBILITY_TEAM, current_membership
+from drop_core.teams import is_plain_member, team_seats_only
 from pages.errors import not_found
 
 
@@ -86,8 +88,10 @@ def files(request):
         answer = account.list_artifacts(request.user, limit=FILES_PER_PAGE)
     here = reverse("app-files")
     next_cursor = answer.headers.get("X-Next-Cursor")
+    team = shows_team(request.user)
     return render(request, "dashboard/files.html", {
-        "files": file_rows(request.user, answer.body),
+        "files": file_rows(request.user, answer.body, team=team),
+        "show_team": team,
         "older_url": f"{here}?{urlencode({'cursor': next_cursor})}" if next_cursor else "",
         "newest_url": here if cursor else "",
         "bad_cursor": bad_cursor,
@@ -135,14 +139,40 @@ def file_revoke(request, artifact_id):
     return redirect("app-files")
 
 
+SHARED = "Your team can now see this file."
+UNSHARED = "Only you can see this file now."
+
+
+@team_seats_only
+@dashboard_view
+@require_http_methods(["POST"])
+def file_visibility(request, artifact_id):
+    """Share one of the person's own files with the team, or make it only theirs again, and go back to Files. Whatever refuses it
+    (another person's file, a team that decides for itself, a file that is not live, a missing one) is the shell's 404."""
+    visibility = request.POST.get("visibility", "")
+    if not set_visibility(current_membership(request.user), artifact_id, visibility):
+        raise Http404("No such file.")
+    messages.success(request, SHARED if visibility == VISIBILITY_TEAM else UNSHARED)
+    return redirect("app-files")
+
+
 @dashboard_view
 @require_safe
 def billing(request):
     """Billing: the plan, what Stripe says of it, what is over a limit and the ways to change plan. It reads the database and
     nothing else: billing.status makes no Stripe call, and nor does a GET of any billing address."""
+    if is_plain_member(request.user):
+        return render(request, "dashboard/billing.html", {"member": True})
     status = billing_account.status(request.user).body
     pending = billing_page.pending_for(request.session, status["plan"], current_interval=billing_page.interval_of(status["billing_interval"]))
     return render(request, "dashboard/billing.html", billing_page.page_context(status, pending))
+
+
+def _members_refusal(request, where):
+    """A member's POST to a billing address, or a GET of the switch page: the sentence on Billing, with no Stripe call. The role is
+    tested here, before billing_account is called, so that the sentence does not depend on how Stripe is configured."""
+    messages.error(request, billing_page.refusal(Answer(403, {"error": "administrator_only"}), billing_page.NO_SUCH_PLAN, where))
+    return redirect("app-billing")
 
 
 @dashboard_view
@@ -152,6 +182,8 @@ def billing_checkout(request):
     and goes to Billing."""
     if request.method != "POST":
         return redirect("app-billing")
+    if is_plain_member(request.user):
+        return _members_refusal(request, "checkout")
     try:
         answer = billing_account.checkout(request.user, request.POST.get("plan", ""), request.POST.get("interval") or "month")
     except Exception:
@@ -169,6 +201,8 @@ def billing_portal(request):
     """POST: open the Stripe customer portal. As checkout: 303 to Stripe's https address, or one sentence on Billing."""
     if request.method != "POST":
         return redirect("app-billing")
+    if is_plain_member(request.user):
+        return _members_refusal(request, "portal")
     try:
         answer = billing_account.portal(request.user)
     except Exception:
@@ -191,6 +225,8 @@ def billing_switch(request, plan):
     if not billing_page.for_sale(plan, interval):
         # Returned, not raised, so that dashboard_view puts its header on it as on every /app/ response.
         return not_found(request)
+    if is_plain_member(request.user):
+        return _members_refusal(request, "switch")
     if request.method == "POST":
         return _switch_plan(request, plan, interval)
     return _confirm_switch(request, plan, interval)

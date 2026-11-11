@@ -146,6 +146,7 @@ DASHBOARD_SECTIONS = {
     "app": "app",
     "app-files": "app-files",
     "app-file-revoke": "app-files",
+    "app-file-visibility": "app-files",
     "app-keys": "app-keys",
     "app-key-revoke": "app-keys",
     "app-apps": "app-apps",
@@ -154,6 +155,11 @@ DASHBOARD_SECTIONS = {
     "app-billing-switch": "app-billing",
     "app-billing-checkout": "app-billing",
     "app-billing-portal": "app-billing",
+    # The Members page hangs off Overview, because the menu has no way to show a link to administrators only.
+    "app-members": "app",
+    "app-file-visibility-setting": "app",
+    "app-member-allowance": "app",
+    "app-invitation-cancel": "app",
 }
 
 

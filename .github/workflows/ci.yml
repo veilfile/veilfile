@@ -824,6 +824,8 @@ jobs:
           DJANGO_SECRET_KEY: ci-site-not-a-secret
           DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
           SITE_SESSION_FILE: ../site-tests/session.txt
+          # The Members page and the invitation page are 404s while the switch is off.
+          VEILFILE_TEAM_SEATS: "on"
         run: |
           if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
             echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2
@@ -1034,6 +1036,8 @@ jobs:
           DJANGO_SECRET_KEY: ci-site-not-a-secret
           DATABASE_URL: ""  # always a throwaway SQLite file: migrate must never reach a real database
           SITE_SESSION_FILE: ../site-tests/session.txt
+          # The Members page and the invitation page are 404s while the switch is off.
+          VEILFILE_TEAM_SEATS: "on"
         run: |
           if curl -fsS "http://127.0.0.1:$SITE_PORT/healthz" >/dev/null 2>&1; then
             echo "Something already answers on port $SITE_PORT (a server that an earlier run left behind?). Stop it and run this job again." >&2

@@ -2,7 +2,8 @@
 {# Page: Billing (spec 4.8). Plan names and prices come from the view, which reads plans.py (AGENTS.md, Pricing changes); the sentences are the React dashboard's, kept as they were. #}
 {% block app_main %}
 <h1>Billing</h1>
-<p>Current plan: <strong>{{ plan_name }}</strong>{% if status_words %} ({{ status_words }}){% endif %}</p>
+{% if member %}<p>Your administrator manages billing for this team.</p>
+{% else %}<p>Current plan: <strong>{{ plan_name }}</strong>{% if status_words %} ({{ status_words }}){% endif %}</p>
 {% if billed_words %}<p>Your subscription is billed {{ billed_words }}.</p>
 {% endif %}{% if subscription_status == "past_due" %}
 <p class="notice" role="status">Your last payment failed. Stripe is retrying; update your payment method under Manage billing to keep your plan.</p>
@@ -53,4 +54,4 @@
 </form>
 {% endif %}
 <p>{% if subscribed %}Plan switches apply to your existing subscription with prorated charges or credits. Manage billing opens the Stripe portal for your payment method, invoices, and cancellation.{% else %}Upgrades go through Stripe Checkout. Once subscribed, you switch plans here and manage payment details and cancellation in the customer portal.{% endif %}</p>
-{% endblock %}
+{% endif %}{% endblock %}

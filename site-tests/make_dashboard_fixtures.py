@@ -3,16 +3,20 @@
 Run from backend/ inside Django, with SITE_SESSION_FILE as for make_staff_session.py; the fixtures are written beside it, as dashboard-fixtures.json:
   SITE_SESSION_FILE=../site-tests/session.txt python manage.py shell -c "exec(open('../site-tests/make_dashboard_fixtures.py').read())"
 
-It makes three verified users, who have no password and are reached only through the sessions it writes:
+It makes five verified users, who have no password and are reached only through the sessions it writes:
   site-dash-owner  a Team workspace: four keys (the longest name a key takes, a revoked one, one to revoke and one that has been used) with room under the plan's cap for
                    the key the checks make, 53 files (so the list has a second page: one with the longest name, one expired, one held, one with secret flags, one to revoke
                    and sizes in gigabytes) and three connected apps (one with the longest name);
   site-dash-over   a Free workspace after a downgrade, over its limits on keys, storage, link lifetime and uploads, with a stored unpaid subscription;
-  site-dash-sub    a Team subscriber whose last payment failed, with a switch to Scale waiting for payment (a session hint) for the Billing page.
+  site-dash-sub    a Team subscriber whose last payment failed, with a switch to Scale waiting for payment (a session hint) for the Billing page;
+  site-dash-admin  a Team workspace with people on it, for the Members page (the switch for team seats must be on in the server): its administrator, and
+  site-dash-member a member of it, with an allowance of each kind (the keys one above the plan's cap) and some use; one invitation waits for an address, made directly so that
+                   the raw token is known. A run deletes the team's invitations and its people other than the administrator first. The owner's files and keys are not touched.
 It also writes spare sessions of the owner for the Sign out checks, which each use one up. A run first resets what an earlier one left, so a run is the same every time.
 It refuses to run unless DEBUG is on and the database is SQLite or on this machine, and refuses while a Stripe variable is set or the storage is not the local one: the
 checks press Revoke and the billing buttons, and nothing they do may reach a real account.
 """
+import hashlib
 import json
 import os
 import secrets
@@ -28,7 +32,17 @@ from django.utils import timezone
 from oauth2_provider.models import get_access_token_model, get_application_model
 
 from drop_billing.models import Subscription
-from drop_core.models import APIKey, Artifact, EmailVerification, UsageCounter, administrator_of, get_or_create_workspace
+from drop_core.models import (
+    APIKey,
+    Artifact,
+    EmailVerification,
+    Invitation,
+    Membership,
+    MemberUsageCounter,
+    UsageCounter,
+    administrator_of,
+    get_or_create_workspace,
+)
 from drop_core.oauth import OAUTH_SCOPE_MCP_USE
 
 if not settings.DEBUG or (connection.vendor != "sqlite"
@@ -44,6 +58,8 @@ if os.environ.get("DROP_STORAGE", "local").lower() != "local":
 
 User, Application, AccessToken = get_user_model(), get_application_model(), get_access_token_model()
 OWNER, OVER, SUB = "site-dash-owner", "site-dash-over", "site-dash-sub"
+ADMIN, MEMBER = "site-dash-admin", "site-dash-member"
+INVITEE = "site-dash-invitee@example.com"   # nobody has this address: the invitation waits and is never answered
 LONG_KEY = "K" * 255   # the longest name a key takes
 LONG_FILE = "x" * 508 + ".txt"   # 512 characters, with no place to break: the longest name a file takes
 LONG_APP = "DashLongName" + "W" * 243   # 255 characters, no space: the longest name a client registers under
@@ -65,13 +81,19 @@ def session_for(user, **kept):
     return session.session_key
 
 
-def make_user(username, plan):
-    """A verified user with an unusable password and an empty workspace on `plan`: what an earlier run left of theirs is deleted first."""
+def make_account(username):
+    """A verified user with an unusable password."""
     user, _ = User.objects.get_or_create(username=username)
     user.email, user.is_active, user.is_staff = f"{username}@example.com", True, False
     user.set_unusable_password()
     user.save()
     EmailVerification.objects.update_or_create(user=user, defaults={"email": user.email, "is_verified": True, "verified_at": NOW})
+    return user
+
+
+def make_user(username, plan):
+    """A verified user with an unusable password and an empty workspace on `plan`: what an earlier run left of theirs is deleted first."""
+    user = make_account(username)
     workspace = get_or_create_workspace(user)
     Artifact.objects.filter(workspace=workspace).delete()
     APIKey.objects.filter(workspace=workspace).delete()
@@ -87,10 +109,10 @@ def add_key(workspace, name, *, used_hours=None, active=True):
     APIKey.objects.filter(pk=key.pk).update(is_active=active, last_used_at=None if used_hours is None else NOW - timedelta(hours=used_hours))
 
 
-def add_file(workspace, name, *, hours=0, days=7, flags=(), held=False, size=1500):
+def add_file(workspace, name, *, hours=0, days=7, flags=(), held=False, size=1500, member=None):
     """A file the list shows: made `hours` ago, expiring in `days` (negative: expired). Its bytes are not stored: nothing here downloads one, and a revoke of
     a file the storage does not have is a delete of nothing."""
-    artifact = Artifact.objects.create(workspace=workspace, member=administrator_of(workspace), filename=name, size_bytes=size, expires_at=NOW + timedelta(days=days), secret_flags=list(flags),
+    artifact = Artifact.objects.create(workspace=workspace, member=member or administrator_of(workspace), filename=name, size_bytes=size, expires_at=NOW + timedelta(days=days), secret_flags=list(flags),
                                        safety_status="held" if held else "clear")
     Artifact.objects.filter(pk=artifact.pk).update(created_at=NOW - timedelta(hours=hours))
 
@@ -135,17 +157,31 @@ sub_workspace.save()
 Subscription.objects.create(workspace=sub_workspace, stripe_customer_id="cus_site_checks_sub", stripe_subscription_id="sub_site_checks_sub", status="past_due",
                             current_period_end=NOW + timedelta(days=20))
 
+admin, admin_workspace = make_user(ADMIN, "team")
+Invitation.objects.filter(workspace=admin_workspace).delete()   # the team's invitations and people other than its administrator, so that a run is the same every time
+Membership.objects.filter(workspace=admin_workspace).exclude(user=admin).delete()
+person = Membership.objects.create(workspace=admin_workspace, user=make_account(MEMBER), role=Membership.MEMBER,
+                                   upload_allowance=50, storage_allowance_bytes=2 * 1024**3, key_allowance=9)   # nine keys: above the Team plan's five, so a cell is capped
+MemberUsageCounter.objects.create(member=person, year_month=NOW.strftime("%Y-%m"), uploads=12)
+APIKey.create_key(admin_workspace, "members-agent", member=person)
+add_file(admin_workspace, "members-notes.txt", size=3_500_000, member=person)
+add_file(admin_workspace, "admin-notes.txt", hours=1)
+raw_token = secrets.token_urlsafe(32)
+Invitation.objects.create(workspace=admin_workspace, email=INVITEE, token_hash=hashlib.sha256(raw_token.encode()).hexdigest(), invited_by=admin, expires_at=NOW + Invitation.TTL)
+
 fixtures = {
     "sessions": {"owner": session_for(owner), "over": session_for(over),
                  # a switch to Scale that awaits payment, as billing_page.remember_pending keeps it in the session
                  "sub": session_for(sub, dashboard_pending_switch={"plan": "scale", "invoice_url": "https://invoice.stripe.com/i/site-checks", "at": int(time.time())}),
+                 "admin": session_for(admin), "member": session_for(person.user),
                  "sign_out": [session_for(owner) for _ in range(SIGN_OUT_SESSIONS)]},
     "owner": {"keys": 4, "files": FILES, "long_key": LONG_KEY, "revoke_key": "revoke-me", "retired_key": "retired-agent", "long_file": LONG_FILE,
               "revoke_file": "revoke-me.txt", "flags_file": "deploy.env", "expired_file": "an-expired-file.zip", "held_file": "a-held-file.csv",
               "apps": {"plain": APP, "long": LONG_APP, "gone": GONE}},
     "over": {"keys": 3},
     "sub": {"switch_to": "scale"},
+    "team": {"member_id": person.pk, "invitee": INVITEE, "token": raw_token},
 }
 Path(os.environ["SITE_SESSION_FILE"]).with_name("dashboard-fixtures.json").write_text(json.dumps(fixtures, indent=1), encoding="utf-8")
-print(f"dashboard fixtures written: {3 + SIGN_OUT_SESSIONS} sessions, {Artifact.objects.filter(workspace=owner_workspace).count()} files and "
+print(f"dashboard fixtures written: {5 + SIGN_OUT_SESSIONS} sessions, {Artifact.objects.filter(workspace=owner_workspace).count()} files and "
       f"{APIKey.objects.filter(workspace=owner_workspace).count()} keys for {OWNER}")

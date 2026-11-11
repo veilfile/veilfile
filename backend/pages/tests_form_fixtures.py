@@ -16,7 +16,7 @@ from django.core import mail
 from django.db import connection
 from django.test import Client, TestCase, override_settings
 
-from drop_core.models import APIKey, DeviceCode, EmailVerification
+from drop_core.models import APIKey, DeviceCode, EmailVerification, Invitation, Membership
 
 ROOT = Path(settings.BASE_DIR).parent
 SCRIPT, HARNESS = ROOT / "site-tests" / "make_form_fixtures.py", ROOT / "site-tests" / "run_site_checks.py"
@@ -78,7 +78,7 @@ class MakeFormFixturesTests(TestCase):
 
     def test_the_sessions_the_codes_the_clients_and_the_links_work(self):
         f = self.f
-        self.assertEqual(sorted(f), ["accounts", "device", "errors", "oauth", "reset", "sessions", "verify"], f"{PREFIX}: the keys run_forms reads")
+        self.assertEqual(sorted(f), ["accounts", "device", "errors", "invite", "oauth", "reset", "sessions", "verify"], f"{PREFIX}: the keys run_forms reads")
         self.assertEqual(Client().post("/accounts/login/", f["accounts"]["verified"]).status_code, 302, f"{PREFIX}: the round trips sign in with this name and password")
         for key, address, status, text in (
                 ("verified", f"/device?user_code={f['device']['consent']}", 200, 'name="confirm"'),
@@ -97,6 +97,26 @@ class MakeFormFixturesTests(TestCase):
         pending = signed_in(f["sessions"]["pending"])
         self.assertEqual(pending.post("/accounts/verify-email/", {"action": "resend"}).status_code, 429, f"{PREFIX}: the pending user's last link went in the future: a resend sends nothing")
         self.assertEqual(mail.outbox, [])
+
+    @override_settings(TEAM_SEATS=True)
+    def test_the_invitation_links_open_the_pages_the_states_mean(self):
+        f = self.f
+        self.assertEqual(sorted(f["sessions"]), ["invitee", "invitee_unverified", "long", "pending", "verified"], f"{PREFIX}: the sessions run_forms reads")
+        for key, token, status, words in (
+                (None, f["invite"]["token"], 200, "Sign in with that address"), ("invitee", f["invite"]["token"], 200, "Join the team"),
+                ("verified", f["invite"]["token"], 200, "so sign out and sign in with that address"),
+                ("invitee_unverified", f["invite"]["unverified_token"], 200, "first, then open this link again"),
+                (None, f["invite"]["missing"], 404, "This invitation is no longer valid")):
+            client = signed_in(f["sessions"][key]) if key else Client()
+            self.assertContains(client.get(f"/accounts/invitations/{token}/"), words, status_code=status, msg_prefix=f"{PREFIX}: {key or 'nobody'} at the invitation {token[:6]}")
+
+    def test_the_invitations_are_made_directly_and_a_second_run_leaves_one_of_each(self):
+        team = Membership.objects.get(user__username="site-team-admin", role=Membership.ADMINISTRATOR).workspace
+        self.assertEqual((team.plan, Invitation.objects.filter(workspace=team).count()), ("team", 2), f"{PREFIX}: a Team workspace with two waiting invitations")
+        run_script()
+        self.assertEqual((Invitation.objects.filter(workspace=team).count(), Membership.objects.filter(workspace=team).count()), (2, 1),
+                         f"{PREFIX}: a run starts by deleting the team's invitations and people other than its administrator")
+        self.assertEqual(mail.outbox, [], f"{PREFIX}: no mail is sent for an invitation")
 
     def test_the_error_pages_print_nothing_of_the_request_and_a_second_run_starts_again(self):
         for name, page in self.f["errors"].items():
