@@ -104,3 +104,31 @@ def live_files_of(row, now):
 def end_upload_urls_of(row):
     """Mark the unused upload URLs one person minted on their team as used, so that none of them takes a file again."""
     PendingUpload.objects.filter(member=row, workspace_id=row.workspace_id, used=False).update(used=True)
+
+
+def uploads_of(artifact_ids):
+    """The workspace, member and API key of each listed file, as (workspace id, member id, key id) tuples. The member and the key
+    can be None. It reads no file name."""
+    return list(Artifact.objects.filter(pk__in=list(artifact_ids)).values_list("workspace_id", "member_id", "api_key_id"))
+
+
+def mark_held(workspace_id, artifact_ids):
+    """Hold the listed files of one workspace that are not held yet, and return the ids it changed. Call it under that
+    workspace's lock."""
+    changed = list(
+        Artifact.objects.filter(workspace_id=workspace_id, pk__in=list(artifact_ids))
+        .exclude(safety_status="held")
+        .values_list("pk", flat=True)
+    )
+    Artifact.objects.filter(pk__in=changed).update(safety_status="held")
+    return changed
+
+
+def mark_clear(artifact_ids):
+    """Clear the hold on the listed files and return how many were held."""
+    return Artifact.objects.filter(pk__in=list(artifact_ids), safety_status="held").update(safety_status="clear")
+
+
+def held_file_count(workspace):
+    """How many live files of this team are held, whoever uploaded them, a current member or a removed one."""
+    return Artifact.objects.filter(workspace=workspace, safety_status="held", expires_at__gt=timezone.now()).count()

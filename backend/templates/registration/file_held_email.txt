@@ -1,0 +1,6 @@
+{% autoescape off %}Veilfile held {{ count }} file{{ count|pluralize }} that someone on your team uploaded, because {{ count|pluralize:"it,they" }} may break our Terms of Service, and {% if count == 1 %}its link no longer opens{% else %}their links no longer open{% endif %}.{% if key_stopped %} The API {% if count == 1 %}key that uploaded it has{% else %}keys that uploaded them have{% endif %} stopped working.{% endif %}
+
+This email does not say which file was held or who uploaded it, to keep files private between the people on a team. If you have a question, write to support@veilfile.com.
+
+veilfile
+{% endautoescape %}

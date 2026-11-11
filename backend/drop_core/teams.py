@@ -623,6 +623,13 @@ def no_longer_on_team(member):
     ).exists()
 
 
+def team_held_files(workspace):
+    """How many live files of the team are held, for the Members page. Zero before any query while the switch is off."""
+    if not settings.TEAM_SEATS:
+        return 0
+    return file_access.held_file_count(workspace)
+
+
 def has_team_features(workspace):
     """Whether the team has the Members page: the switch is on, and the plan allows more than one person (or has no limit on
     them), or someone else is on the team, or an invitation is waiting. False before any query while the switch is off."""

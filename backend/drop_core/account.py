@@ -340,7 +340,7 @@ def list_artifacts(user, *, cursor=None, limit=None, member=None):
 def revoke_artifact(user, artifact_id, *, member=None):
     """DELETE /api/v1/artifacts/<id>/: revoke one of this person's files, or one shared with the team they administer.
     Its link stops working at once and its file and row are deleted (204). A file the person cannot see is 404, and one
-    they can see but may not revoke is 403 ``not_your_file``.
+    they can see but may not revoke is 403 ``not_your_file``, and a held file is 403 ``file_held``.
 
     If the storage delete fails the link is still dead and the row stays, expired, for the sweeper to retry. That is
     a 204 too, as the REST API has always answered it, and the body says ``"storage_deleted": False``."""
@@ -356,6 +356,8 @@ def revoke_artifact(user, artifact_id, *, member=None):
                     "code": "workspace_suspended",
                 },
             )
+        if artifact is not None and artifact.safety_status == "held":
+            return Answer(403, {"error": "This file is held, so it was not revoked.", "code": "file_held"})
     except NotYourFile:
         return Answer(
             403,

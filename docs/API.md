@@ -188,6 +188,7 @@ A file you can see but may not revoke returns `403` with `{"error": "Only the pe
 If the storage backend is unreachable, the URL still dies at once and the
 file is deleted by the next expiry sweep; the artifact shows as expired in
 the list until then.
+A file that staff hold is not revoked by any route: the answer is `403` with `{"error": "This file is held, so it was not revoked.", "code": "file_held"}`. The `revoke_artifact` MCP tool raises the same sentence as an invalid-params error.
 
 ---
 
@@ -718,6 +719,7 @@ extension, and the allowed list.
 | 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
 | 402 | `key_limit_reached` | The workspace has reached its plan's API key limit (`POST /api/v1/keys`). |
 | 403 | `workspace_suspended` | This account is suspended, so nothing was stored. Contact support@veilfile.com. |
+| 403 | `file_held` | This file is held, so it was not revoked. |
 | 403 | `member_removed` | You are no longer on this team, so nothing was stored. |
 | 403 | `forbidden` | The caller is signed in but not permitted, or a session call failed the CSRF check. |
 | 403 | `session_required` | The endpoint needs a dashboard session, not an API key or an OAuth token. |

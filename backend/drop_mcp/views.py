@@ -825,6 +825,8 @@ def _tool_revoke_artifact(key, args, request):
         return {'revoked': False}
     if artifact is None:
         return {'revoked': False}
+    if artifact.safety_status == 'held':
+        raise ValueError('This file is held, so it was not revoked.')
     revoked = revoke_artifact(artifact.workspace, artifact.id)
     result = {'revoked': bool(revoked)}
     if revoked == REVOKE_PENDING_DELETE:

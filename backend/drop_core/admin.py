@@ -1,6 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.utils import timezone
 
+from .holds import hold_files, release_files
 from .models import APIKey, Artifact, EmailVerification, Invitation, MemberUsageCounter, Membership, UsageCounter, Workspace
 
 
@@ -50,13 +51,46 @@ class APIKeyAdmin(admin.ModelAdmin):
 class ArtifactAdmin(admin.ModelAdmin):
     list_display = ("filename", "workspace", "member", "size_bytes", "expires_at", "created_at")
     list_filter = ("mime_type",)
-    readonly_fields = ("token",)
+    # safety_status changes only through the actions below, so that no hold skips the notice to the administrator.
+    readonly_fields = ("token", "safety_status")
     raw_id_fields = ("member",)
+    actions = ("hold_selected_files", "release_selected_files")
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
         form.base_fields["member"].required = True
         return form
+
+    @admin.action(description="Hold the selected files", permissions=["change"])
+    def hold_selected_files(self, request, queryset):
+        chosen = list(queryset.exclude(safety_status="held"))
+        result = hold_files([artifact.pk for artifact in chosen])
+        for artifact in chosen:
+            self.log_change(request, artifact, "Held.")
+        told = result.told
+        self.message_user(
+            request,
+            f"{result.held} {'file' if result.held == 1 else 'files'} held. "
+            f"{told} {'administrator was' if told == 1 else 'administrators were'} told.",
+        )
+        if result.not_told:
+            self.message_user(
+                request,
+                f"The notice to {result.not_told} {'administrator' if result.not_told == 1 else 'administrators'} "
+                "could not be sent, so tell them another way.",
+                messages.WARNING,
+            )
+
+    @admin.action(description="Release the selected files", permissions=["change"])
+    def release_selected_files(self, request, queryset):
+        chosen = list(queryset.filter(safety_status="held"))
+        released = release_files([artifact.pk for artifact in chosen])
+        for artifact in chosen:
+            self.log_change(request, artifact, "Released.")
+        self.message_user(
+            request,
+            f"{released} {'file' if released == 1 else 'files'} released. The keys that uploaded them stay stopped.",
+        )
 
 
 @admin.register(UsageCounter)

@@ -193,6 +193,25 @@ class ListTests(MembersCase):
         self.assertNotIn("secret-plans", html, f"{VIEW}: the Members page reads counts and sums, never a file name")
         self.assertNotIn(artifact.token, html, f"{VIEW}: nor a file's link")
 
+    def test_the_held_count_shows_without_a_name(self):
+        member = second_member(self.workspace, "lin")
+        removed = second_member(self.workspace, "gone")
+        Membership.objects.filter(pk=removed.pk).update(removed_at=timezone.now())
+        for owner, name in ((member, "secret-plans.txt"), (removed, "other-secret.txt")):
+            Artifact.objects.filter(pk=live_file(owner, name).pk).update(safety_status="held")
+        text = visible(self.get().content.decode())
+        self.assertIn("Veilfile has held 2 files that people on this team uploaded. This page does not say which ones, or whose.", text)
+        for hidden in ("secret-plans", "other-secret", "lin@example.com held"):
+            self.assertNotIn(hidden, text, f"{PAGE}: a hold notice names no file and no person")
+        Artifact.objects.filter(filename="other-secret.txt").delete()
+        self.assertIn("Veilfile has held 1 file that people on this team uploaded. This page does not say which one, or whose.", visible(self.get().content.decode()))
+
+    def test_no_held_line_when_nothing_is_held(self):
+        member = second_member(self.workspace, "lin")
+        live_file(member, "plain.txt")
+        Artifact.objects.filter(pk=live_file(member, "old.txt", days=-1).pk).update(safety_status="held")
+        self.assertNotIn("Veilfile has held", self.get().content.decode())
+
     def test_it_runs_one_query_per_figure(self):
         second_member(self.workspace, "lin")
         self.get()  # the first request warms caches that later ones do not pay for

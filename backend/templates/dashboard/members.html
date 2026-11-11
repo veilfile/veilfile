@@ -10,6 +10,7 @@
 {% else %}<p>{{ seats_used }} seat{{ seats_used|pluralize }} {{ seats_used|pluralize:"is,are" }} in use, and this plan has no limit on seats.</p>
 {% endif %}
 {% if offer %}<p>You asked {{ offer.email }} to become the administrator. The request ends on {{ offer.expires|utc_time }}. <a class="label interactive" href="{% url 'app-administrator-offer-cancel' %}">Cancel the request</a></p>
+{% endif %}{% if held %}<p>Veilfile has held {{ held }} {{ held|pluralize:"file,files" }} that people on this team uploaded. This page does not say which {{ held|pluralize:"one,ones" }}, or whose.</p>
 {% endif %}<table class="rows">
 <caption>People on the team</caption>
 <thead>
