@@ -263,6 +263,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -275,7 +279,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
@@ -364,6 +368,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -376,7 +384,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
@@ -466,6 +474,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -478,7 +490,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
@@ -569,6 +581,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -581,7 +597,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
@@ -672,6 +688,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -684,7 +704,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-
       # WebKit as well as Chromium: the phone menu's sheet runs in both (the engine of every browser on an iPhone is WebKit), and a check that
@@ -777,6 +797,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -789,7 +813,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
@@ -883,6 +907,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -895,7 +923,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       - name: Install dependencies
@@ -987,6 +1015,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         uses: actions/cache@v4.2.3
         with:
@@ -999,7 +1031,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-
       # WebKit as well as Chromium: the times (Date and Intl) and the Sign out button in the phone's sheet are checked in the engine of every browser on an iPhone, and a check that skips

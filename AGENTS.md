@@ -511,19 +511,23 @@ CI runs on GitHub-hosted runners: every job in `ci.yml` has `runs-on: ubuntu-24.
      past installs, 3 that succeeded (810, 830 and 979 seconds, all on 24 to 26 October) would have been cut off by this limit; since then the slowest success took 374 seconds.
   3. It keeps the downloaded packages. The same file points `Dir::Cache::Archives` at `~/.cache/apt-archives/` and keeps the downloaded packages, and a second `actions/cache` step
      (`Cache the apt packages`) restores and saves only the `.deb` files there (`~/.cache/apt-archives/*.deb`), never apt's root-only `partial/` directory. The key is
-     `apt-archives-chromium-` or, for `site-phone` and `site-dashboard` only, `apt-archives-webkit-`, then the runner's OS and architecture and the Playwright version; the
-     `restore-keys` entry falls back to the newest cache of the same kind, and a stale one does no harm, since apt downloads only the packages it lacks. Root's apt writes
-     the files, so a step after the install (`if: always()`) hands them to the runner user for the cache to save. A cache failure never fails a job.
-  4. It starts from main's caches. A pull request's caches are scoped to it and start empty (the browser jobs run for pull requests only, so main never saved any), but a pull
-     request can read the caches of the default branch. `.github/workflows/seed-ci-caches.yml` fills them there: it runs on every push to `main`, weekly (so that the caches are
-     used within GitHub's 7 days and do not expire) and by hand, and its `chromium` and `webkit` jobs restore, install and save the browser cache and the apt cache under exactly
-     the keys of `ci.yml` (`pages.tests_site_parts` compares them, so that they cannot drift apart). A new pull request's first run then finds the browsers and the packages and
-     downloads little. It is not a required check and nothing depends on it. `actions/cache` never overwrites a key, so after the first run for a Playwright version it finds both
-     caches and skips the install; a package update on Ubuntu's side changes nothing until the Playwright version changes the key, and a pull request's apt then downloads only the
-     packages that changed. A seed that hits a slow mirror fails or saves nothing, and a later run fills the cache. To run it by hand once after merging, or after a Playwright
-     upgrade: `gh workflow run seed-ci-caches.yml --ref main`, or the Actions tab, "Seed CI caches", "Run workflow". A change to the file itself makes the `changes` job run the
-     `site*` jobs, since the path is not on its list. The seed does not stop a silent hang in `apt-get update`: that step still runs on every job (it fetches the package lists, which
-     are never cached), so the 12 minute limit and the apt timeouts stay the only guard against it.
+     `apt-archives-chromium-` or, for `site-phone` and `site-dashboard` only, `apt-archives-webkit-`, then the runner's OS and architecture, the Playwright version and the day in UTC
+     (the `Find today's date` step writes it); the `restore-keys` entry falls back to the newest cache of the same kind, whatever its day, and a stale one does no harm, since apt
+     downloads only the packages it lacks. Root's apt writes the files, so a step after the install (`if: always()`) hands them to the runner user for the cache to save. A cache
+     failure never fails a job.
+  4. It starts from main's caches. A pull request's caches are scoped to it and start empty (the browser jobs run for pull requests only, so main never saved any), but a pull request
+     can read the caches of the default branch. `.github/workflows/seed-ci-caches.yml` fills them there: it runs on every push to `main`, daily (so that a package update on Ubuntu's
+     side reaches the cache within a day, and the caches never expire unused) and by hand, and its `chromium` and `webkit` jobs restore, install and save the browser cache and the
+     apt cache under exactly the keys of `ci.yml` (`pages.tests_site_parts` compares them, so that they cannot drift apart). A new pull request's first run then finds the browsers
+     and the packages and downloads little. It is not a required check and nothing depends on it. `actions/cache` never overwrites a key, which is why the apt key ends with the day:
+     until 11 November 2026 it held the Playwright version only, so the packages stayed those of 5 November, and that day the two WebKit jobs had to download a `libsoup` update while
+     the runners could not resolve any of Ubuntu's mirrors, and failed twice (the image already falls back from `azure.archive.ubuntu.com` to `archive.ubuntu.com` and
+     `security.ubuntu.com`, and all three failed). Now the day's first run restores the day before's packages, installs, which downloads only what Ubuntu has updated since, runs
+     `apt-get autoclean` so that replaced versions do not pile up, and saves the day's cache; a later run that day finds both caches and skips the install. A pull request's apt
+     downloads nothing in the usual case, and only what changed in the hours between an update and the next seed. A seed that hits a slow mirror fails or saves nothing, and a later
+     run fills the cache. To run it by hand once after merging, or after a Playwright upgrade: `gh workflow run seed-ci-caches.yml --ref main`, or the Actions tab, "Seed CI caches",
+     "Run workflow". A change to the file itself makes the `changes` job run the `site*` jobs, since the path is not on its list. The seed does not stop a silent hang in `apt-get
+     update`: that step still runs on every job (it fetches the package lists, which are never cached), so the 12 minute limit and the apt timeouts stay the only guard against it.
   To tell from a job's log whether the cache hit, open the `Cache the apt packages` step: `Cache restored from key: apt-archives-...` is a hit (an exact key says so, and a
   shorter key is the stale fallback), and `Cache not found for input keys` is a miss. In the `Install dependencies` step, packages that were cached are not fetched again, so the
   `Fetched` line of `apt-get install` is short or absent. The two cache steps are separate: the browser cache does not avoid the apt install. None of this could be run on a Mac;
