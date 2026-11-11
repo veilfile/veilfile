@@ -200,15 +200,99 @@ class DeleteAccountTests(Base):
         from django.db import transaction
 
         with transaction.atomic():
-            with self.assertRaises(AssertionError):
+            with self.assertRaises(RuntimeError):
                 delete_account(self.grace.user)
         self.assertFalse(self.gone(self.grace.user))
+
+    def test_the_guard_is_an_explicit_raise_that_python_dash_o_keeps(self):
+        import inspect
+
+        self.assertNotIn("assert ", inspect.getsource(delete_account))
+
+    def test_the_account_is_inactive_and_its_offer_cleared_before_any_other_step(self):
+        Membership.objects.filter(pk=self.grace.pk).update(offered_administrator_at=timezone.now())
+        seen = []
+
+        def look(row, now):
+            seen.append(
+                (
+                    User.objects.get(pk=self.grace.user_id).is_active,
+                    Membership.objects.get(pk=self.grace.pk).offered_administrator_at,
+                )
+            )
+
+        with mock.patch("drop_core.account_deletion._close_member_row", look):
+            delete_account(self.grace.user)
+        self.assertEqual(seen, [(False, None)])
+
+    def test_an_administrator_role_taken_between_the_check_and_the_delete_is_refused_with_the_team_intact(self):
+        theirs = self.file(self.admin, "admins.txt")
+        real = account_deletion.file_access.delete_files_of
+
+        def accept_late(row, batch=500):
+            # What an accepted offer does, as the step in the middle of the deletion would see it.
+            Membership.objects.filter(pk=self.admin.pk).update(role=Membership.MEMBER)
+            Membership.objects.filter(pk=self.grace.pk).update(role=Membership.ADMINISTRATOR)
+            Workspace.objects.filter(pk=self.team.pk).update(owner_id=self.grace.user_id)
+            return real(row, batch)
+
+        with mock.patch("drop_core.account_deletion.file_access.delete_files_of", accept_late):
+            with self.assertRaises(DeletionRefused) as caught:
+                delete_account(self.grace.user)
+        self.assertEqual(caught.exception.code, "changed")
+        self.assertTrue(Workspace.objects.filter(pk=self.team.pk).exists())
+        self.assertTrue(Membership.objects.filter(pk=self.admin.pk).exists())
+        self.assertTrue(Artifact.objects.filter(pk=theirs.pk).exists())
+        self.assertTrue(self.stored(theirs))
+        self.assertFalse(User.objects.get(pk=self.grace.user_id).is_active)
+
+    def test_a_held_file_that_lands_late_is_refused(self):
+        alone = get_or_create_workspace(make_user("lone"))
+        row = Membership.objects.get(workspace=alone)
+        late = self.file(row, "late.txt")
+        real = account_deletion.Invitation
+
+        class Late:
+            class objects:
+                @staticmethod
+                def filter(*args, **kwargs):
+                    Artifact.objects.filter(pk=late.pk).update(safety_status="held")
+                    return real.objects.filter(*args, **kwargs)
+
+        with mock.patch("drop_core.account_deletion.Invitation", Late):
+            with self.assertRaises(DeletionRefused) as caught:
+                delete_account(alone.owner)
+        self.assertEqual(caught.exception.code, "changed")
+        self.assertTrue(Artifact.objects.filter(pk=late.pk).exists())
+        self.assertTrue(self.stored(late))
+        self.assertFalse(User.objects.get(pk=alone.owner_id).is_active)
+
+    def test_a_file_uploaded_late_on_a_team_they_joined_is_refused_without_a_restricted_error(self):
+        real = account_deletion.file_access.delete_files_of
+        late = []
+
+        def upload_late(row, batch=500):
+            done = real(row, batch)
+            late.append(self.file(Membership.objects.get(pk=row.pk), "late.txt"))
+            return done
+
+        with mock.patch("drop_core.account_deletion.file_access.delete_files_of", upload_late):
+            with self.assertRaises(DeletionRefused) as caught:
+                delete_account(self.grace.user)
+        self.assertEqual(caught.exception.code, "changed")
+        self.assertTrue(Artifact.objects.filter(pk=late[0].pk).exists())
+        self.assertFalse(self.gone(self.grace.user))
+        self.assertFalse(User.objects.get(pk=self.grace.user_id).is_active)
 
     def test_the_summary_counts_and_names_nothing(self):
         self.file(self.grace, "secret-name.txt")
         self.file(self.grace, "another.txt")
         summary = deletion_summary(self.grace.user)
         self.assertEqual(summary, {"teams": 1, "files": 2, "keys": 1})
+
+    def test_the_summary_does_not_count_the_persons_own_workspace_as_a_team(self):
+        alone = get_or_create_workspace(make_user("lone"))
+        self.assertEqual(deletion_summary(alone.owner)["teams"], 0)
 
     def test_the_files_go_in_batches(self):
         for n in range(5):
@@ -251,6 +335,23 @@ class AdminDeleteTests(Base):
         self.assertEqual(response.status_code, 302)
         self.assertFalse(User.objects.filter(username="lone").exists())
         self.assertFalse(self.stored(mine))
+
+    def test_a_late_refusal_shows_the_changed_sentence(self):
+        real = account_deletion.file_access.delete_files_of
+
+        def upload_late(row, batch=500):
+            done = real(row, batch)
+            self.file(Membership.objects.get(pk=row.pk), "late.txt")
+            return done
+
+        with mock.patch("drop_core.account_deletion.file_access.delete_files_of", upload_late):
+            response = self.client.post(self.url, {"post": "yes"})
+        self.assertEqual(response.status_code, 302)
+        followed = self.client.get(response["Location"])
+        self.assertContains(
+            followed, "Something changed while the account was being deleted, so it was not deleted. It is inactive now."
+        )
+        self.assertFalse(self.gone(self.grace.user))
 
     def test_the_admin_delete_button_refuses_with_the_sentence(self):
         url = f"/admin/auth/user/{self.admin.user_id}/delete/"

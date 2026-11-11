@@ -4,6 +4,7 @@ Every class sets longMessage = False (pages.tests_site_rules holds this module t
 """
 import re
 from datetime import timedelta
+from unittest import mock
 
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
@@ -64,7 +65,7 @@ class AccessTests(TeamCase):
     def test_an_administrator_alone_and_a_person_with_no_team_get_the_shells_404(self):
         _, alone = team_of("kay")
         stranger = second_member(self.workspace, "mo").user
-        Membership.objects.filter(user=stranger).update(removed_at=timezone.now())
+        Membership.objects.filter(user=stranger).update(removed_at=timezone.now() - teams.GONE_NOTICE - timedelta(days=1))
         for user in (alone.user, stranger):
             client = Client()
             client.force_login(user)
@@ -93,6 +94,26 @@ class LeaveTests(TeamCase):
         self.assertEqual(response.redirect_chain, [(OVERVIEW, 302)])
         self.assertIn("You have left the team. Connect your agents again with veilfile login.", visible(response.content.decode()))
         self.assertTrue(self.closed())
+
+    def test_leaving_twice_lands_on_overview(self):
+        self.client.post(LEAVE)
+        response = self.client.post(LEAVE, follow=True)
+        self.assertEqual(response.redirect_chain, [(OVERVIEW, 302)])
+        self.assertIn(LEFT, visible(response.content.decode()))
+
+    def test_back_after_leaving_lands_on_overview(self):
+        self.client.post(LEAVE)
+        response = self.client.get(LEAVE, follow=True)
+        self.assertEqual(response.redirect_chain, [(OVERVIEW, 302)])
+        self.assertIn(LEFT, visible(response.content.decode()))
+
+    def test_a_person_gone_by_the_lock_gets_the_person_gone_notice(self):
+        from drop_core.teams import SeatChangeRefused
+
+        with mock.patch("dashboard.team.leave_team", side_effect=SeatChangeRefused("not_on_a_team")):
+            response = self.client.post(LEAVE, follow=True)
+        self.assertEqual(response.redirect_chain, [(OVERVIEW, 302)])
+        self.assertIn("That person is not on the team any more.", visible(response.content.decode()))
 
     def test_an_administrator_with_people_gets_the_sentence(self):
         client = Client()

@@ -19,10 +19,11 @@ from drop_core.teams import (
     has_other_members,
     has_team_features,
     leave_team,
+    no_longer_on_team,
     team_seats_only,
 )
 
-from .members import REQUEST_NOT_WAITING, TEAM_SUSPENDED
+from .members import PERSON_GONE, REQUEST_NOT_WAITING, TEAM_SUSPENDED
 from .views import dashboard_view
 
 ADMINISTRATOR_STAYS = "You administer this team, so you cannot leave it while other people are on it. Make someone else the administrator first."
@@ -30,13 +31,16 @@ ADMINISTRATOR_STAYS = "You administer this team, so you cannot leave it while ot
 
 def _member(request):
     """The signed-in person's current member row, or a redirect to Members, with its sentence, for an administrator of a team with
-    other people. An administrator alone, and a person with no team, get the shell's 404. Callers check for the redirect with
+    other people. An administrator alone who has just left a team goes to Overview, where the notice says so. An administrator alone
+    otherwise, and a person with no team, get the shell's 404. Callers check for the redirect with
     isinstance(..., HttpResponse)."""
     member = current_membership(request.user)
     if member.is_administrator:
         if has_other_members(member.workspace):
             messages.info(request, ADMINISTRATOR_STAYS)
             return redirect("app-members")
+        if no_longer_on_team(member):
+            return redirect("app")
         raise Http404("No such page.")
     return member
 
@@ -55,10 +59,13 @@ def team_leave(request):
         except PermissionDenied:
             raise Http404("No such page.") from None
         except SeatChangeRefused as refused:
-            if refused.code != "team_suspended":
-                raise Http404("No such page.") from None
-            messages.info(request, TEAM_SUSPENDED)
-            return redirect("app")
+            if refused.code == "team_suspended":
+                messages.info(request, TEAM_SUSPENDED)
+                return redirect("app")
+            if refused.code in ("person_gone", "not_on_a_team"):
+                messages.info(request, PERSON_GONE)
+                return redirect("app")
+            raise Http404("No such page.") from None
         messages.success(request, "You have left the team. Connect your agents again with veilfile login.")
         return redirect("app")
     administrator = Membership.objects.filter(
