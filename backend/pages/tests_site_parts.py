@@ -542,6 +542,24 @@ class RunnerTests(SimpleTestCase):
         self.assertEqual({key for job, key in keys.items() if job in WEBKIT_JOBS}.isdisjoint({key for job, key in keys.items() if job not in WEBKIT_JOBS}), True,
                          "ci.yml: the jobs that install WebKit and the ones that do not have different apt cache keys")
 
+    def test_the_apt_cache_key_ends_with_the_day(self):
+        # actions/cache never overwrites a key, so a key without the day kept the packages of its first save: on 11 November 2026 the WebKit jobs had to download a
+        # libsoup update that the cache of 5 November lacked, while the runners could not resolve Ubuntu's mirrors, and failed twice. With the day (UTC) in the key, the
+        # seed on main saves each day's packages, and restore-keys still finds the newest cache when today's is not saved yet (AGENTS.md, "Where CI runs").
+        seed = workflow_jobs((ROOT / ".github" / "workflows" / "seed-ci-caches.yml").read_text(encoding="utf-8"))
+        bodies = [(f"ci.yml: the `{job}` job", self.jobs[job]) for job in SITE_JOBS] + [(f".github/workflows/seed-ci-caches.yml: the `{name}` job", body) for name, body in seed.items()]
+        for where, body in bodies:
+            steps = workflow_steps(body)
+            today = next((step for step in steps if "id: today" in step), "")
+            self.assertIn('echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"', today, f"{where} finds today's date in UTC (id: today) on every run")
+            self.assertNotIn("\n        if:", today, f"{where} finds today's date on every run")
+            browsers = next(step for step in steps if "name: Cache Playwright's browsers" in step)
+            apt = next(step for step in steps if "name: Cache the apt packages" in step)
+            self.assertLess(steps.index(today), steps.index(apt), f"{where} finds today's date before it restores the apt packages")
+            self.assertTrue(re.search(r"\n          key: (.*)", apt).group(1).endswith("-${{ steps.today.outputs.date }}"), f"{where}: the apt cache key ends with today's date")
+            self.assertNotIn("steps.today", re.search(r"restore-keys: \|\n\s+(.*)", apt).group(1), f"{where}: the apt cache falls back to the newest cache of its kind, whatever its day")
+            self.assertNotIn("steps.today", browsers, f"{where}: the browser cache stays keyed on the Playwright version alone, since the browsers do not change from day to day")
+
     def test_the_seed_workflow_fills_the_caches_the_site_jobs_read(self):
         # A pull request reads the caches of main but not another pull request's, and the site jobs run for pull requests only. seed-ci-caches.yml fills the caches on main,
         # and only under exactly the keys of ci.yml, or a pull request's exact-key lookup misses them (AGENTS.md, "Where CI runs").
@@ -549,7 +567,8 @@ class RunnerTests(SimpleTestCase):
         seed = workflow_jobs(seed_text)
         self.assertEqual(sorted(seed), ["chromium", "webkit"], ".github/workflows/seed-ci-caches.yml: one job fills the Chromium caches and one the Chromium and WebKit caches")
         self.assertRegex(seed_text, r"(?m)^on:\n  push:\n    branches: \[main\]\n", ".github/workflows/seed-ci-caches.yml: it runs on every push to main")
-        self.assertRegex(seed_text, r"(?m)^  schedule:\n    # .*\n    - cron: ", ".github/workflows/seed-ci-caches.yml: it runs weekly, so that the caches do not expire unused")
+        self.assertRegex(seed_text, r'(?m)^  schedule:\n    # .*\n    - cron: "\d+ \d+ \* \* \*"\n',
+                         ".github/workflows/seed-ci-caches.yml: it runs daily, so that a package update on Ubuntu's side reaches the apt cache within a day")
         self.assertRegex(seed_text, r"(?m)^  workflow_dispatch:", ".github/workflows/seed-ci-caches.yml: it can be run by hand")
         self.assertRegex(seed_text, r"(?m)^permissions:\n  contents: read\n", ".github/workflows/seed-ci-caches.yml: it only reads the repository")
         self.assertNotIn("secrets.", seed_text, ".github/workflows/seed-ci-caches.yml: it uses no secrets")
@@ -584,8 +603,11 @@ class RunnerTests(SimpleTestCase):
             for ci_job in ci_jobs:
                 self.assertEqual(keys(seed[seed_job]), keys(self.jobs[ci_job]),
                                  f".github/workflows/seed-ci-caches.yml: the `{seed_job}` job's cache keys must be those of the `{ci_job}` job in ci.yml, byte for byte, or a pull request misses the caches")
-            self.assertIn(f"python -m playwright install --with-deps {browsers}\n", step_script(next(step for step in workflow_steps(seed[seed_job]) if "name: Install dependencies\n" in step)),
-                          f".github/workflows/seed-ci-caches.yml: the `{seed_job}` job installs {browsers}")
+            install = step_script(next(step for step in workflow_steps(seed[seed_job]) if "name: Install dependencies\n" in step))
+            self.assertIn(f"python -m playwright install --with-deps {browsers}\n", install, f".github/workflows/seed-ci-caches.yml: the `{seed_job}` job installs {browsers}")
+            # Each day's cache starts from the day before, so without this every superseded version of a package would stay in it for good.
+            self.assertIn("sudo apt-get autoclean", install, f".github/workflows/seed-ci-caches.yml: the `{seed_job}` job drops the .deb files that Ubuntu has replaced before the cache saves")
+            self.assertLess(install.index("playwright install"), install.index("apt-get autoclean"), f".github/workflows/seed-ci-caches.yml: the `{seed_job}` job cleans the cache after the install")
 
     def test_the_names_job_checks_every_file_against_the_owners_list(self):
         body = self.jobs["names"]

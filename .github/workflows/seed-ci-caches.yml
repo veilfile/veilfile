@@ -6,17 +6,17 @@
 # Two jobs, one for each kind of cache ci.yml has: Chromium alone (the `site` jobs but `site-phone` and `site-dashboard`) and Chromium with WebKit.
 # They are not required checks and nothing depends on them. If one hits a slow mirror, a later run fills the cache.
 #
-# actions/cache never overwrites a key, so once a Playwright version has its caches, a run finds them and skips the install. A package update on
-# Ubuntu's side changes nothing here: the key holds the Playwright version only, so the cached .deb files stay until that version changes, and a
-# pull request's apt then downloads only the packages that changed.
+# actions/cache never overwrites a key, so the apt cache's key ends with the day (UTC). The first run of a day restores the day before's packages,
+# installs, which downloads only what Ubuntu has updated since, drops the replaced .deb files and saves the day's cache; a later run that day finds
+# both caches and skips the install. The browser cache's key holds the Playwright version only, since the browsers do not change from day to day.
 name: Seed CI caches
 
 on:
   push:
     branches: [main]
   schedule:
-    # Weekly, so that the caches are used within GitHub's 7 days and do not expire.
-    - cron: "17 4 * * 1"
+    # Daily, so that a package update on Ubuntu's side reaches the apt cache within a day, and the caches never go 7 days unused and expire.
+    - cron: "17 4 * * *"
   workflow_dispatch:
 
 permissions:
@@ -42,6 +42,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         id: browsers
         uses: actions/cache@v4.2.3
@@ -55,7 +59,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-chromium-${{ runner.os }}-${{ runner.arch }}-
       # Both caches found under their exact keys: there is nothing to save, so the install is skipped.
@@ -74,6 +78,8 @@ jobs:
           EOF
           pip install -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium
+          # Each day's cache starts from the day before's: drop the .deb files of versions Ubuntu has replaced, or they would stay in it for good.
+          sudo apt-get autoclean
       # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
       - name: Make the apt packages readable for the cache
         if: always()
@@ -97,6 +103,10 @@ jobs:
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(sed -n 's/^playwright==//p' site-tests/requirements.txt)" >> "$GITHUB_OUTPUT"
+      # The apt cache's key ends with the day (UTC), so that the seed on main saves each day's packages and a pull request finds them (AGENTS.md, "Where CI runs").
+      - name: Find today's date
+        id: today
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright's browsers
         id: browsers
         uses: actions/cache@v4.2.3
@@ -110,7 +120,7 @@ jobs:
         continue-on-error: true
         with:
           path: ~/.cache/apt-archives/*.deb
-          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          key: apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-${{ steps.today.outputs.date }}
           restore-keys: |
             apt-archives-webkit-${{ runner.os }}-${{ runner.arch }}-
       # Both caches found under their exact keys: there is nothing to save, so the install is skipped.
@@ -129,6 +139,8 @@ jobs:
           EOF
           pip install -r site-tests/requirements.txt
           python -m playwright install --with-deps chromium webkit
+          # Each day's cache starts from the day before's: drop the .deb files of versions Ubuntu has replaced, or they would stay in it for good.
+          sudo apt-get autoclean
       # Root's apt wrote the .deb files: hand them to the runner user so that the cache can read and save them (this step runs even when the install failed).
       - name: Make the apt packages readable for the cache
         if: always()
