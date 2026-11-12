@@ -429,10 +429,10 @@ class KeyAllowanceTests(TestCase):
     def test_no_allowance_changes_nothing(self):
         cap = PLANS["team"]["keys"]
         for i in range(cap - 1):
-            create_key_within_cap(self.workspace, f"k{i}", member=self.admin)
-        last, _ = create_key_within_cap(self.workspace, "last", member=self.admin)
+            create_key_within_cap(self.workspace, f"k{i}", member=self.grace)
+        last, _ = create_key_within_cap(self.workspace, "last", member=self.grace)
         with self.assertRaises(KeyCapReached) as caught:
-            create_key_within_cap(self.workspace, "more", member=self.admin)
+            create_key_within_cap(self.workspace, "more", member=self.grace)
         self.assertNotIsInstance(caught.exception, MemberKeyCapReached)
         # An over-cap workspace can still rotate a key.
         self.workspace.plan = "free"
