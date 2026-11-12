@@ -404,6 +404,23 @@ Like C3's, with scripts in `~/dev/veilfile-rehearsal-kit/prd`, starting from `pr
   - The new `Customer.modify` call needs the owner's word before the deploy.
   - A staff edit of a plan, or a missing customer, bars a team's members as a drop does.
 
+## Changed during the build
+
+- **The seat check reads the plan Stripe's subscription is on,** not the workspace's own plan, which can lag a webhook. So a change of interval on the plan the subscription is already on is never refused, and a stale record cannot skip a real downgrade. An automated security review and the whole-branch review found this.
+- **A transfer marks the handover whenever the team has a Stripe customer,** not only with a subscription, and the card notice shows only while there is also a subscription. Checkout repairs the email as the portal does, so a lapsed team's new administrator is never left with the former administrator's address after one failed move. Checkout repairs only after it has passed the live-subscription check, so a refused checkout leaves the notice in place.
+- **A portal or checkout request re-reads the administrator after Stripe returns the session,** and gives no link to someone the role has just left. The attack showed a former administrator's request in flight at a transfer getting a portal link, which can change the card or cancel.
+- **Moving Stripe's email re-reads the administrator after each call,** and moves it again for the current one, at most three moves in all, so a slow first transfer's call cannot overwrite a second's.
+- **With the switch off, Billing and the switch confirmation make the queries `main` made,** because the views reach the member only with the switch on.
+- **A status refresh that applies a paid plan to a workspace nobody administers reports it,** as the webhook and the sync command do.
+- **On Billing, a plan with too few seats is named once, below the monthly buttons,** and its buttons are left out of both rows; a sentence in the row of buttons read as a button.
+- **A barred member's Overview shows their own use and not the team's,** whose key meter left out their key, and their Files caption is the one-person caption.
+- **The switch off is not byte-identical in one way that only a team can meet:** a member of a team on Free is barred whatever the switch says (decision 1), and nothing makes such a member while the switch is off. Otherwise 823 responses and 37 Stripe calls matched the previous release, and one-person billing over HTTP matched it with the switch on and off.
+- **`0021` waits for every transaction that holds a lock on any workspace row,** including a webhook's Stripe call, and requests queue behind it: 3.5 s behind a 5 s hold, with no errors. Deploy at a quiet time.
+- **Left as they are:**
+  - Staff can still edit a plan in the admin, and a hand-set Free bars a team's members (decision 15).
+  - `sync_stripe_billing` reports a workspace nobody administers only with `--apply`.
+  - A refused checkout after its session was made leaves an unused Stripe session, which expires on its own.
+
 ## Carried to D2, E and F
 
 These are not part of this plan.
