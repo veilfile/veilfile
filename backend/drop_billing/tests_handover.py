@@ -71,6 +71,19 @@ class MoveEmailTests(HandoverBase):
         self.assertEqual(depths, [baseline], f"{ACCOUNT}: Customer.modify runs outside any transaction")
         self.assertIsNotNone(self.ws.billing_handed_over_at, "the marker is set with a subscription")
 
+    def test_a_customer_written_after_the_member_was_loaded_is_still_used(self):
+        from dashboard import team
+
+        real = teams.accept_administrator_offer
+
+        def accept_then_change_customer(member):
+            real(member)
+            Workspace.objects.filter(pk=self.ws.pk).update(stripe_customer_id="cus_LATE")
+
+        with mock.patch.object(team, "accept_administrator_offer", accept_then_change_customer):
+            self.transfer()
+        self.modify.assert_called_once_with("cus_LATE", email="grace@example.com")
+
     def test_a_failed_email_move_keeps_the_transfer_and_the_portal_repairs_it(self):
         self.modify.side_effect = stripe.APIConnectionError("secret detail of the failure")
         with self.assertLogs("drop_billing", level="WARNING") as logged:
