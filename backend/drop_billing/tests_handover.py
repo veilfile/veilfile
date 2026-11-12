@@ -319,6 +319,27 @@ class InFlightTransferTests(HandoverBase):
         self.assertFalse(billing_account.move_billing_email(self.ws))
         self.assertEqual(len(calls), 3)
 
+    def test_a_refused_checkout_keeps_the_notice_and_makes_no_move(self):
+        self.set_billing("team", sub_id="sub_A")
+        self.transfer()
+        self.assertIsNotNone(self.ws.billing_handed_over_at)
+        self.listed.return_value = sub_list(make_sub("sub_A", "active", "price_team"))
+        self.modify.reset_mock()
+        answer = billing_account.checkout(self.grace.user, "team")
+        self.assertEqual(answer.status, 409)
+        self.assertEqual(answer.body["code"], "already_subscribed")
+        self.modify.assert_not_called()
+        self.assertIsNotNone(self.reload().billing_handed_over_at, f"{ACCOUNT}: a refused checkout leaves the marker set")
+
+    def test_a_lapsed_teams_checkout_still_repairs_the_email_and_clears_the_marker(self):
+        self.modify.side_effect = stripe.APIConnectionError("down")
+        with self.assertLogs("drop_billing", level="WARNING"):
+            self.transfer()
+        self.modify.reset_mock(side_effect=True)
+        self.assertEqual(billing_account.checkout(self.grace.user, "team").status, 200)
+        self.modify.assert_called_once_with("cus_A", email="grace@example.com")
+        self.assertIsNone(self.reload().billing_handed_over_at)
+
 
 class MigrationTests(TransactionTestCase):
     longMessage = False

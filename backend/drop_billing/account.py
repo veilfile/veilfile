@@ -650,7 +650,6 @@ def checkout(user, plan, interval="month"):
     workspace = member.workspace
     try:
         customer_id = _ensure_customer(stripe_mod, workspace, user, plan)
-        _repair_billing_email(workspace)
         # Stripe, not the local mirror, decides: the webhook for a checkout
         # finished a moment ago may not have arrived yet.
         subs = _list_subscriptions(stripe_mod, customer_id)
@@ -665,6 +664,7 @@ def checkout(user, plan, interval="month"):
             # bring it up to date so the dashboard shows the right controls.
             _sync_from_subscriptions(workspace, subs, customer_id)
             return _already_subscribed(live)
+        _repair_billing_email(workspace)
         try:
             session = _create_checkout_session(
                 stripe_mod, workspace, customer_id, plan, price_id
