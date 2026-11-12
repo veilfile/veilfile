@@ -147,6 +147,12 @@ def _open_administrator(workspace_id):
     )
 
 
+def _is_open_administrator(workspace_id, user):
+    """Whether ``user`` is the team's open administrator now. A plain read, made after a Stripe call that no lock covers."""
+    administrator = _open_administrator(workspace_id)
+    return administrator is not None and administrator.user_id == user.pk
+
+
 def _not_enough_seats(workspace, plan):
     """409 when the team has more people than ``plan`` has seats, or None. Reads the people now, so call it under the workspace lock."""
     short = too_few_seats(workspace, plan)
@@ -676,6 +682,8 @@ def checkout(user, plan, interval="month"):
         return refused.answer
     except stripe_mod.error.StripeError as exc:
         return _stripe_error(exc)
+    if not _is_open_administrator(workspace.pk, user):
+        return _administrator_only()
     return Answer(200, {"checkout_url": session["url"]})
 
 
@@ -940,6 +948,8 @@ def portal(user):
             exc,
         )
         return _stripe_error(exc)
+    if not _is_open_administrator(workspace.pk, user):
+        return _administrator_only()
     if handed_over_at is not None and moved:
         Workspace.objects.filter(pk=workspace.pk, billing_handed_over_at=handed_over_at).update(billing_handed_over_at=None)
     return Answer(200, {"portal_url": session["url"]})

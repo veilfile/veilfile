@@ -249,6 +249,46 @@ class PortalConfigurationTests(HandoverBase):
         self.assertEqual(kwargs, {"customer": "cus_A", "return_url": "https://veilfile.test/app/"})
 
 
+class InFlightTransferTests(HandoverBase):
+    """Rulings 12 to 14: a transfer that commits while a billing request is in flight."""
+
+    def setUp(self):
+        super().setUp()
+        self.set_billing("free", customer="cus_A", sub_id="")
+        self.session = self.patch_stripe("session", return_value={"id": "cs_1", "url": "https://checkout.stripe.com/c/cs_1"})
+        self.listed = self.patch_stripe("list", return_value=sub_list())
+        self.heidi = second_member(self.ws, "heidi")
+
+    def hand_over(self, to):
+        """The row changes of a committed transfer, without its email move, so the test counts only the calls under it."""
+        Membership.objects.filter(workspace=self.ws, role=Membership.ADMINISTRATOR).update(role=Membership.MEMBER)
+        Membership.objects.filter(pk=to.pk).update(role=Membership.ADMINISTRATOR)
+
+    def test_a_former_administrators_portal_in_flight_gets_no_url(self):
+        def transfer_during_the_call(*args, **kwargs):
+            self.hand_over(self.grace)
+            return {"url": "https://billing.stripe.test/p/1"}
+
+        self.portal_session.side_effect = transfer_during_the_call
+        answer = billing_account.portal(self.user)
+        self.assertEqual(self.portal_session.call_count, 1)
+        self.assertEqual((answer.status, answer.body), (403, {"error": "administrator_only"}))
+
+    def test_a_former_administrators_checkout_in_flight_gets_no_url(self):
+        def transfer_during_the_call(*args, **kwargs):
+            self.hand_over(self.grace)
+            return {"id": "cs_1", "url": "https://checkout.stripe.com/c/cs_1"}
+
+        self.session.side_effect = transfer_during_the_call
+        answer = billing_account.checkout(self.user, "team")
+        self.assertEqual(self.session.call_count, 1)
+        self.assertEqual((answer.status, answer.body), (403, {"error": "administrator_only"}))
+
+    def test_a_portal_and_a_checkout_with_no_transfer_still_get_their_urls(self):
+        self.assertEqual(billing_account.portal(self.user).body, {"portal_url": "https://billing.stripe.test/p/1"})
+        self.assertEqual(billing_account.checkout(self.user, "team").body, {"checkout_url": "https://checkout.stripe.com/c/cs_1"})
+
+
 class MigrationTests(TransactionTestCase):
     longMessage = False
 
