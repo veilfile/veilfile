@@ -104,8 +104,8 @@ class MakeDashboardFixturesTests(TestCase):
 
     def test_it_writes_the_sessions_and_the_names_the_harness_reads_and_each_session_opens_every_section(self):
         f = self.f
-        self.assertEqual(sorted(f), ["over", "owner", "sessions", "sub", "team"], f"{PREFIX}: the keys the dashboard part reads")
-        self.assertEqual(sorted(f["sessions"]), ["admin", "member", "over", "owner", "sign_out", "sub"], f"{PREFIX}: the sessions the dashboard part reads")
+        self.assertEqual(sorted(f), ["bar", "over", "owner", "sessions", "sub", "team"], f"{PREFIX}: the keys the dashboard part reads")
+        self.assertEqual(sorted(f["sessions"]), ["admin", "barred", "heir", "lapsed", "member", "over", "owner", "sign_out", "sub"], f"{PREFIX}: the sessions the dashboard part reads")
         self.assertEqual(len(f["sessions"]["sign_out"]), 14, f"{PREFIX}: the Sign out checks end 14 sessions of the owner (dashboard_sign_out_problems and dashboard_slow_frames_problems), so there are 14")
         missing = []
         for path in sorted(fixture_paths() - {("run",)}):
@@ -187,6 +187,31 @@ class MakeDashboardFixturesTests(TestCase):
         for path, words in (("/app/team/leave/", "Do you want to leave this team?"), ("/app/team/administrator/", "Do you want to become the administrator of this team?")):
             self.assertContains(member_client.get(path), words, msg_prefix=f"{PREFIX}: the member at {path}")
         self.assertEqual(member_client.get(URL_MEMBERS).status_code, 404, f"{PREFIX}: a member has no Members page")
+
+    @override_settings(TEAM_SEATS=True)
+    def test_the_lapsed_team_has_a_barred_member_and_the_heir_has_a_team_just_handed_over(self):
+        from drop_core.models import Workspace
+
+        bar, User = self.f["bar"], get_user_model()
+        lapsed = User.objects.get(username="site-dash-lapsed-admin")
+        workspace = get_or_create_workspace(lapsed)
+        self.assertEqual((workspace.plan, workspace.stripe_customer_id, workspace.billing_handed_over_at), ("free", "", None), f"{PREFIX}: the lapsed team is on Free and has no billing account")
+        rows = Membership.objects.filter(workspace=workspace, removed_at__isnull=True).order_by("pk")
+        self.assertEqual([(row.user.username, row.role) for row in rows], [("site-dash-lapsed-admin", "administrator"), ("site-dash-barred", "member")], f"{PREFIX}: an administrator and one barred member")
+        self.assertEqual(bar["admin_email"], lapsed.email, f"{PREFIX}: the Overview sentence names the administrator's address")
+        barred, administrator = signed_in(self.f["sessions"]["barred"]), signed_in(self.f["sessions"]["lapsed"])
+        overview = " ".join(barred.get("/app/").content.decode().split())
+        self.assertIn(f"until {lapsed.email} chooses a paid plan.", overview, f"{PREFIX}: the barred member's Overview says the team is on Free")
+        self.assertIn("/app/team/leave/", overview, f"{PREFIX}: the barred member has the Leave link")
+        self.assertContains(barred.get("/app/keys/"), "so you cannot make keys for now", msg_prefix=f"{PREFIX}: the barred member's Keys")
+        files = barred.get("/app/files/")
+        self.assertContains(files, "barred-members-file.txt", msg_prefix=f"{PREFIX}: the barred member has a file of their own to look at")
+        self.assertContains(administrator.get("/app/billing/"), "on it cannot upload or make keys", msg_prefix=f"{PREFIX}: the lapsed administrator's Billing")
+        self.assertContains(administrator.get(URL_MEMBERS), "so nobody but you can upload or make keys", msg_prefix=f"{PREFIX}: the lapsed administrator's Members")
+        heir = Workspace.objects.get(owner__username="site-dash-heir")
+        self.assertEqual((heir.plan, heir.stripe_customer_id.startswith("cus_"), heir.stripe_subscription_id.startswith("sub_"), heir.billing_handed_over_at is not None),
+                         ("team", True, True, True), f"{PREFIX}: the heir's team is on Team with fake Stripe ids and the handover marker")
+        self.assertContains(signed_in(self.f["sessions"]["heir"]).get("/app/billing/"), "The card on file is the one the former administrator added", msg_prefix=f"{PREFIX}: the heir's Billing")
 
     def test_a_second_run_starts_again_and_touches_nobody_else(self):
         bystander = get_user_model().objects.create(username="site-dash-bystander")
