@@ -47,6 +47,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from . import funnel
+from .account import KEY_NOT_ALLOWED_WORDS
 from .email_verification import client_ip, is_email_verified
 from .key_caps import (
     KeyCapReached,
@@ -58,7 +59,7 @@ from .key_caps import (
     needs_replacement,
     replaceable_keys,
 )
-from .models import APIKey, DeviceCode, current_member, current_membership, has_other_members
+from .models import APIKey, DeviceCode, current_member, current_membership, has_other_members, is_barred
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +342,8 @@ def _render_consent(request, device_code, error=None, selected_key="", http_stat
             "active_total": active_total,
             "key_allowance": member.key_allowance,
             "on_team": has_other_members(workspace),
+            # A barred person's page gives the sentence in place of the form.
+            "barred": is_barred(member, workspace),
             "is_administrator": member.is_administrator,
             "replacement_required": replacement_required,
             # The member's allowance, not the team's limit, is what stops them.
@@ -488,8 +491,8 @@ def _redeem(device_code):
                 )
             except KeyNotAllowed as exc:
                 refused = (
-                    "This account is suspended, so no key was made. Contact support@veilfile.com."
-                    if exc.code == "workspace_suspended"
+                    KEY_NOT_ALLOWED_WORDS[exc.code]
+                    if exc.code in ("workspace_suspended", "team_on_free")
                     else "You are no longer on this team, so no key was made. Run veilfile login again."
                 )
             except MemberKeyCapReached:
@@ -673,6 +676,9 @@ def device_approve(request):
         )
     member = current_membership(request.user)
     workspace = member.workspace
+    if is_barred(member, workspace):
+        # Before anything is written; the page says so in place of its form.
+        return _render_consent(request, device_code, http_status=403)
     raw_replace = (request.POST.get("replace_key") or "").strip()
     # Anti-phishing: approval from a link someone sent you must not be a
     # single click. The user attests they started this login themselves.

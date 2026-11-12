@@ -177,6 +177,7 @@ class LookupTests(TestCase):
         self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
         self.ada = make_user("ada")
         self.team = get_or_create_workspace(self.ada)
+        Workspace.objects.filter(pk=self.team.pk).update(plan="team")
         self.grace = second_member(self.team, "grace")
         self.old = get_or_create_workspace(self.grace.user)
         Membership.objects.filter(workspace=self.old).update(removed_at=timezone.now())
@@ -241,6 +242,7 @@ class DeviceLookupTests(_DeviceTestBase):
 
     def test_device_approval_stores_the_team(self):
         team = get_or_create_workspace(self._user("ada"))
+        Workspace.objects.filter(pk=team.pk).update(plan="team")
         grace = second_member(team, "grace")
         old = get_or_create_workspace(grace.user)
         Membership.objects.filter(workspace=old).update(removed_at=timezone.now())

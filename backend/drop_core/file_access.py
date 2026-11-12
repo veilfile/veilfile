@@ -4,12 +4,14 @@ from django.db.models import Count, Q, Sum
 from django.utils import timezone
 
 from .models import (
+    BARRED,
     FILE_VISIBILITY_MEMBERS_CHOOSE,
     VISIBILITY_CHOICES,
     VISIBILITY_TEAM,
     Artifact,
     Membership,
     PendingUpload,
+    is_barred,
 )
 
 
@@ -19,14 +21,16 @@ class NotYourFile(Exception):
 
 def files_visible_to(member):
     """The files this person can see: their own here, their own left behind
-    under a membership that has ended, and those shared with the team here.
+    under a membership that has ended, and those shared with the team here. A
+    member of a team that is on Free sees only the first two.
 
     It resolves the closed rows first, so the query has two indexed conditions
     and no join."""
     closed = Membership.objects.filter(user_id=member.user_id, removed_at__isnull=False).values_list("pk", flat=True)
-    return Artifact.objects.filter(
-        Q(member_id__in=[member.pk, *closed]) | Q(workspace_id=member.workspace_id, visibility=VISIBILITY_TEAM)
-    )
+    own = Q(member_id__in=[member.pk, *closed])
+    if is_barred(member):
+        return Artifact.objects.filter(own)
+    return Artifact.objects.filter(own | Q(workspace_id=member.workspace_id, visibility=VISIBILITY_TEAM))
 
 
 def file_to_revoke(member, artifact_id):
@@ -45,7 +49,9 @@ def set_visibility(member, artifact_id, visibility):
     """Share one of the person's own files with the team, or make it only theirs again. True when it changed.
 
     It works only on a file the person uploaded in their current workspace, while the administrator lets members choose, and
-    while the file is live (not expired, not held, and the workspace not suspended). It writes the visibility and nothing else."""
+    while the file is live (not expired, not held, and the workspace not suspended), and never for a member of a team on Free: the
+    bar is in the UPDATE's own filter, from the rows as they are now, so a stale request changes nothing. It writes the visibility
+    and nothing else."""
     if visibility not in dict(VISIBILITY_CHOICES):
         return False
     changed = (
@@ -58,6 +64,7 @@ def set_visibility(member, artifact_id, visibility):
             expires_at__gt=timezone.now(),
         )
         .exclude(safety_status="held")
+        .exclude(BARRED)
         .update(visibility=visibility)
     )
     return bool(changed)
@@ -67,7 +74,7 @@ def file_details(member, ids):
     """What a team's Files page says of each listed file the person can see, by id: its visibility, who uploaded it
     ("You" or an address), and whether the person may revoke it or change its visibility. One query for all the ids."""
     now = timezone.now()
-    choose = member.workspace.file_visibility == FILE_VISIBILITY_MEMBERS_CHOOSE
+    choose = member.workspace.file_visibility == FILE_VISIBILITY_MEMBERS_CHOOSE and not is_barred(member)
     details = {}
     artifacts = files_visible_to(member).filter(id__in=list(ids)).select_related("member__user", "workspace")
     for artifact in artifacts:

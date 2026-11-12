@@ -22,14 +22,16 @@ import logging
 import os
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from drop_core.account import Answer
 from drop_core.key_caps import active_key_count
-from drop_core.models import Artifact, Workspace, current_membership
+from drop_core.models import Artifact, Membership, Workspace, current_membership, has_other_members
 from drop_core.plans import PLANS
 from drop_core.services import workspace_storage_bytes
+from drop_core.teams import too_few_seats
 
 from .models import Subscription
 
@@ -135,6 +137,47 @@ def _administrator_only():
     return Answer(403, {"error": "administrator_only"})
 
 
+def _open_administrator(workspace_id):
+    """The team's open administrator row with its user, or None. A plain read for code that already holds the workspace lock:
+    ``administrator_of`` and ``current_membership`` may write, and nothing here locks a membership row."""
+    return (
+        Membership.objects.filter(workspace_id=workspace_id, role=Membership.ADMINISTRATOR, removed_at__isnull=True)
+        .select_related("user")
+        .first()
+    )
+
+
+def _is_open_administrator(workspace_id, user):
+    """Whether ``user`` is the team's open administrator now. A plain read, made after a Stripe call that no lock covers."""
+    administrator = _open_administrator(workspace_id)
+    return administrator is not None and administrator.user_id == user.pk
+
+
+def _not_enough_seats(workspace, plan):
+    """409 when the team has more people than ``plan`` has seats, or None. Reads the people now, so call it under the workspace lock."""
+    short = too_few_seats(workspace, plan)
+    if short is None:
+        return None
+    return Answer(
+        409,
+        {
+            "error": "This team has more people than the plan has seats. Remove people first.",
+            "code": "not_enough_seats",
+            "plan": plan,
+            "people": short[0],
+            "seats": short[1],
+        },
+    )
+
+
+class _Refused(Exception):
+    """Raised under a lock to leave it with the answer to give."""
+
+    def __init__(self, answer):
+        super().__init__(answer.status)
+        self.answer = answer
+
+
 def _no_subscription():
     return _error(
         "no_subscription",
@@ -182,8 +225,9 @@ def _forget_missing_customer(workspace, customer_id):
         locked.stripe_customer_id = ""
         locked.stripe_subscription_id = ""
         locked.plan = "free"
+        locked.billing_handed_over_at = None
         locked.save(
-            update_fields=["plan", "stripe_customer_id", "stripe_subscription_id"]
+            update_fields=["plan", "stripe_customer_id", "stripe_subscription_id", "billing_handed_over_at"]
         )
         Subscription.objects.filter(workspace=locked).update(
             stripe_customer_id="",
@@ -195,6 +239,7 @@ def _forget_missing_customer(workspace, customer_id):
     workspace.plan = locked.plan
     workspace.stripe_customer_id = ""
     workspace.stripe_subscription_id = ""
+    workspace.billing_handed_over_at = None
     return locked
 
 
@@ -383,13 +428,27 @@ def _apply_subscriptions(workspace, subs, customer_id):
     return plan
 
 
+def _report_unadministered(workspace, plan):
+    """Log an ERROR for staff when a paid plan was just applied to a workspace with no open administrator row, as when
+    the payer joined another team before the payment landed. Call it under the workspace lock; it names ids only."""
+    if plan == "free":
+        return
+    if Membership.objects.filter(workspace=workspace, role=Membership.ADMINISTRATOR, removed_at__isnull=True).exists():
+        return
+    logger.error(
+        "billing: workspace %s has a paid subscription %s and no current administrator; reconcile it by hand",
+        workspace.pk,
+        workspace.stripe_subscription_id,
+    )
+
+
 def _sync_from_subscriptions(workspace, subs, customer_id):
     """Apply an already fetched subscription list under the row lock,
     unless the workspace has moved to another customer meanwhile."""
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=workspace.pk)
         if locked.stripe_customer_id == customer_id:
-            _apply_subscriptions(locked, subs, customer_id)
+            _report_unadministered(locked, _apply_subscriptions(locked, subs, customer_id))
     return locked
 
 
@@ -443,7 +502,7 @@ def _already_subscribed(live_subs):
     )
 
 
-def _ensure_customer(stripe_mod, workspace, user, replace=""):
+def _ensure_customer(stripe_mod, workspace, user, plan, replace=""):
     """Return the workspace's Stripe customer id, creating it on first use.
 
     Runs under a row lock so a double click cannot create two customers:
@@ -451,15 +510,25 @@ def _ensure_customer(stripe_mod, workspace, user, replace=""):
     is a stored id Stripe reported missing (a test-mode leftover); it is
     unlinked like any missing customer (``_forget_missing_customer``) and
     swapped for a fresh one.
+
+    Under the lock, before anything else, the administrator is read again and the people are counted against ``plan``'s seats:
+    a row demoted since the caller read it, or a team with more people than seats, raises ``_Refused``. The new customer gets
+    the address of the administrator read there.
     """
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=workspace.pk)
+        administrator = _open_administrator(locked.pk)
+        if administrator is None or administrator.user_id != user.pk:
+            raise _Refused(_administrator_only())
+        refused = _not_enough_seats(locked, plan)
+        if refused is not None:
+            raise _Refused(refused)
         if locked.stripe_customer_id and locked.stripe_customer_id != replace:
             workspace.stripe_customer_id = locked.stripe_customer_id
             return locked.stripe_customer_id
         if replace:
             locked = _forget_missing_customer(locked, replace)
-        customer = stripe_mod.Customer.create(email=user.email or None)
+        customer = stripe_mod.Customer.create(email=administrator.user.email or None)
         locked.stripe_customer_id = customer["id"]
         locked.save(update_fields=["stripe_customer_id"])
     workspace.plan = locked.plan
@@ -580,13 +649,13 @@ def checkout(user, plan, interval="month"):
         return _administrator_only()
     workspace = member.workspace
     try:
-        customer_id = _ensure_customer(stripe_mod, workspace, user)
+        customer_id = _ensure_customer(stripe_mod, workspace, user, plan)
         # Stripe, not the local mirror, decides: the webhook for a checkout
         # finished a moment ago may not have arrived yet.
         subs = _list_subscriptions(stripe_mod, customer_id)
         if subs is None:
             customer_id = _ensure_customer(
-                stripe_mod, workspace, user, replace=customer_id
+                stripe_mod, workspace, user, plan, replace=customer_id
             )
             subs = []
         live = [s for s in subs if s.get("status") in LIVE_STATUSES]
@@ -595,6 +664,7 @@ def checkout(user, plan, interval="month"):
             # bring it up to date so the dashboard shows the right controls.
             _sync_from_subscriptions(workspace, subs, customer_id)
             return _already_subscribed(live)
+        _repair_billing_email(workspace)
         try:
             session = _create_checkout_session(
                 stripe_mod, workspace, customer_id, plan, price_id
@@ -603,13 +673,17 @@ def checkout(user, plan, interval="month"):
             if not _is_missing_customer(exc):
                 raise
             customer_id = _ensure_customer(
-                stripe_mod, workspace, user, replace=customer_id
+                stripe_mod, workspace, user, plan, replace=customer_id
             )
             session = _create_checkout_session(
                 stripe_mod, workspace, customer_id, plan, price_id
             )
+    except _Refused as refused:
+        return refused.answer
     except stripe_mod.error.StripeError as exc:
         return _stripe_error(exc)
+    if not _is_open_administrator(workspace.pk, user):
+        return _administrator_only()
     return Answer(200, {"checkout_url": session["url"]})
 
 
@@ -654,6 +728,9 @@ def switch(user, plan, interval="month"):
             workspace = Workspace.objects.select_for_update().get(
                 pk=workspace.pk
             )
+            administrator = _open_administrator(workspace.pk)
+            if administrator is None or administrator.user_id != user.pk:
+                return _administrator_only()
             return _switch(stripe_mod, workspace, plan, price_id)
     except stripe_mod.error.StripeError as exc:
         logger.error(
@@ -716,6 +793,12 @@ def _switch(stripe_mod, workspace, plan, price_id):
         if current.get("pending_update"):
             return _cancel_pending(stripe_mod, workspace, current)
         return Answer(200, {"plan": workspace.plan, "status": "unchanged"})
+
+    # The mirror may lag Stripe, so the skip reads the plan of the item being changed.
+    if plan != _plan_for_price_id(_item_price_id(item)):
+        refused = _not_enough_seats(workspace, plan)
+        if refused is not None:
+            return refused
 
     updated = stripe_mod.Subscription.modify(
         current["id"],
@@ -799,6 +882,46 @@ def _cancel_pending(stripe_mod, workspace, current):
     return Answer(200, {"plan": workspace.plan, "status": "pending_cancelled"})
 
 
+MOVE_ATTEMPTS = 3
+
+
+def move_billing_email(workspace):
+    """Give the team's Stripe customer the address of the team's open administrator, after a transfer. After each call it reads the
+    administrator again and, if a later transfer changed it, moves the email again, at most ``MOVE_ATTEMPTS`` moves in all. True when
+    the last move was for the current administrator, or the workspace has no customer. False when Stripe fails or is not configured;
+    that is logged with the exception's class only, and nothing is undone. Call it outside a transaction: it makes a Stripe call."""
+    if not workspace.stripe_customer_id:
+        return True
+    stripe_mod, err = _stripe_or_503()
+    if err is not None:
+        logger.warning("billing: the email of workspace %s did not move: billing is not configured", workspace.pk)
+        return False
+    for _ in range(MOVE_ATTEMPTS):
+        administrator = _open_administrator(workspace.pk)
+        if administrator is None:
+            logger.warning("billing: the email of workspace %s did not move: no open administrator", workspace.pk)
+            return False
+        try:
+            stripe_mod.Customer.modify(workspace.stripe_customer_id, email=administrator.user.email or None)
+        except Exception as exc:
+            logger.warning("billing: the email of workspace %s did not move: %s", workspace.pk, type(exc).__name__)
+            return False
+        # A transfer may have committed while Stripe was answering; a slow first move must not land last.
+        current = _open_administrator(workspace.pk)
+        if current is not None and current.user_id == administrator.user_id:
+            return True
+    logger.warning("billing: the email of workspace %s did not settle: the administrator kept changing", workspace.pk)
+    return False
+
+
+def _repair_billing_email(workspace):
+    """While a transfer's marker is set, move the customer's email again, as the portal does, and clear the marker with a filter on the
+    value read when the move worked. A failed move is logged and never stops the caller. Call it outside a transaction."""
+    handed_over_at = workspace.billing_handed_over_at
+    if handed_over_at is not None and move_billing_email(workspace):
+        Workspace.objects.filter(pk=workspace.pk, billing_handed_over_at=handed_over_at).update(billing_handed_over_at=None)
+
+
 def portal(user):
     """POST /api/v1/billing/portal: a Stripe customer-portal session for managing the subscription. The 200 body is
     ``{"portal_url": ...}``; 400 ``no_billing_account`` when the workspace has no Stripe customer."""
@@ -813,10 +936,17 @@ def portal(user):
     if not workspace.stripe_customer_id:
         return Answer(400, {"error": "no_billing_account"})
 
+    handed_over_at = workspace.billing_handed_over_at
+    moved = handed_over_at is None or move_billing_email(workspace)
+    options = {}
+    if settings.STRIPE_TEAM_PORTAL_CONFIGURATION and settings.TEAM_SEATS and has_other_members(workspace):
+        options["configuration"] = settings.STRIPE_TEAM_PORTAL_CONFIGURATION
+
     try:
         session = stripe_mod.billing_portal.Session.create(
             customer=workspace.stripe_customer_id,
             return_url=_base_url() + "/app/",
+            **options,
         )
     except stripe_mod.error.StripeError as exc:
         if _is_missing_customer(exc):
@@ -828,4 +958,8 @@ def portal(user):
             exc,
         )
         return _stripe_error(exc)
+    if not _is_open_administrator(workspace.pk, user):
+        return _administrator_only()
+    if handed_over_at is not None and moved:
+        Workspace.objects.filter(pk=workspace.pk, billing_handed_over_at=handed_over_at).update(billing_handed_over_at=None)
     return Answer(200, {"portal_url": session["url"]})

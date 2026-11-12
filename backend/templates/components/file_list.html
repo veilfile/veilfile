@@ -1,9 +1,9 @@
 {# Component: file_list. The Files section's list (spec 4.8): a stacked row for each file with its state and, while its link works, Copy and Revoke, then the way to older or newer files. #}
-{# Inputs: files, a list of rows (dashboard/file_rows.py: id, name, size, added, expires, flags, state, url); id_prefix, which the ids of the links Copy reads are made from; older_url and newest_url, each an address or empty; show_team, true on a team, with csrf_token for the sharing forms, and then each row also has visibility, uploaded_by, can_revoke and can_change_visibility (drop_core/file_access.py). #}
+{# Inputs: files, a list of rows (dashboard/file_rows.py: id, name, size, added, expires, flags, state, url); id_prefix, which the ids of the links Copy reads are made from; older_url and newest_url, each an address or empty; show_team, true on a team, with csrf_token for the sharing forms, and own_only, true when the person is barred and the caption says only their files, and then each row also has visibility, uploaded_by, can_revoke and can_change_visibility (drop_core/file_access.py). #}
 {% load dashboard %}
 {% if files %}
 <table class="rows files">
-<caption>{% if show_team %}Your files and your team's, newest first{% else %}Your files, newest first{% endif %}</caption>
+<caption>{% if show_team and not own_only %}Your files and your team's, newest first{% else %}Your files, newest first{% endif %}</caption>
 <thead>
 <tr><th scope="col">File</th><th scope="col">Size</th><th scope="col">Added</th><th scope="col">Expires</th><th scope="col">Secret flags</th>{% if show_team %}<th scope="col">Visible to</th><th scope="col">Uploaded by</th>{% endif %}<th scope="col">State</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr>
 </thead>

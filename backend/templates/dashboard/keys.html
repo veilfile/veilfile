@@ -11,7 +11,8 @@
 {% elif refusal.kind == "cap" %}<p class="form-links"><a class="label interactive" href="{% url 'app-billing' %}">Billing</a></p>
 {% endif %}
 {% endif %}
-{% if active_key_count == 0 %}<section aria-labelledby="keys-get-connected">
+{% if barred %}<p class="notice" role="status">Your team is on the Free plan, so you cannot make keys for now. You can still revoke the ones you have.</p>
+{% endif %}{% if active_key_count == 0 and not barred %}<section aria-labelledby="keys-get-connected">
 <h2 id="keys-get-connected">Get connected</h2>
 <p>The recommended way to connect is the CLI. Install it with pip install veilfile, run veilfile login, open the page it prints, and enter the code there. The key is stored in a credentials file only you can read. The CLI prints it only if you pass --print-key, and it does not write it to your shell history. Then run veilfile push screenshot.png. Your upload appears under Files.</p>
 {% include "components/code_block.html" with id="onboarding-pip" label="Copy the pip install command" code="pip install veilfile" only %}
@@ -22,14 +23,14 @@
 <p class="notice">Each login mints one API key, and device-issued keys count toward your plan's key cap (one key on Free). The full three-step walkthrough is in the <a href="{% url 'docs-page' 'quickstart' %}">quickstart</a>.</p>
 </section>
 {% endif %}
-{% focus_field form "name" as focus %}
+{% if not barred %}{% focus_field form "name" as focus %}
 <form method="post">
 {% csrf_token %}
 <input type="hidden" name="token" value="{{ token }}">
 {% include "components/field.html" with id="id_name" name="name" label="Key name" value=form.name.value autocomplete="off" help="Give the key a name that tells you which agent uses it, such as ci-runner. This is optional." errors=form.name.errors focus=focus extra='spellcheck="false" autocapitalize="none"' only %}
 <button class="action interactive" type="submit">Create key</button>
 </form>
-{% if rows %}
+{% endif %}{% if rows %}
 <table class="rows">
 <caption>API keys</caption>
 <thead>

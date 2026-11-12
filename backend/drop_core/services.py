@@ -26,6 +26,7 @@ from .models import (
     UsageCounter,
     Workspace,
     administrator_of,
+    is_barred,
 )
 from .plans import PLANS
 from .safety import (
@@ -348,8 +349,9 @@ def upload_artifact(
     ``file_type_not_allowed``, ``invalid_request``, ``monthly_cap_reached``,
     ``storage_cap_reached``, ``member_monthly_allowance_reached``,
     ``member_storage_allowance_reached``, ``content_not_allowed``,
-    ``secret_detected``, ``workspace_suspended``, ``member_removed``. The team's limits are tested before the member's.
-    The last two are read under the workspace lock, so an upload that began before a suspension or a removal is refused.
+    ``secret_detected``, ``workspace_suspended``, ``member_removed``, ``team_on_free``. The team's limits are tested before the member's.
+    ``team_on_free`` is also tested before the limits, from the row passed in, unless the team is suspended. The last three are read
+    under the workspace lock, so an upload that began before a suspension, a removal or a drop to Free is refused.
     ``ttl_days`` is clamped to the plan maximum; a non-integer value raises
     ``invalid_request``. The returned artifact carries a non-persistent
     ``ttl_adjusted`` attribute: True when the requested ``ttl_days`` was not
@@ -389,6 +391,11 @@ def upload_artifact(
             f"The allowed extensions are {_allowed_list()}.",
         )
     mime_type = mime_type_for(filename)
+
+    # Early and not authoritative: the lock below decides. A barred member is told about the bar, not about a full plan, and a
+    # suspended team still answers as suspended.
+    if workspace.suspended_at is None and is_barred(member, workspace):
+        raise ValueError("team_on_free")
 
     # Cheap early cap checks so a capped workspace is refused before the
     # scan. Not authoritative: the reservation below re-checks atomically.
@@ -480,13 +487,18 @@ def upload_artifact(
             MemberUsageCounter.objects.get_or_create(member=member, year_month=month)
             if not member_reserve.update(uploads=F("uploads") + 1):
                 raise ValueError("member_monthly_allowance_reached")
-        locked = Workspace.objects.select_for_update().only("id", "suspended_at", "file_visibility").get(pk=workspace.pk)
+        locked = Workspace.objects.select_for_update().only("id", "plan", "suspended_at", "file_visibility").get(pk=workspace.pk)
         # Read after the lock, so a removal or a suspension that committed first is seen. Raising rolls back the
         # reservations above. The test is positive, so a row that has gone or belongs elsewhere refuses too.
         if locked.suspended_at is not None:
             raise ValueError("workspace_suspended")
-        if not Membership.objects.filter(pk=member.pk, workspace_id=workspace.pk, removed_at__isnull=True).exists():
+        role = Membership.objects.filter(
+            pk=member.pk, workspace_id=workspace.pk, removed_at__isnull=True
+        ).values_list("role", flat=True).first()
+        if role is None:
             raise ValueError("member_removed")
+        if role == Membership.MEMBER and locked.plan == Workspace.PLAN_FREE:
+            raise ValueError("team_on_free")
         artifact = Artifact(
             workspace=workspace,
             api_key=api_key,

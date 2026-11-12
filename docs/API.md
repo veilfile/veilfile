@@ -223,7 +223,8 @@ Response `201 Created`: `api_key` is the full `vlf_...` secret, shown once:
 
 Plan key limits apply (Free: 1 key, Team: 5, Team Plus: 10, Scale: unlimited). Every active
 key counts, including keys issued by `veilfile login`. Exceeding the limit
-returns `402` `key_limit_reached`. An unverified email returns `403`
+returns `402` `key_limit_reached`. A member of a team that is on the Free plan
+returns `403` `team_on_free` with the message "Your team is on the Free plan, so no key was made. Ask your administrator to choose a paid plan under Billing.", and an unverified email returns `403`
 `email_verification_required`. `name` is optional; a non-string, a name over 255
 characters, or a name containing control characters returns `400`
 `{"code": "invalid_request"}`.
@@ -493,7 +494,9 @@ Redirect the workspace owner there to complete payment. If Stripe already
 holds a live subscription for the workspace (`active`, `trialing`, `past_due`,
 `unpaid`, `incomplete`, `paused`), the answer is `409`
 `{"error": ..., "code": "already_subscribed", "subscription_status": ...}`:
-change plans with `/billing/switch` or the portal instead.
+change plans with `/billing/switch` or the portal instead. A team with more
+people than the plan has seats gets `409` `{"error": ..., "code": "not_enough_seats", "plan", "people", "seats"}`,
+and no customer or session is made.
 
 ### `POST /api/v1/billing/switch`: change plan
 
@@ -512,6 +515,7 @@ unused part of the old period as a credit.
 | `200` | `{"plan", "status": "pending_cancelled"}` (switching back to the current plan voids a switch that was still waiting for payment) |
 | `402` | `{"error", "code": "payment_required", "plan", "invoice_url"}`: the payment failed, the plan is unchanged, and `invoice_url` can still be paid |
 | `409` | `no_subscription`, `subscription_past_due` or `multiple_subscriptions` |
+| `409` | `{"error", "code": "not_enough_seats", "plan", "people", "seats"}`: the team has more people than the plan has seats, so Stripe was not asked to change anything |
 | `400` | `invalid_plan` or `invalid_interval` |
 | `502` / `503` | `stripe_error` / `billing_not_configured` |
 
@@ -654,7 +658,7 @@ the URL is already dead and the file is deleted by the next expiry sweep.
 `file_too_large`, `file_type_not_allowed`, `content_not_allowed`,
 `secret_detected`, `monthly_cap_reached`, `storage_cap_reached`,
 `member_monthly_allowance_reached`, `member_storage_allowance_reached`,
-`workspace_suspended`, `member_removed`, `storage_unavailable` and `rate_limited` (with `retry_after` seconds).
+`workspace_suspended`, `member_removed`, `team_on_free`, `storage_unavailable` and `rate_limited` (with `retry_after` seconds).
 Successful results have no `isError` key. `upload_artifact` and
 `create_upload_url` share the 100 uploads/hour/credential limit with REST.
 
@@ -722,11 +726,13 @@ extension, and the allowed list.
 | 403 | `workspace_suspended` | This account is suspended, so nothing was stored. Contact support@veilfile.com. |
 | 403 | `file_held` | This file is held, so it was not revoked. |
 | 403 | `member_removed` | You are no longer on this team, so nothing was stored. |
+| 403 | `team_on_free` | A key request answers with "Your team is on the Free plan, so no key was made. Ask your administrator to choose a paid plan under Billing." An upload answers with "Your team is on the Free plan, so nothing was stored. Ask your administrator to choose a paid plan under Billing." |
 | 403 | `forbidden` | The caller is signed in but not permitted, or a session call failed the CSRF check. |
 | 403 | `session_required` | The endpoint needs a dashboard session, not an API key or an OAuth token. |
 | 403 | `email_verification_required` | The account email must be verified first. |
 | 404 | `not_found` | The id or token is unknown, or the file is revoked or expired. |
 | 405 | `method_not_allowed` | The HTTP method is not allowed for this URL. The `Allow` header lists the ones that are. |
+| 409 | `not_enough_seats` | This team has more people than the plan has seats. Remove people first. (`POST /api/v1/billing/checkout` and `POST /api/v1/billing/switch`, with `plan`, `people` and `seats`.) |
 | 413 | `file_too_large` | The file, or the decoded base64, is larger than 25 MiB. |
 | 429 | `monthly_cap_reached` | The workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade. |
 | 429 | `member_monthly_allowance_reached` | You have reached the monthly upload allowance your administrator set. Uploads work again next month, or your administrator can raise it. |

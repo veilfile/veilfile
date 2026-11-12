@@ -437,7 +437,7 @@ class KeyAllowanceTests(TestCase):
         # An over-cap workspace can still rotate a key.
         self.workspace.plan = "free"
         self.workspace.save(update_fields=["plan"])
-        new, _ = create_key_within_cap(self.workspace, "rotated", replacing=last, member=self.grace)
+        new, _ = create_key_within_cap(self.workspace, "rotated", replacing=last, member=self.admin)
         self.assertTrue(new.is_active)
 
     def test_the_create_key_answer(self):

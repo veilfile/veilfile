@@ -27,8 +27,8 @@ class MemberKeyCapReached(KeyCapReached):
 
 
 class KeyNotAllowed(Exception):
-    """The person or the team may no longer mint keys. ``code`` is ``member_removed``
-    or ``workspace_suspended``. It is not a cap, so it is no KeyCapReached."""
+    """The person or the team may no longer mint keys. ``code`` is ``member_removed``,
+    ``workspace_suspended`` or ``team_on_free`` (a member of a team on Free). It is not a cap, so it is no KeyCapReached."""
 
     def __init__(self, code):
         super().__init__(code)
@@ -41,7 +41,12 @@ def key_cap(workspace):
 
 
 def active_keys(workspace):
-    return APIKey.objects.filter(workspace=workspace, is_active=True)
+    """The workspace's active keys. While the team is on Free the keys of member rows are left out, because their people are
+    barred, so the administrator can still make the one key Free allows."""
+    keys = APIKey.objects.filter(workspace=workspace, is_active=True)
+    if workspace.plan == Workspace.PLAN_FREE:
+        keys = keys.exclude(member__role=Membership.MEMBER)
+    return keys
 
 
 def active_key_count(workspace):
@@ -72,7 +77,7 @@ def create_key_within_cap(workspace, name, device_issued=False, replacing=None, 
     locked (SELECT ... FOR UPDATE on Postgres) so concurrent mints cannot
     both pass the check. Returns ``(key, raw_key)``; raises KeyCapReached, or
     MemberKeyCapReached when only the member's own allowance is reached, and KeyNotAllowed when the team is
-    suspended or the member has been removed (both read under the lock).
+    suspended, the member has been removed or a member's team is on Free (all read under the lock).
     The person is resolved first, because creating the administrator row
     under that lock can deadlock with another request doing the same.
     """
@@ -81,8 +86,13 @@ def create_key_within_cap(workspace, name, device_issued=False, replacing=None, 
         locked = Workspace.objects.select_for_update().get(pk=workspace.pk)
         if locked.suspended_at is not None:
             raise KeyNotAllowed("workspace_suspended")
-        if not Membership.objects.filter(pk=member.pk, workspace_id=workspace.pk, removed_at__isnull=True).exists():
+        role = Membership.objects.filter(
+            pk=member.pk, workspace_id=workspace.pk, removed_at__isnull=True
+        ).values_list("role", flat=True).first()
+        if role is None:
             raise KeyNotAllowed("member_removed")
+        if role == Membership.MEMBER and locked.plan == Workspace.PLAN_FREE:
+            raise KeyNotAllowed("team_on_free")
         active = active_keys(locked)
         replaced_pk = None
         if replacing is not None:

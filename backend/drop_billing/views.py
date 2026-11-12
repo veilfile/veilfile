@@ -60,6 +60,7 @@ from .account import (
     _is_missing_customer,
     _list_subscriptions,
     _price_ids,
+    _report_unadministered,
     _stripe_or_503,
     _subscription_plan,
 )
@@ -129,7 +130,8 @@ def _sync_workspace(stripe_mod, workspace, event_customer=""):
                 )
                 raise CustomerNotVisible(customer_id)
             return _forget_missing_customer(workspace, customer_id)
-        _apply_subscriptions(workspace, subs, customer_id)
+        plan = _apply_subscriptions(workspace, subs, customer_id)
+        _report_unadministered(workspace, plan)
     return workspace
 
 

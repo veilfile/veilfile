@@ -28,6 +28,7 @@ from drop_billing.views import (
     _forget_missing_customer,
     _list_subscriptions,
     _price_ids,
+    _report_unadministered,
     _stripe_or_503,
     _subscription_plan,
 )
@@ -134,7 +135,8 @@ class Command(BaseCommand):
             if apply:
                 with transaction.atomic():
                     locked = Workspace.objects.select_for_update().get(pk=ws.pk)
-                    _apply_subscriptions(locked, subs, customer_id)
+                    plan = _apply_subscriptions(locked, subs, customer_id)
+                    _report_unadministered(locked, plan)
 
         unbilled = Workspace.objects.filter(stripe_customer_id="").exclude(plan="free")
         for ws in unbilled.order_by("created_at"):

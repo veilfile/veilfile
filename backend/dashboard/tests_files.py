@@ -958,6 +958,8 @@ class TeamFilesTests(FilesCase):
 
     def setUp(self):
         super().setUp()
+        Workspace.objects.filter(pk=self.workspace.pk).update(plan="team")
+        self.workspace.refresh_from_db()
         self.grace = second_member(self.workspace, "grace")
         self.ada = administrator_of(self.workspace)
 

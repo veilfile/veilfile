@@ -58,6 +58,7 @@ def overview_context(request):
     status = None if member_view else read(billing_account.status, user, "billing status")
     verified = is_email_verified(user)
     record = EmailVerification.objects.filter(user=user).first()
+    barred = bool(team and team["barred"])
     own_keys = team.get("own", {}).get("keys_used") if member_view else (usage or {}).get("keys_used")
     return {
         "team": team,
@@ -65,7 +66,8 @@ def overview_context(request):
         "left_team": settings.TEAM_SEATS and no_longer_on_team(member),
         "administrator_offer": administrator_offer_for(member) if settings.TEAM_SEATS else None,
         "waiting_invitation": waiting_invitation_for(user),
-        "get_connected": bool(usage) and own_keys == 0,
+        "barred": barred,
+        "get_connected": bool(usage) and own_keys == 0 and not barred,
         "billing_notice": billing_notice(request.GET),
         # The link went to the address on the verification record, which is not user.email until it is verified (drop_core.views.email_verification).
         "verify_prompt": None if verified else {"sent_to": record.email if record is not None else ""},

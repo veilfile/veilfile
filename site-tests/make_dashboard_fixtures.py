@@ -3,7 +3,7 @@
 Run from backend/ inside Django, with SITE_SESSION_FILE as for make_staff_session.py; the fixtures are written beside it, as dashboard-fixtures.json:
   SITE_SESSION_FILE=../site-tests/session.txt python manage.py shell -c "exec(open('../site-tests/make_dashboard_fixtures.py').read())"
 
-It makes five verified users, who have no password and are reached only through the sessions it writes:
+It makes eight verified users, who have no password and are reached only through the sessions it writes:
   site-dash-owner  a Team workspace: four keys (the longest name a key takes, a revoked one, one to revoke and one that has been used) with room under the plan's cap for
                    the key the checks make, 53 files (so the list has a second page: one with the longest name, one expired, one held, one with secret flags, one to revoke
                    and sizes in gigabytes) and three connected apps (one with the longest name);
@@ -12,6 +12,10 @@ It makes five verified users, who have no password and are reached only through 
   site-dash-admin  a Team workspace with people on it, for the Members page (the switch for team seats must be on in the server): its administrator, and
   site-dash-member a member of it, with an allowance of each kind (the keys one above the plan's cap) and some use; the member has a request to become the administrator waiting, and one invitation waits for an address, made directly so that
                    the raw token is known. A run deletes the team's invitations and its people other than the administrator first. The owner's files and keys are not touched.
+  site-dash-lapsed-admin  a Free workspace that has other people on it, as a team does after its payment ends (for the bar and the Billing and Members pages that say so): its administrator, and
+  site-dash-barred        its member, barred because the team is on Free, with a file and a key of their own;
+  site-dash-heir          the administrator of a Team workspace just handed over to them: fake Stripe ids are written to its rows (nothing is sent anywhere) and the handover is marked,
+                          so that Billing says to check the card.
 It also writes spare sessions of the owner for the Sign out checks, which each use one up. A run first resets what an earlier one left, so a run is the same every time.
 It refuses to run unless DEBUG is on and the database is SQLite or on this machine, and refuses while a Stripe variable is set or the storage is not the local one: the
 checks press Revoke and the billing buttons, and nothing they do may reach a real account.
@@ -59,6 +63,7 @@ if os.environ.get("DROP_STORAGE", "local").lower() != "local":
 User, Application, AccessToken = get_user_model(), get_application_model(), get_access_token_model()
 OWNER, OVER, SUB = "site-dash-owner", "site-dash-over", "site-dash-sub"
 ADMIN, MEMBER = "site-dash-admin", "site-dash-member"
+LAPSED, BARRED, HEIR = "site-dash-lapsed-admin", "site-dash-barred", "site-dash-heir"
 INVITEE = "site-dash-invitee@example.com"   # nobody has this address: the invitation waits and is never answered
 LONG_KEY = "K" * 255   # the longest name a key takes
 LONG_FILE = "x" * 508 + ".txt"   # 512 characters, with no place to break: the longest name a file takes
@@ -99,7 +104,7 @@ def make_user(username, plan):
     APIKey.objects.filter(workspace=workspace).delete()
     UsageCounter.objects.filter(workspace=workspace).delete()
     Subscription.objects.filter(workspace=workspace).delete()
-    workspace.plan, workspace.stripe_customer_id, workspace.stripe_subscription_id = plan, "", ""
+    workspace.plan, workspace.stripe_customer_id, workspace.stripe_subscription_id, workspace.billing_handed_over_at = plan, "", "", None
     workspace.save()
     return user, workspace
 
@@ -170,19 +175,34 @@ add_file(admin_workspace, "admin-notes.txt", hours=1)
 raw_token = secrets.token_urlsafe(32)
 Invitation.objects.create(workspace=admin_workspace, email=INVITEE, token_hash=hashlib.sha256(raw_token.encode()).hexdigest(), invited_by=admin, expires_at=NOW + Invitation.TTL)
 
+lapsed, lapsed_workspace = make_user(LAPSED, "free")   # a team that ended up on Free with a person still on it
+Invitation.objects.filter(workspace=lapsed_workspace).delete()
+Membership.objects.filter(workspace=lapsed_workspace).exclude(user=lapsed).delete()
+barred = Membership.objects.create(workspace=lapsed_workspace, user=make_account(BARRED), role=Membership.MEMBER)
+APIKey.create_key(lapsed_workspace, "barred-members-agent", member=barred)
+add_file(lapsed_workspace, "barred-members-file.txt", member=barred)
+
+heir, heir_workspace = make_user(HEIR, "team")   # fake ids, never sent anywhere: no Stripe variable is set
+heir_workspace.stripe_customer_id, heir_workspace.stripe_subscription_id, heir_workspace.billing_handed_over_at = "cus_site_checks_heir", "sub_site_checks_heir", NOW
+heir_workspace.save()
+Subscription.objects.create(workspace=heir_workspace, stripe_customer_id="cus_site_checks_heir", stripe_subscription_id="sub_site_checks_heir", status="active",
+                            current_period_end=NOW + timedelta(days=20))
+
 fixtures = {
     "sessions": {"owner": session_for(owner), "over": session_for(over),
                  # a switch to Scale that awaits payment, as billing_page.remember_pending keeps it in the session
                  "sub": session_for(sub, dashboard_pending_switch={"plan": "scale", "invoice_url": "https://invoice.stripe.com/i/site-checks", "at": int(time.time())}),
                  "admin": session_for(admin), "member": session_for(person.user),
+                 "lapsed": session_for(lapsed), "barred": session_for(barred.user), "heir": session_for(heir),
                  "sign_out": [session_for(owner) for _ in range(SIGN_OUT_SESSIONS)]},
     "owner": {"keys": 4, "files": FILES, "long_key": LONG_KEY, "revoke_key": "revoke-me", "retired_key": "retired-agent", "long_file": LONG_FILE,
               "revoke_file": "revoke-me.txt", "flags_file": "deploy.env", "expired_file": "an-expired-file.zip", "held_file": "a-held-file.csv",
               "apps": {"plain": APP, "long": LONG_APP, "gone": GONE}},
     "over": {"keys": 3},
     "sub": {"switch_to": "scale"},
+    "bar": {"admin_email": lapsed.email, "file": "barred-members-file.txt", "key": "barred-members-agent"},
     "team": {"member_id": person.pk, "invitee": INVITEE, "token": raw_token},
 }
 Path(os.environ["SITE_SESSION_FILE"]).with_name("dashboard-fixtures.json").write_text(json.dumps(fixtures, indent=1), encoding="utf-8")
-print(f"dashboard fixtures written: {5 + SIGN_OUT_SESSIONS} sessions, {Artifact.objects.filter(workspace=owner_workspace).count()} files and "
+print(f"dashboard fixtures written: {8 + SIGN_OUT_SESSIONS} sessions, {Artifact.objects.filter(workspace=owner_workspace).count()} files and "
       f"{APIKey.objects.filter(workspace=owner_workspace).count()} keys for {OWNER}")

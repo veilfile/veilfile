@@ -10621,6 +10621,57 @@ def dashboard_members_problems(browser, base_url, session_key, fixtures):
     return problems
 
 
+# The words of the bar and of billing at a transfer, as the owner approved them (the plan's Words section); `admin` is the lapsed team's administrator, whose address the fixtures write.
+BAR_OVERVIEW = "Your team is on the Free plan, so you cannot upload or make keys until {admin} chooses a paid plan. You can still see and revoke your own files, and you can leave the team."
+BAR_KEYS = "Your team is on the Free plan, so you cannot make keys for now. You can still revoke the ones you have."
+BAR_BILLING = ("Your team is on the Free plan, so the 1 other person on it cannot upload or make keys. "
+               "Choose a plan with enough seats for everyone, or remove people under Members.")
+BAR_MEMBERS = "The team is on the Free plan, so nobody but you can upload or make keys. Choose a paid plan under Billing, or remove people here."
+HEIR_BILLING = ("You are now this team's administrator, so its plan is yours to pay. The card on file is the one the former administrator added. "
+                "Check it, and change it if you need to, under Manage billing.")
+
+
+def dashboard_bar_problems(browser, base_url, session_key, fixtures):
+    """A team on Free and a team just handed over, as the pages part looks at a page: the barred member's Overview, Files and Keys, the lapsed administrator's Billing and Members, and the heir's Billing,
+    each at 375 and 1280 px, in Paper and in Ink, with Motion on and off (axe, no sideways scroll, no console error). Each says its sentence from the plan's Words. The barred member's pages have no
+    key form, no Get connected section and no visibility control, and their Overview has the Leave link. Each page is opened with a GET and nothing is posted. The fixtures set no Stripe variable."""
+    problems, bar = [], fixtures["bar"]
+    sessions = fixtures["sessions"]
+    for name, key, path, sentence in (("barred-overview", sessions["barred"], "/app/", BAR_OVERVIEW.format(admin=bar["admin_email"])), ("barred-files", sessions["barred"], "/app/files/", bar["file"]),
+                                      ("barred-keys", sessions["barred"], "/app/keys/", BAR_KEYS), ("lapsed-billing", sessions["lapsed"], "/app/billing/", BAR_BILLING),
+                                      ("lapsed-members", sessions["lapsed"], "/app/members/", BAR_MEMBERS), ("heir-billing", sessions["heir"], "/app/billing/", HEIR_BILLING)):
+        site_page = SitePage(path, f"dashboard-{name}", signed_in=True)
+        for width in WIDTHS:
+            for appearance in APPEARANCES:
+                for motion in MOTIONS:
+                    label = f"{name} ({path}) at {width}px, {appearance}, motion {motion}"
+                    context = new_context(browser, base_url, key, site_page, width=width, theme=appearance, motion=motion)
+                    context.set_default_timeout(FORM_NAV_MS)
+                    page, errors = fresh_page(context)
+                    try:
+                        reply = dash_open(page, base_url, path)
+                        if reply.status != 200:
+                            problems.append(f"{label}: answers {reply.status}, not 200; the team pages answer only while the switch for team seats is on in the server (ci.yml sets VEILFILE_TEAM_SEATS) and for the fixtures' team ({FIXTURES_STALE})")
+                        else:
+                            words = " ".join(page.locator("main").inner_text().split())
+                            if sentence not in words:
+                                problems.append(f"{label}: <main> does not say {sentence!r} (templates/dashboard, the plan's Words; {FIXTURES_STALE})")
+                            if name.startswith("barred"):
+                                found = page.evaluate("""() => ({ forms: document.querySelectorAll('main form input[name=token], main form input[name=name]').length,
+                                    visibility: document.querySelectorAll('main form[action*="/visibility/"]').length, leave: document.querySelectorAll('main a[href="/app/team/leave/"]').length })""")
+                                if found["forms"] or found["visibility"] or "Get connected" in words or "Share with the team" in words or "Make it only mine" in words:
+                                    problems.append(f"{label}: a barred member's page has a key form, a Get connected section or a visibility control ({found}); the bar takes them away (dashboard/keys.py, drop_core/file_access.py)")
+                                if name == "barred-overview" and found["leave"] != 1:
+                                    problems.append(f"{label}: the Leave link is not there once ({found['leave']}); a barred member can always leave (templates/dashboard/overview.html)")
+                            problems += page_problems(page, label)
+                    except PlaywrightError as error:
+                        problems.append(f"{label}: could not finish looking at the page: {error.message.splitlines()[0]}")
+                    finally:
+                        context.close()
+                    problems += [f"{label}: console error: {error}" for error in errors]
+    return problems
+
+
 def run_dashboard(browser, base_url, session_key, out, device, fixtures, playwright):
     """The dashboard part: the five sections as the pages part checks a page (the owner fixture's session, not the staff login), then what only the dashboard has, each timed. The checks that
     use up sessions or change what the fixtures made (Sign out, the key flow, the revokes) come last, the revokes after every check that counts rows and keys (the slow-frames walk counts the
@@ -10630,7 +10681,7 @@ def run_dashboard(browser, base_url, session_key, out, device, fixtures, playwri
     for site_page in DASHBOARD_PAGES:
         problems += page_states(browser, base_url, fixtures["sessions"]["owner"], out, device, first, site_page, "dashboard")
         problems += timed("dashboard", page_edge_problems, browser, base_url, fixtures["sessions"]["owner"], site_page, out)
-    for check in (dashboard_section_problems, dashboard_change_problems, dashboard_members_problems, dashboard_rows_problems, dashboard_time_problems, dashboard_billing_problems, dashboard_error_page_problems,
+    for check in (dashboard_section_problems, dashboard_change_problems, dashboard_members_problems, dashboard_bar_problems, dashboard_rows_problems, dashboard_time_problems, dashboard_billing_problems, dashboard_error_page_problems,
                   dashboard_sign_out_problems, dashboard_slow_frames_problems, dashboard_key_problems, dashboard_revoke_problems):
         problems += timed("dashboard", check, browser, base_url, session_key, fixtures)
     problems += timed("dashboard", dashboard_webkit_problems, playwright, base_url, fixtures)

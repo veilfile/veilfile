@@ -24,7 +24,10 @@
 </form>
 </div>
 {% endif %}
-{% include "dashboard/over_limits.html" with status=status only %}
+{% if free_others %}<p class="notice" role="status">Your team is on the Free plan, so the {{ free_others }} other {{ free_others|pluralize:"person,people" }} on it cannot upload or make keys. Choose a plan with enough seats for everyone, or remove people under Members.</p>
+{% endif %}{% if over_seats %}<p class="notice" role="status">Your team has {{ over_seats.people }} people, and {{ over_seats.plan }} has {{ over_seats.seats }} seats, so nobody new can join until people leave or you change plans.</p>
+{% endif %}{% if check_card %}<p class="notice" role="status">You are now this team's administrator, so its plan is yours to pay. The card on file is the one the former administrator added. Check it, and change it if you need to, under Manage billing.</p>
+{% endif %}{% include "dashboard/over_limits.html" with status=status only %}
 {% if options %}
 <div class="form-actions">
 {% for option in options %}{% if subscribed %}<a class="action interactive" href="{% url 'app-billing-switch' plan=option.slug %}">Switch to {{ option.name }} (${{ option.price }}/mo)</a>
@@ -34,7 +37,8 @@
 <button class="action interactive" type="submit">Upgrade to {{ option.name }} (${{ option.price }}/mo)</button>
 </form>
 {% endif %}{% endfor %}</div>
-{% endif %}
+{% endif %}{% for sentence in seat_sentences %}<p>{{ sentence }}</p>
+{% endfor %}
 {% if yearly_options %}
 <p>Yearly billing costs the price of ten months, so two months are free.</p>
 <div class="form-actions">

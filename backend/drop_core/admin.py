@@ -18,7 +18,7 @@ class WorkspaceAdmin(admin.ModelAdmin):
     list_display = ("name", "owner", "plan", "suspended_at", "created_at")
     list_filter = ("plan",)
     # Changed only by the actions below. A full form save would write back a stale plan and stale Stripe values.
-    readonly_fields = ("owner", "suspended_at", "file_visibility")
+    readonly_fields = ("owner", "suspended_at", "file_visibility", "billing_handed_over_at")
     actions = ("suspend_workspaces", "lift_suspensions")
 
     def has_add_permission(self, request):

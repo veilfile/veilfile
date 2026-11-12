@@ -344,6 +344,10 @@ def team_seats_from(value):
 # Team seats (invitations and the Members page) stay off until they launch. Read once at start-up, so turning them on takes a restart.
 TEAM_SEATS = team_seats_from(os.environ.get("VEILFILE_TEAM_SEATS", ""))
 
+# The Stripe customer-portal configuration `portal` passes for a team of more than one person, with plan changes off so that they go
+# through the switch and its seat check. Empty means the portal's default.
+STRIPE_TEAM_PORTAL_CONFIGURATION = os.environ.get("STRIPE_TEAM_PORTAL_CONFIGURATION", "")
+
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/app/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
