@@ -89,6 +89,7 @@ Errors are JSON: `{"error": "<message>", "code": "<code>"}`. Branch on `code`.
 | 403 | `file_held` | This file is held, so it was not revoked. |
 | 403 | `team_on_free` | Your team is on the Free plan, so nothing was stored. Ask your administrator to choose a paid plan under Billing. |
 | 404 | `not_found` | The id or token is unknown, or the file is revoked or expired. |
+| 409 | `not_enough_seats` | This team has more people than the plan has seats. Remove people first. (`POST /api/v1/billing/checkout` and `POST /api/v1/billing/switch`, with `plan`, `people` and `seats`.) |
 | 413 | `file_too_large` | The file is larger than 25 MiB. |
 | 429 | `monthly_cap_reached` | The workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade. |
 | 429 | `rate_limited` | There were too many requests. Wait the number of seconds in `Retry-After`, then try again. |

@@ -29,7 +29,8 @@
 {% endif %}{% include "dashboard/over_limits.html" with status=status only %}
 {% if options %}
 <div class="form-actions">
-{% for option in options %}{% if subscribed %}<a class="action interactive" href="{% url 'app-billing-switch' plan=option.slug %}">Switch to {{ option.name }} (${{ option.price }}/mo)</a>
+{% for option in options %}{% if option.seats %}<p>{{ option.seats }}</p>
+{% elif subscribed %}<a class="action interactive" href="{% url 'app-billing-switch' plan=option.slug %}">Switch to {{ option.name }} (${{ option.price }}/mo)</a>
 {% else %}<form method="post" action="{% url 'app-billing-checkout' %}">
 {% csrf_token %}
 <input type="hidden" name="plan" value="{{ option.slug }}">
@@ -40,7 +41,8 @@
 {% if yearly_options %}
 <p>Yearly billing costs the price of ten months, so two months are free.</p>
 <div class="form-actions">
-{% for option in yearly_options %}{% if subscribed %}<a class="action interactive" href="{% url 'app-billing-switch' plan=option.slug %}?interval=year">Switch to {{ option.name }} (${{ option.price }}/yr)</a>
+{% for option in yearly_options %}{% if option.seats %}<p>{{ option.seats }}</p>
+{% elif subscribed %}<a class="action interactive" href="{% url 'app-billing-switch' plan=option.slug %}?interval=year">Switch to {{ option.name }} (${{ option.price }}/yr)</a>
 {% else %}<form method="post" action="{% url 'app-billing-checkout' %}">
 {% csrf_token %}
 <input type="hidden" name="plan" value="{{ option.slug }}">

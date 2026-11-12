@@ -40,6 +40,18 @@ NO_BILLING_ACCOUNT = "There is no billing account to manage yet. Upgrade to a pa
 NOT_SUBSCRIBED = "You have no subscription to switch yet. Upgrade to a paid plan to start one."
 MEMBER_BILLING = "Your administrator manages billing for this team."
 
+
+
+def not_enough_seats_sentence(body):
+    """The refusal of a switch or checkout to a plan with fewer seats than the team has people, from the body's plan, people and seats."""
+    people, seats, name = body.get("people"), body.get("seats"), plan_name(body.get("plan"))
+    excess = people - seats
+    return (
+        f"Your team has {people} people, and {name} has {seats} seats. "
+        f"Remove {excess} {'person' if excess == 1 else 'people'} under Members before you change to {name}."
+    )
+
+
 FIXED = {
     (403, None): MEMBER_BILLING,
     (402, "payment_required"): PAYMENT_FAILED,
@@ -97,6 +109,14 @@ def yearly_options(current, interval="month"):
             for slug in paid_plans() if for_sale(slug, "year") and (slug, "year") != (current, interval)]
 
 
+def with_seat_sentences(options, short):
+    """`options`, each with a `seats` sentence in place of its button when `short` says the team has more people than the plan has seats."""
+    for option in options:
+        found = short.get(option["slug"])
+        option["seats"] = f"{option['name']} has {found[1]} seats, and your team has {found[0]} people." if found else ""
+    return options
+
+
 def is_upgrade(current, target):
     """True when moving from `current` to `target` costs more: both are for sale and the target's price is the higher. A switch
     from anything that is not a paid plan reads as a downgrade, as the React dashboard's switchConfirmText had it."""
@@ -147,10 +167,12 @@ def status_words(subscription_status):
     return STATUS_WORDS.get(subscription_status, "") if isinstance(subscription_status, str) else ""
 
 
-def page_context(status, pending, team=None):
+def page_context(status, pending, team=None, short=None):
     """What billing.html prints. `status` is the body billing.status answers; `pending` is pending_for()'s answer; `team` is
-    teams.team_summary's answer for the signed-in administrator, None while the switch is off."""
+    teams.team_summary's answer for the signed-in administrator, None while the switch is off; `short` is a plan's slug to the
+    (people, seats) of teams.too_few_seats for each plan the team does not fit, empty when all fit."""
     team = team or {}
+    short = short or {}
     plan = status["plan"]
     subscribed = bool(status["has_subscription"])
     # The interval the subscription is billed at, as the mirror knows it ("" before a webhook has written it, which is monthly:
@@ -167,8 +189,8 @@ def page_context(status, pending, team=None):
         "subscription_status": status["subscription_status"],
         "status_words": status_words(status["subscription_status"]),
         "can_manage": bool(status["has_billing_account"]),
-        "options": plan_options(plan, interval or "month"),
-        "yearly_options": yearly_options(plan, interval or "month"),
+        "options": with_seat_sentences(plan_options(plan, interval or "month"), short),
+        "yearly_options": with_seat_sentences(yearly_options(plan, interval or "month"), short),
         "pending": pending,
         "free_others": team.get("others_barred", 0),
         "over_seats": team.get("over_seats"),
@@ -227,6 +249,8 @@ def refusal(answer, bad_request, where):
     sentence = FIXED.get((answer.status, code))
     if (answer.status, code) == (409, "already_subscribed"):
         sentence = already_subscribed_sentence(body.get("subscription_status"))
+    if (answer.status, code) == (409, "not_enough_seats"):
+        sentence = not_enough_seats_sentence(body)
     if sentence is None and answer.status == 400:
         sentence = bad_request
     ref = reference()

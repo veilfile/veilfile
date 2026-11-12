@@ -28,7 +28,7 @@ from drop_core import account
 from drop_core.account import Answer
 from drop_core.file_access import NotYourFile, file_to_revoke, set_visibility
 from drop_core.models import VISIBILITY_TEAM, current_membership
-from drop_core.teams import is_plain_member, team_seats_only, team_summary
+from drop_core.teams import is_plain_member, team_seats_only, team_summary, too_few_seats
 from pages.errors import not_found
 
 
@@ -166,8 +166,10 @@ def billing(request):
         return render(request, "dashboard/billing.html", {"member": True})
     status = billing_account.status(request.user).body
     pending = billing_page.pending_for(request.session, status["plan"], current_interval=billing_page.interval_of(status["billing_interval"]))
-    team = team_summary(current_membership(request.user)) if settings.TEAM_SEATS else None
-    return render(request, "dashboard/billing.html", billing_page.page_context(status, pending, team))
+    member = current_membership(request.user)
+    team = team_summary(member) if settings.TEAM_SEATS else None
+    short = {slug: found for slug in billing_page.paid_plans() if (found := too_few_seats(member.workspace, slug))} if team else {}
+    return render(request, "dashboard/billing.html", billing_page.page_context(status, pending, team, short))
 
 
 def _members_refusal(request, where):
@@ -245,7 +247,10 @@ def _confirm_switch(request, plan, interval):
     if (status["plan"], current_interval) == (plan, interval):
         messages.info(request, billing_page.switch_result(plan, "unchanged", interval))
         return redirect("app-billing")
-    return render(request, "dashboard/billing_switch.html", billing_page.switch_context(status["plan"], plan, current_interval, interval))
+    context = billing_page.switch_context(status["plan"], plan, current_interval, interval)
+    found = too_few_seats(current_membership(request.user).workspace, plan)
+    context["seats"] = billing_page.with_seat_sentences([context["target"]], {plan: found})[0]["seats"]
+    return render(request, "dashboard/billing_switch.html", context)
 
 
 def _switch_plan(request, plan, interval):

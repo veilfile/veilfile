@@ -13,9 +13,10 @@
 {% else %}
 <p>The unused part of your current period becomes a credit on your next invoices, and {{ target.name }} limits apply right away. Existing API keys and links are not removed.</p>
 {% endif %}
-<form method="post">
+{% if seats %}<p>{{ seats }}</p>
+{% else %}<form method="post">
 {% csrf_token %}
 <button class="action interactive" type="submit">Switch to {{ target.label }}</button>
 </form>
-<p class="form-links"><a class="label interactive" href="{% url 'app-billing' %}">Back to billing</a></p>
+{% endif %}<p class="form-links"><a class="label interactive" href="{% url 'app-billing' %}">Back to billing</a></p>
 {% endblock %}
