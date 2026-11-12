@@ -234,6 +234,20 @@ class SwitchOnOneAccountTests(SeatBase):
                         ])
                 self.assertEqual(answers[0], answers[1], f"{ACCOUNT}: an account alone gets the same answers with the switch on")
 
+    def test_an_account_alone_on_team_plus_switches_to_team_the_same_with_the_switch_on(self):
+        answers = []
+        for on in (False, True):
+            self.subscribed("team_plus", "price_teamplus")
+            with override_settings(TEAM_SEATS=on):
+                answers.append(self.switch("team"))
+            self.modify.assert_called_once()
+            self.modify.reset_mock()
+        self.assertEqual(
+            [(answer.status_code, answer.json()) for answer in answers[:1]],
+            [(answer.status_code, answer.json()) for answer in answers[1:]],
+            f"{ACCOUNT}: a one-person account's switch answers the same with the switch on",
+        )
+
     def test_too_few_seats_reads_nothing_with_the_switch_off(self):
         people(self.ws, 8)
         with self.assertNumQueries(0):
