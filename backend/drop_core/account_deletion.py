@@ -10,7 +10,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from . import file_access
-from .models import APIKey, Invitation, Membership, Workspace
+from .models import APIKey, Invitation, MemberUsageCounter, Membership, UsageCounter, Workspace
 from .oauth import revoke_user_oauth_grants
 from .teams import _close_member_row, _deny_device_logins
 
@@ -82,7 +82,12 @@ def delete_account(user):
     account is on and does not own, one transaction stops its credentials; then its files, keys and waiting invitations go.
     Last, in one transaction, the workspaces it owns are locked and checked again, and the account is deleted with them. When
     something changed, it raises DeletionRefused("changed") and leaves the account inactive. A failure after the first step
-    leaves the stopped credentials stopped, which is safe."""
+    leaves the stopped credentials stopped, which is safe.
+
+    The last transaction takes its locks in the order upload_artifact does: the workspace counters of the month, then the
+    member counters, then the workspace rows. An upload holds its counters while it waits for the workspace row, so a deletion
+    that locked the workspace rows first and then deleted the counters would wait on that upload while the upload waits on it,
+    and Postgres would end one of them with a deadlock."""
     if connection.in_atomic_block:
         raise RuntimeError("delete_account must run outside any transaction")
     code = why_not_delete(user)
@@ -108,6 +113,13 @@ def delete_account(user):
         invited_by=user, accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True
     ).update(revoked_at=now)
     with transaction.atomic():
+        owned = _owned_ids(user)
+        list(UsageCounter.objects.select_for_update().filter(workspace_id__in=owned).order_by("pk"))
+        list(
+            MemberUsageCounter.objects.select_for_update()
+            .filter(Q(member__workspace_id__in=owned) | Q(member__user=user))
+            .order_by("pk")
+        )
         list(Workspace.objects.select_for_update().filter(pk__in=_owned_ids(user)).order_by("pk"))
         if _changed_since_the_check(user):
             raise DeletionRefused("changed")

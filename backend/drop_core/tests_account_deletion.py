@@ -24,8 +24,10 @@ from .models import (
     Artifact,
     DeviceCode,
     Invitation,
+    MemberUsageCounter,
     Membership,
     SafetyEvent,
+    UsageCounter,
     Workspace,
     get_or_create_workspace,
 )
@@ -267,6 +269,23 @@ class DeleteAccountTests(Base):
         self.assertTrue(self.stored(late))
         self.assertFalse(User.objects.get(pk=alone.owner_id).is_active)
 
+    def test_a_hold_that_lands_after_the_first_check_keeps_the_file_on_a_team_they_joined(self):
+        held_late = self.file(self.grace, "late.txt")
+        gone_anyway = self.file(self.grace, "plain.txt")
+
+        def hold(user):
+            Artifact.objects.filter(pk=held_late.pk).update(safety_status="held")
+
+        with mock.patch("drop_core.account_deletion.revoke_user_oauth_grants", hold):
+            with self.assertRaises(DeletionRefused) as caught:
+                delete_account(self.grace.user)
+        self.assertEqual(caught.exception.code, "changed")
+        self.assertTrue(Artifact.objects.filter(pk=held_late.pk).exists())
+        self.assertTrue(self.stored(held_late))
+        self.assertFalse(Artifact.objects.filter(pk=gone_anyway.pk).exists())
+        self.assertFalse(self.stored(gone_anyway))
+        self.assertFalse(User.objects.get(pk=self.grace.user_id).is_active)
+
     def test_a_file_uploaded_late_on_a_team_they_joined_is_refused_without_a_restricted_error(self):
         real = account_deletion.file_access.delete_files_of
         late = []
@@ -301,6 +320,41 @@ class DeleteAccountTests(Base):
 
         self.assertEqual(file_access.delete_files_of(Membership.objects.get(pk=self.grace.pk), batch=2), 5)
         self.assertFalse(Artifact.objects.filter(member=self.grace).exists())
+
+    def test_a_held_file_survives_delete_files_of_and_the_call_counts_what_it_deleted(self):
+        from . import file_access
+
+        row = Membership.objects.get(pk=self.grace.pk)
+        a, b = self.file(row, "a.txt"), self.file(row, "b.txt")
+        held = self.file(row, "held.txt", held=True)
+        self.assertEqual(file_access.delete_files_of(row, batch=1), 2)
+        self.assertEqual(list(Artifact.objects.filter(member=row).values_list("pk", flat=True)), [held.pk])
+        self.assertTrue(self.stored(held))
+        self.assertFalse(self.stored(a) or self.stored(b))
+
+    def test_the_last_transaction_locks_the_counters_before_the_workspace_rows(self):
+        from django.test.utils import CaptureQueriesContext
+
+        alone = get_or_create_workspace(make_user("lone"))
+        row = Membership.objects.get(workspace=alone)
+        month = timezone.now().strftime("%Y-%m")
+        UsageCounter.objects.create(workspace=alone, year_month=month, uploads=1)
+        MemberUsageCounter.objects.create(member=row, year_month=month, uploads=1)
+        with CaptureQueriesContext(connection) as captured:
+            delete_account(alone.owner)
+        sql = [q["sql"] for q in captured.captured_queries]
+        delete_at = next(i for i, q in enumerate(sql) if q.startswith('DELETE FROM "auth_user"') or q.startswith('DELETE FROM "' + User._meta.db_table + '"'))
+        before = sql[:delete_at]
+
+        def last_select(table):
+            hits = [i for i, q in enumerate(before) if q.startswith("SELECT") and f'FROM "{table}"' in q]
+            self.assertTrue(hits, table)
+            return hits[-1]
+
+        counters = last_select("drop_core_usagecounter")
+        members = last_select("drop_core_memberusagecounter")
+        workspaces = last_select("drop_core_workspace")
+        self.assertTrue(counters < members < workspaces, (counters, members, workspaces))
 
 
 @override_settings(TEAM_SEATS=True)
@@ -401,3 +455,18 @@ class AdminDeleteTests(Base):
         self.assertEqual(self.client.get(f"/admin/drop_core/membership/{self.grace.pk}/delete/").status_code, 403)
         self.assertEqual(self.client.get(f"/admin/drop_core/workspace/{self.team.pk}/delete/").status_code, 403)
         self.assertEqual(self.client.post(f"/admin/drop_core/workspace/{self.team.pk}/delete/", {"post": "yes"}).status_code, 403)
+
+    def test_staff_cannot_delete_the_account_they_are_signed_in_with(self):
+        from django.contrib.admin.models import LogEntry
+
+        url = f"/admin/auth/user/{self.staff.pk}/delete/"
+        change = f"/admin/auth/user/{self.staff.pk}/change/"
+        for method in (self.client.get, lambda u: self.client.post(u, {"post": "yes"})):
+            response = method(url)
+            self.assertEqual((response.status_code, response["Location"]), (302, change))
+            self.assertContains(
+                self.client.get(change),
+                "You cannot delete the account you are signed in with. Ask another member of staff to do it.",
+            )
+        self.assertTrue(User.objects.get(pk=self.staff.pk).is_active)
+        self.assertFalse(LogEntry.objects.filter(action_flag=3).exists())

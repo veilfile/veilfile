@@ -285,6 +285,32 @@ class InFlightTests(Base):
 
 
 @override_settings(TEAM_SEATS=True)
+class UploadUrlAfterRejoinTests(Base):
+    def test_an_upload_url_from_before_a_removal_stays_dead_after_a_rejoin(self):
+        self.remove()
+        # What the refused PUT in flight did after the removal: it put the claim back.
+        PendingUpload.objects.filter(pk=self.pending.pk).update(used=False)
+        sent = []
+        teams.invite(self.admin, self.grace.user.email, build_url=lambda raw: sent.append(raw) or raw)
+        teams.accept_invitation(self.grace.user, sent[0])
+        self.assertTrue(PendingUpload.objects.get(pk=self.pending.pk).used)
+        self.assertEqual(self.put("graces-url").status_code, 404)
+        self.assertFalse(Artifact.objects.filter(workspace=self.team).exists())
+
+    def test_a_put_refused_for_a_removed_member_keeps_the_claim(self):
+        with mock.patch("drop_core.views.upload_artifact", side_effect=ValueError("member_removed")):
+            answer = self.put("graces-url")
+        self.assertEqual((answer.status_code, answer.json()["code"]), (403, "member_removed"))
+        self.assertTrue(PendingUpload.objects.get(pk=self.pending.pk).used)
+
+    def test_a_put_refused_for_a_cap_still_releases_the_claim(self):
+        with mock.patch("drop_core.views.upload_artifact", side_effect=ValueError("monthly_cap_reached")):
+            answer = self.put("graces-url")
+        self.assertEqual((answer.status_code, answer.json()["code"]), (429, "monthly_cap_reached"))
+        self.assertFalse(PendingUpload.objects.get(pk=self.pending.pk).used)
+
+
+@override_settings(TEAM_SEATS=True)
 class LeavingTests(Base):
     def test_leaving_is_removal_with_files_kept(self):
         login = self.approved_login(self.grace.user, self.team)

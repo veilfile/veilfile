@@ -170,13 +170,24 @@ def files_at_stake(owned_workspace_ids, row_ids):
 
 
 def delete_files_of(row, batch=500):
-    """Delete every file one row uploaded, `batch` rows at a time and one transaction for each, so that the receiver removes each
-    batch's bytes right after its commit. Returns how many files it deleted. Call it outside a transaction."""
+    """Delete the files one row uploaded that are not held, `batch` rows at a time and one transaction for each, so that the
+    receiver removes each batch's bytes right after its commit. It never deletes a held file. Each batch locks its rows with the
+    held ones excluded and deletes only what that lock returns, so a hold and this delete of one row cannot both win: the hold
+    takes its rows under the team's workspace lock (mark_held), and Postgres tests a locked row's WHERE clause again after the
+    other transaction commits. Held files stay, and the loop ends when only they are left. Returns how many files it deleted.
+    Call it outside a transaction."""
     deleted = 0
     while True:
-        ids = list(Artifact.objects.filter(member=row).values_list("pk", flat=True)[:batch])
+        ids = list(Artifact.objects.filter(member=row).exclude(safety_status="held").order_by("pk").values_list("pk", flat=True)[:batch])
         if not ids:
             return deleted
         with transaction.atomic():
-            Artifact.objects.filter(pk__in=ids).delete()
-        deleted += len(ids)
+            locked = list(
+                Artifact.objects.select_for_update()
+                .filter(pk__in=ids)
+                .exclude(safety_status="held")
+                .order_by("pk")
+                .values_list("pk", flat=True)
+            )
+            Artifact.objects.filter(pk__in=locked).delete()
+        deleted += len(locked)

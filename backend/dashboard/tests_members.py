@@ -21,6 +21,7 @@ from drop_core.models import (
     FILE_VISIBILITY_ALWAYS_TEAM,
     FILE_VISIBILITY_MEMBERS_CHOOSE,
     VISIBILITY_ONLY_ME,
+    VISIBILITY_TEAM,
     APIKey,
     Artifact,
     EmailVerification,
@@ -513,7 +514,7 @@ class RemoveTests(MembersCase):
         super().setUp()
         self.member = second_member(self.workspace, "lin")
         self.file = live_file(self.member, "secret-plans.txt", size=2048)
-        live_file(self.member, "shared.txt", size=1024, visibility=FILE_VISIBILITY_ALWAYS_TEAM)
+        live_file(self.member, "shared.txt", size=1024, visibility=VISIBILITY_TEAM)
         self.url = f"{URL}{self.member.pk}/remove/"
 
     def post(self, **fields):

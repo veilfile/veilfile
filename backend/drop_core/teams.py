@@ -329,6 +329,8 @@ def _join_once(user, digest, team_id):
         if row is None:
             row = Membership.objects.create(workspace=team, user=user, role=Membership.MEMBER)
         else:
+            # Stop these first, so that nothing made before the row closed comes back with it.
+            file_access.end_upload_urls_of(row)
             APIKey.objects.filter(member=row, is_active=True).update(is_active=False)
             Membership.objects.filter(pk=row.pk).update(
                 role=Membership.MEMBER, removed_at=None, upload_allowance=None, storage_allowance_bytes=None, key_allowance=None

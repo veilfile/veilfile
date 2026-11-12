@@ -178,6 +178,9 @@ class AccountAdmin(UserAdmin):
         if not self.has_delete_permission(request, user):
             raise PermissionDenied
         change_url = reverse("admin:auth_user_change", args=[user.pk])
+        if user.pk == request.user.pk:
+            messages.error(request, "You cannot delete the account you are signed in with. Ask another member of staff to do it.")
+            return redirect(change_url)
         code = why_not_delete(user)
         if code is not None:
             messages.error(request, REFUSALS[code])
