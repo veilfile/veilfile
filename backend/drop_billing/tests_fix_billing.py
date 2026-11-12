@@ -1339,3 +1339,65 @@ class SyncCommandSafetyTests(FixBillingBase):
         self.assertIn("ws-hint", text)
         self.assertNotIn("cus_X", text)
         self.assertIn("1 orphan subscription(s)", text)
+
+
+# ---------------------------------------------------------------------------
+# Team seats, billing: a payment for a workspace nobody administers
+# ---------------------------------------------------------------------------
+class UnadministeredPaymentTests(FixBillingBase):
+    longMessage = False
+    MESSAGE = "billing: workspace %s has a paid subscription %s and no current administrator; reconcile it by hand"
+
+    def close_administrator_row(self):
+        from django.utils import timezone
+
+        from drop_core import teams
+        from drop_core.models import Membership
+
+        row = Membership.objects.get(workspace=self.ws, role=Membership.ADMINISTRATOR, removed_at=None)
+        teams._close_administrator_row(row, timezone.now())
+
+    def expected(self):
+        return self.MESSAGE % (self.ws.pk, "sub_A")
+
+    def test_a_checkout_paid_after_its_payer_joined_a_team_is_applied_and_reported(self):
+        self.set_billing("free", customer="cus_A")
+        self.close_administrator_row()
+        self.patch_stripe("list", return_value=sub_list(make_sub("sub_A", "active", "price_team")))
+        with self.assertLogs("drop_billing", level="ERROR") as logs:
+            resp = self.post_event(checkout_completed())
+        self.assertEqual(resp.status_code, 200)
+        ws = self.reload()
+        self.assertEqual((ws.plan, ws.stripe_subscription_id), ("team", "sub_A"))
+        self.assertEqual([r.getMessage() for r in logs.records], [self.expected()])
+
+    def test_a_paid_workspace_with_an_administrator_is_not_reported(self):
+        self.set_billing("free", customer="cus_A")
+        self.patch_stripe("list", return_value=sub_list(make_sub("sub_A", "active", "price_team")))
+        with self.assertNoLogs("drop_billing", level="ERROR"):
+            self.assertEqual(self.post_event(checkout_completed()).status_code, 200)
+        self.assertEqual(self.reload().plan, "team")
+
+    def test_a_workspace_nobody_administers_that_stays_free_is_not_reported(self):
+        self.set_billing("free", customer="cus_A")
+        self.close_administrator_row()
+        self.patch_stripe("list", return_value=sub_list())
+        with self.assertNoLogs("drop_billing", level="ERROR"):
+            self.assertEqual(self.post_event(checkout_completed()).status_code, 200)
+
+    def test_the_sync_command_applies_and_reports_the_same_payment(self):
+        self.set_billing("free", customer="cus_A")
+        self.close_administrator_row()
+        self.patch_stripe("list", return_value=sub_list(make_sub("sub_A", "active", "price_team")))
+        with mock.patch.dict(os.environ, {"STRIPE_SECRET_KEY": "sk_live_" + "fixbilling"}):
+            with self.assertLogs("drop_billing", level="ERROR") as logs:
+                call_command("sync_stripe_billing", "--apply", stdout=io.StringIO())
+        self.assertEqual(self.reload().plan, "team")
+        self.assertEqual([r.getMessage() for r in logs.records], [self.expected()])
+
+    def test_a_dry_run_of_the_command_reports_nothing(self):
+        self.set_billing("free", customer="cus_A")
+        self.close_administrator_row()
+        self.patch_stripe("list", return_value=sub_list(make_sub("sub_A", "active", "price_team")))
+        with self.assertNoLogs("drop_billing", level="ERROR"):
+            call_command("sync_stripe_billing", stdout=io.StringIO())

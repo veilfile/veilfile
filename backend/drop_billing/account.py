@@ -422,6 +422,20 @@ def _apply_subscriptions(workspace, subs, customer_id):
     return plan
 
 
+def _report_unadministered(workspace, plan):
+    """Log an ERROR for staff when a paid plan was just applied to a workspace with no open administrator row, as when
+    the payer joined another team before the payment landed. Call it under the workspace lock; it names ids only."""
+    if plan == "free":
+        return
+    if Membership.objects.filter(workspace=workspace, role=Membership.ADMINISTRATOR, removed_at__isnull=True).exists():
+        return
+    logger.error(
+        "billing: workspace %s has a paid subscription %s and no current administrator; reconcile it by hand",
+        workspace.pk,
+        workspace.stripe_subscription_id,
+    )
+
+
 def _sync_from_subscriptions(workspace, subs, customer_id):
     """Apply an already fetched subscription list under the row lock,
     unless the workspace has moved to another customer meanwhile."""
