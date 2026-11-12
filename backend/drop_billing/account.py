@@ -882,26 +882,36 @@ def _cancel_pending(stripe_mod, workspace, current):
     return Answer(200, {"plan": workspace.plan, "status": "pending_cancelled"})
 
 
+MOVE_ATTEMPTS = 3
+
+
 def move_billing_email(workspace):
-    """Give the team's Stripe customer the address of the team's open administrator, after a transfer. True when Stripe accepted it
-    or the workspace has no customer. False when Stripe fails or is not configured; that is logged with the exception's class only,
-    and nothing is undone. Call it outside a transaction: it makes a Stripe call."""
+    """Give the team's Stripe customer the address of the team's open administrator, after a transfer. After each call it reads the
+    administrator again and, if a later transfer changed it, moves the email again, at most ``MOVE_ATTEMPTS`` moves in all. True when
+    the last move was for the current administrator, or the workspace has no customer. False when Stripe fails or is not configured;
+    that is logged with the exception's class only, and nothing is undone. Call it outside a transaction: it makes a Stripe call."""
     if not workspace.stripe_customer_id:
         return True
     stripe_mod, err = _stripe_or_503()
     if err is not None:
         logger.warning("billing: the email of workspace %s did not move: billing is not configured", workspace.pk)
         return False
-    administrator = _open_administrator(workspace.pk)
-    if administrator is None:
-        logger.warning("billing: the email of workspace %s did not move: no open administrator", workspace.pk)
-        return False
-    try:
-        stripe_mod.Customer.modify(workspace.stripe_customer_id, email=administrator.user.email or None)
-    except Exception as exc:
-        logger.warning("billing: the email of workspace %s did not move: %s", workspace.pk, type(exc).__name__)
-        return False
-    return True
+    for _ in range(MOVE_ATTEMPTS):
+        administrator = _open_administrator(workspace.pk)
+        if administrator is None:
+            logger.warning("billing: the email of workspace %s did not move: no open administrator", workspace.pk)
+            return False
+        try:
+            stripe_mod.Customer.modify(workspace.stripe_customer_id, email=administrator.user.email or None)
+        except Exception as exc:
+            logger.warning("billing: the email of workspace %s did not move: %s", workspace.pk, type(exc).__name__)
+            return False
+        # A transfer may have committed while Stripe was answering; a slow first move must not land last.
+        current = _open_administrator(workspace.pk)
+        if current is not None and current.user_id == administrator.user_id:
+            return True
+    logger.warning("billing: the email of workspace %s did not settle: the administrator kept changing", workspace.pk)
+    return False
 
 
 def _repair_billing_email(workspace):

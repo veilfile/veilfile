@@ -288,6 +288,37 @@ class InFlightTransferTests(HandoverBase):
         self.assertEqual(billing_account.portal(self.user).body, {"portal_url": "https://billing.stripe.test/p/1"})
         self.assertEqual(billing_account.checkout(self.user, "team").body, {"checkout_url": "https://checkout.stripe.com/c/cs_1"})
 
+    def test_a_second_transfer_during_the_first_move_moves_the_email_again(self):
+        calls = []
+
+        def second_transfer_during_the_call(customer, email=None):
+            calls.append(email)
+            if len(calls) == 1:
+                self.hand_over(self.heidi)
+            return {"id": "cus_A"}
+
+        self.modify.side_effect = second_transfer_during_the_call
+        self.hand_over(self.grace)
+        self.assertTrue(billing_account.move_billing_email(self.ws))
+        self.assertEqual(calls, ["grace@example.com", "heidi@example.com"])
+
+    def test_a_move_with_no_transfer_makes_one_call(self):
+        self.assertTrue(billing_account.move_billing_email(self.ws))
+        self.modify.assert_called_once_with("cus_A", email="payer@example.com")
+
+    def test_a_move_chasing_transfers_stops_after_three_calls_and_reports_false(self):
+        people = [self.grace, self.heidi, second_member(self.ws, "ivan")]
+        calls = []
+
+        def another_transfer_each_time(customer, email=None):
+            calls.append(email)
+            self.hand_over(people[len(calls) % 3])
+            return {"id": "cus_A"}
+
+        self.modify.side_effect = another_transfer_each_time
+        self.assertFalse(billing_account.move_billing_email(self.ws))
+        self.assertEqual(len(calls), 3)
+
 
 class MigrationTests(TransactionTestCase):
     longMessage = False
