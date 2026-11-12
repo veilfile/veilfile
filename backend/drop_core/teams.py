@@ -597,7 +597,7 @@ def _accept_once(member):
         key_allowance=None,
     )
     changes = {"owner_id": row.user_id}
-    if team.stripe_subscription_id:
+    if team.stripe_customer_id:
         changes["billing_handed_over_at"] = now
     Workspace.objects.filter(pk=team.pk).update(**changes)
 

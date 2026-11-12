@@ -644,6 +644,7 @@ def checkout(user, plan, interval="month"):
     workspace = member.workspace
     try:
         customer_id = _ensure_customer(stripe_mod, workspace, user, plan)
+        _repair_billing_email(workspace)
         # Stripe, not the local mirror, decides: the webhook for a checkout
         # finished a moment ago may not have arrived yet.
         subs = _list_subscriptions(stripe_mod, customer_id)
@@ -893,6 +894,14 @@ def move_billing_email(workspace):
         logger.warning("billing: the email of workspace %s did not move: %s", workspace.pk, type(exc).__name__)
         return False
     return True
+
+
+def _repair_billing_email(workspace):
+    """While a transfer's marker is set, move the customer's email again, as the portal does, and clear the marker with a filter on the
+    value read when the move worked. A failed move is logged and never stops the caller. Call it outside a transaction."""
+    handed_over_at = workspace.billing_handed_over_at
+    if handed_over_at is not None and move_billing_email(workspace):
+        Workspace.objects.filter(pk=workspace.pk, billing_handed_over_at=handed_over_at).update(billing_handed_over_at=None)
 
 
 def portal(user):

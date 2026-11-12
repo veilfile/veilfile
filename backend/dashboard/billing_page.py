@@ -171,7 +171,7 @@ def page_context(status, pending, team=None, short=None, handed_over=False):
     """What billing.html prints. `status` is the body billing.status answers; `pending` is pending_for()'s answer; `team` is
     teams.team_summary's answer for the signed-in administrator, None while the switch is off; `short` is a plan's slug to the
     (people, seats) of teams.too_few_seats for each plan the team does not fit, empty when all fit. `handed_over` is whether the
-    workspace's transfer marker is set, which with a billing account asks the new administrator to check the card."""
+    workspace's transfer marker is set, which with a billing account and a subscription asks the new administrator to check the card."""
     team = team or {}
     short = short or {}
     plan = status["plan"]
@@ -195,7 +195,7 @@ def page_context(status, pending, team=None, short=None, handed_over=False):
         "pending": pending,
         "free_others": team.get("others_barred", 0),
         "over_seats": team.get("over_seats"),
-        "check_card": bool(handed_over and status["has_billing_account"]),
+        "check_card": bool(handed_over and status["has_billing_account"] and subscribed),
     }
 
 

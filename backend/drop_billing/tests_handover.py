@@ -167,6 +167,53 @@ class FollowTests(HandoverBase):
         self.assertIn("billing_handed_over_at", admin.site._registry[Workspace].readonly_fields)
 
 
+class LapsedTeamTests(HandoverBase):
+    """A team with a customer and no subscription, as after a cancelled plan (Ruling 8)."""
+
+    def setUp(self):
+        super().setUp()
+        self.set_billing("free", customer="cus_A", sub_id="")
+        self.session = self.patch_stripe("session", return_value={"id": "cs_1", "url": "https://checkout.stripe.com/c/cs_1"})
+        self.listed = self.patch_stripe("list", return_value=sub_list())
+
+    def checkout(self, user):
+        return billing_account.checkout(user, "team")
+
+    def test_a_transfer_with_a_customer_and_no_subscription_sets_the_marker_and_shows_no_notice(self):
+        self.transfer()
+        self.assertIsNotNone(self.ws.billing_handed_over_at, "backend/drop_core/teams.py: the marker follows the customer")
+        self.assertNotIn("The card on file", self.page(self.grace.user))
+
+    def test_a_failed_move_is_repaired_by_the_new_administrators_first_checkout(self):
+        self.modify.side_effect = stripe.APIConnectionError("down")
+        with self.assertLogs("drop_billing", level="WARNING"):
+            self.transfer()
+        self.assertIsNotNone(self.ws.billing_handed_over_at)
+        self.modify.reset_mock(side_effect=True)
+        self.assertEqual(self.checkout(self.grace.user).status, 200)
+        self.modify.assert_called_once_with("cus_A", email="grace@example.com")
+        self.assertIsNone(self.reload().billing_handed_over_at, f"{ACCOUNT}: checkout clears the marker once the move worked")
+
+    def test_a_failed_move_in_checkout_does_not_stop_it_and_keeps_the_marker(self):
+        self.transfer()
+        self.modify.side_effect = stripe.APIConnectionError("down")
+        with self.assertLogs("drop_billing", level="WARNING"):
+            self.assertEqual(self.checkout(self.grace.user).status, 200)
+        self.assertIsNotNone(self.reload().billing_handed_over_at)
+
+    def test_a_second_transfer_in_between_keeps_its_own_marker(self):
+        self.transfer()
+        newer = timezone.now() + timedelta(minutes=5)
+
+        def second_transfer(*args, **kwargs):
+            Workspace.objects.filter(pk=self.ws.pk).update(billing_handed_over_at=newer)
+            return {"id": "cus_A"}
+
+        self.modify.side_effect = second_transfer
+        self.checkout(self.grace.user)
+        self.assertEqual(self.reload().billing_handed_over_at, newer, f"{ACCOUNT}: checkout clears with a filter on the value it read")
+
+
 class PortalConfigurationTests(HandoverBase):
     def configuration(self, user):
         self.portal_session.reset_mock()
