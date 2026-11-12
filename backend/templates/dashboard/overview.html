@@ -46,7 +46,7 @@
 {% include "components/meter.html" with id="overview-own-keys" label="API keys" used=team.own.keys_used cap=team.own.key_allowance only %}
 </div>
 </section>
-{% endif %}<section aria-labelledby="overview-usage">
+{% endif %}{% if not barred %}<section aria-labelledby="overview-usage">
 <h2 id="overview-usage">{% if member_view %}The team's use{% else %}Usage{% endif %}</h2>
 {% if usage %}<div class="meters">
 {% include "components/meter.html" with id="overview-uploads" label="Successful uploads this month" used=usage.uploads_used cap=usage.uploads_cap note="Uploads are counted by calendar month, in UTC." only %}
@@ -55,7 +55,7 @@
 {% include "components/meter.html" with id="overview-ttl" label="Links last up to" used=usage.ttl_days unit="day" only %}
 </div>
 {% else %}<p>Usage could not be loaded just now. Reload the page to try again.</p>
-{% endif %}</section>
+{% endif %}</section>{% endif %}
 <section aria-labelledby="overview-account">
 <h2 id="overview-account">Account</h2>
 {% if email %}<p><strong>{{ email }}</strong> is {% if email_verified %}verified{% else %}not verified{% endif %}.</p>

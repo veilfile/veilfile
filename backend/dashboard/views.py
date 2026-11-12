@@ -27,7 +27,7 @@ from drop_billing import account as billing_account
 from drop_core import account
 from drop_core.account import Answer
 from drop_core.file_access import NotYourFile, file_to_revoke, set_visibility
-from drop_core.models import VISIBILITY_TEAM, current_membership
+from drop_core.models import VISIBILITY_TEAM, current_membership, is_barred
 from drop_core.teams import is_plain_member, team_seats_only, team_summary, too_few_seats
 from pages.errors import not_found
 
@@ -93,6 +93,7 @@ def files(request):
     return render(request, "dashboard/files.html", {
         "files": file_rows(request.user, answer.body, team=team),
         "show_team": team,
+        "barred": bool(team) and is_barred(current_membership(request.user)),
         "older_url": f"{here}?{urlencode({'cursor': next_cursor})}" if next_cursor else "",
         "newest_url": here if cursor else "",
         "bad_cursor": bad_cursor,

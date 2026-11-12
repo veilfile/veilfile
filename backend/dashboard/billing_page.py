@@ -117,6 +117,15 @@ def with_seat_sentences(options, short):
     return options
 
 
+def seat_sentences(options):
+    """The seats sentence of each plan in `options` that has one, once per plan, in the order the plans are listed."""
+    sentences = {}
+    for option in options:
+        if option["seats"]:
+            sentences.setdefault(option["slug"], option["seats"])
+    return list(sentences.values())
+
+
 def is_upgrade(current, target):
     """True when moving from `current` to `target` costs more: both are for sale and the target's price is the higher. A switch
     from anything that is not a paid plan reads as a downgrade, as the React dashboard's switchConfirmText had it."""
@@ -180,6 +189,8 @@ def page_context(status, pending, team=None, short=None, handed_over=False):
     # every subscription before yearly billing was).
     known = status.get("billing_interval") or ""
     interval = interval_of(known) if subscribed else ""
+    monthly = with_seat_sentences(plan_options(plan, interval or "month"), short)
+    yearly = with_seat_sentences(yearly_options(plan, interval or "month"), short)
     return {
         "status": status,
         "plan": plan,
@@ -190,8 +201,9 @@ def page_context(status, pending, team=None, short=None, handed_over=False):
         "subscription_status": status["subscription_status"],
         "status_words": status_words(status["subscription_status"]),
         "can_manage": bool(status["has_billing_account"]),
-        "options": with_seat_sentences(plan_options(plan, interval or "month"), short),
-        "yearly_options": with_seat_sentences(yearly_options(plan, interval or "month"), short),
+        "options": [o for o in monthly if not o["seats"]],
+        "yearly_options": [o for o in yearly if not o["seats"]],
+        "seat_sentences": seat_sentences(monthly + yearly),
         "pending": pending,
         "free_others": team.get("others_barred", 0),
         "over_seats": team.get("over_seats"),

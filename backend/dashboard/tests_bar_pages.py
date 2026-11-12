@@ -232,6 +232,81 @@ class HelperTests(BarPagesCase):
         self.assertFalse(teams.team_summary(Membership.objects.get(pk=self.grace.pk))["barred"])
 
 
+class SeatSentenceTests(BarPagesCase):
+    """Billing names a plan with too few seats once, in a paragraph after the monthly row, and leaves its buttons out of both rows."""
+
+    SENTENCE = "Team has 5 seats, and your team has 6 people."
+
+    def setUp(self):
+        super().setUp()
+        for name in ("a", "b", "c"):
+            second_member(self.team, name)
+
+    def html(self):
+        return self.page(self.admin.user, "/app/billing/")[1].content.decode()
+
+    @staticmethod
+    def rows(html):
+        import re
+
+        return re.findall(r'<div class="form-actions">(.*?)</div>', html, re.S)
+
+    def test_the_sentence_appears_once_outside_any_row_of_actions(self):
+        html = self.html()
+        self.assertEqual(html.count(self.SENTENCE), 1, "backend/templates/dashboard/billing.html: a plan with too few seats is named once")
+        self.assertFalse([row for row in self.rows(html) if "has 5 seats" in row], "backend/templates/dashboard/billing.html: not in a row of actions")
+
+    def test_the_sentence_follows_the_monthly_row_and_comes_before_the_yearly_sentence(self):
+        html = self.html()
+        monthly_end = html.index("</div>", html.index('<div class="form-actions">'))
+        self.assertLess(monthly_end, html.index(self.SENTENCE))
+        self.assertLess(html.index(self.SENTENCE), html.index("Yearly billing costs"))
+        self.assertIn("<p>" + self.SENTENCE + "</p>", html)
+
+    def test_no_button_for_that_plan_appears_in_either_row(self):
+        rows = " ".join(self.rows(self.html()))
+        self.assertNotIn("Upgrade to Team (", rows)
+        self.assertNotIn("Upgrade to Team yearly", rows)
+        self.assertNotIn('name="plan" value="team"', rows)
+
+    def test_a_plan_that_fits_keeps_its_buttons(self):
+        rows = self.rows(self.html())
+        self.assertEqual(len(rows), 2)
+        for row, per in zip(rows, ("mo", "yr")):
+            self.assertIn(f"Upgrade to Team Plus ($", row)
+            self.assertIn(f"/{per})", row)
+
+
+class BarredOverviewTests(BarPagesCase):
+    def test_a_barred_member_has_their_own_use_and_not_the_teams(self):
+        html = self.page(self.grace.user, "/app/")[1].content.decode()
+        self.assertNotIn('id="overview-usage"', html, "backend/templates/dashboard/overview.html: no team use for a barred member")
+        self.assertNotIn("The team's use", html)
+        self.assertIn('id="overview-own"', html)
+
+    def test_an_unbarred_member_still_has_the_teams_use(self):
+        Workspace.objects.filter(pk=self.team.pk).update(plan="team")
+        html = self.page(self.grace.user, "/app/")[1].content.decode()
+        self.assertIn('id="overview-usage"', html)
+        self.assertIn("The team's use", html)
+        self.assertIn('id="overview-own"', html)
+
+
+class BarredFilesCaptionTests(BarPagesCase):
+    def test_a_barred_members_caption_names_only_their_files_and_keeps_the_columns(self):
+        live_file(self.grace, "mine.txt")
+        html = self.page(self.grace.user, "/app/files/")[1].content.decode()
+        self.assertIn("<caption>Your files, newest first</caption>", html)
+        for label in ("Visible to", "Uploaded by"):
+            self.assertIn(f'<th scope="col">{label}</th>', html)
+
+    def test_an_unbarred_members_caption_names_the_teams_too(self):
+        Workspace.objects.filter(pk=self.team.pk).update(plan="team")
+        live_file(self.grace, "mine.txt")
+        html = self.page(self.grace.user, "/app/files/")[1].content.decode()
+        self.assertIn("<caption>Your files and your team's, newest first</caption>", html)
+
+
 class OnePersonTests(TestCase):
     longMessage = False
 
