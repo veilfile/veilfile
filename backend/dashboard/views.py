@@ -6,6 +6,7 @@ looked up within the signed-in user's own account (a stranger's, or a missing on
 """
 from functools import wraps
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpResponseRedirect
@@ -27,7 +28,7 @@ from drop_core import account
 from drop_core.account import Answer
 from drop_core.file_access import NotYourFile, file_to_revoke, set_visibility
 from drop_core.models import VISIBILITY_TEAM, current_membership
-from drop_core.teams import is_plain_member, team_seats_only
+from drop_core.teams import is_plain_member, team_seats_only, team_summary
 from pages.errors import not_found
 
 
@@ -165,7 +166,8 @@ def billing(request):
         return render(request, "dashboard/billing.html", {"member": True})
     status = billing_account.status(request.user).body
     pending = billing_page.pending_for(request.session, status["plan"], current_interval=billing_page.interval_of(status["billing_interval"]))
-    return render(request, "dashboard/billing.html", billing_page.page_context(status, pending))
+    team = team_summary(current_membership(request.user)) if settings.TEAM_SEATS else None
+    return render(request, "dashboard/billing.html", billing_page.page_context(status, pending, team))
 
 
 def _members_refusal(request, where):

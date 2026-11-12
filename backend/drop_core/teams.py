@@ -33,9 +33,10 @@ from .models import (
     Workspace,
     current_membership,
     has_other_members,
+    is_barred,
 )
 from .oauth import revoke_user_oauth_grants
-from .plans import PLANS
+from .plans import PLANS, plan_name
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,18 @@ def seat_limit(workspace):
     if not settings.TEAM_SEATS:
         return None
     return PLANS[workspace.plan]["seats"]
+
+
+def too_few_seats(workspace, plan=None):
+    """(people, seats) when the team's current people outnumber the seats of `plan`, which is the workspace's own plan when None.
+    None when that plan has no limit on seats, when the team fits, and, before any query, while the switch is off."""
+    if not settings.TEAM_SEATS:
+        return None
+    seats = PLANS[plan or workspace.plan]["seats"]
+    if seats is None:
+        return None
+    people = Membership.objects.filter(workspace=workspace, removed_at__isnull=True).count()
+    return (people, seats) if people > seats else None
 
 
 def _open(workspace):
@@ -724,7 +737,9 @@ def set_file_visibility_setting(administrator, value):
 def team_summary(member):
     """What Overview says of the team the person is on, or None: the switch is off, or the person administers a plan with one seat
     and nobody else. Keys: is_administrator, admin_email (from the administrator's own row), people, seats_used and seat_limit, and,
-    for a member, `own` with their use against their allowance. None before any query while the switch is off."""
+    for a member, `own` with their use against their allowance, and `barred`. For an administrator: `others_barred`, the other people of a
+    team on Free, and `over_seats`, a paid team's people, seats and plan name when it has more people than seats, else None. None before
+    any query while the switch is off."""
     if not settings.TEAM_SEATS:
         return None
     workspace = member.workspace
@@ -743,8 +758,18 @@ def team_summary(member):
         "people": Membership.objects.filter(workspace=workspace, removed_at__isnull=True).count(),
         "seats_used": seats_in_use(workspace),
         "seat_limit": seat_limit(workspace),
+        "barred": is_barred(member),
+        "others_barred": 0,
+        "over_seats": None,
     }
-    if not member.is_administrator:
+    if member.is_administrator:
+        if workspace.plan == Workspace.PLAN_FREE:
+            summary["others_barred"] = summary["people"] - 1
+        else:
+            short = too_few_seats(workspace)
+            if short is not None:
+                summary["over_seats"] = {"people": short[0], "seats": short[1], "plan": plan_name(workspace.plan)}
+    else:
         own = next((row for row in member_rows(workspace) if row["person"].pk == member.pk), None)
         if own is not None:
             summary["own"] = {key: own[key] for key in (

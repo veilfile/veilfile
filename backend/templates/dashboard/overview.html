@@ -8,7 +8,8 @@
 {% elif billing_notice.kind == "error" %}<p class="notice" role="alert"><strong>We couldn't start checkout{% if billing_notice.plan %} for the {{ billing_notice.plan }} plan{% endif %}.</strong> Nothing was charged. Try again from <a href="{% url 'app-billing' %}">Billing</a>.</p>
 {% elif billing_notice.kind == "already_subscribed" %}<p class="notice" role="status">You already have a subscription, so no new checkout was started. <a href="{% url 'app-billing' %}">Switch plans or manage billing</a>.</p>
 {% endif %}
-{% if verify_prompt %}<p class="notice"><strong>Verify your email to create API keys.</strong> {% if verify_prompt.sent_to %}We sent a link to {{ verify_prompt.sent_to }}.{% else %}Add an email address to your account.{% endif %} <a href="{% url 'email-verification' %}">Verify email</a></p>
+{% if barred %}<p class="notice" role="status">Your team is on the Free plan, so you cannot upload or make keys until {{ team.admin_email }} chooses a paid plan. You can still see and revoke your own files, and you can leave the team.</p>
+{% endif %}{% if verify_prompt %}<p class="notice"><strong>Verify your email to create API keys.</strong> {% if verify_prompt.sent_to %}We sent a link to {{ verify_prompt.sent_to }}.{% else %}Add an email address to your account.{% endif %} <a href="{% url 'email-verification' %}">Verify email</a></p>
 {% endif %}
 {% if waiting_invitation %}<p class="notice" role="status">An invitation to a team is waiting for this address. Open the link in the email to accept or decline it.</p>
 {% endif %}{% if left_team %}<p class="notice" role="status">You are no longer on a team, so this account is a Free account again.</p>

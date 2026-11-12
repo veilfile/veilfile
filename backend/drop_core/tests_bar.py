@@ -17,7 +17,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from dashboard.tests_keys import hidden_token
+from dashboard.forms import issue_key_token
 from drop_billing.tests_fix_billing import FixBillingBase, make_event, make_sub, sub_list
 
 from .key_caps import KeyNotAllowed, active_keys, create_key_within_cap
@@ -289,7 +289,11 @@ class KeyTests(Base):
             create_key_within_cap(self.team, "new", member=self.grace)
         self.assertEqual(caught.exception.code, "team_on_free")
         self.client.force_login(self.grace.user)
-        page = self.client.post("/app/keys/", {"name": "new", "token": hidden_token(self.client.get("/app/keys/").content.decode())})
+        # The page has no form for her, so the token is issued as the page issues it and the POST is forged.
+        session = self.client.session
+        token = issue_key_token(session)
+        session.save()
+        page = self.client.post("/app/keys/", {"name": "new", "token": token})
         self.assertIn(KEY_SENTENCE, page.content.decode())
         response = self.client.post("/api/v1/keys/", {"name": "new"}, content_type="application/json")
         self.assertEqual(response.status_code, 403)

@@ -147,8 +147,10 @@ def status_words(subscription_status):
     return STATUS_WORDS.get(subscription_status, "") if isinstance(subscription_status, str) else ""
 
 
-def page_context(status, pending):
-    """What billing.html prints. `status` is the body billing.status answers; `pending` is pending_for()'s answer."""
+def page_context(status, pending, team=None):
+    """What billing.html prints. `status` is the body billing.status answers; `pending` is pending_for()'s answer; `team` is
+    teams.team_summary's answer for the signed-in administrator, None while the switch is off."""
+    team = team or {}
     plan = status["plan"]
     subscribed = bool(status["has_subscription"])
     # The interval the subscription is billed at, as the mirror knows it ("" before a webhook has written it, which is monthly:
@@ -168,6 +170,8 @@ def page_context(status, pending):
         "options": plan_options(plan, interval or "month"),
         "yearly_options": yearly_options(plan, interval or "month"),
         "pending": pending,
+        "free_others": team.get("others_barred", 0),
+        "over_seats": team.get("over_seats"),
     }
 
 

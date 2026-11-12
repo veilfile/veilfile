@@ -71,6 +71,7 @@ class PrivacyMatrixTests(TestCase):
         ada = make_user("ada")
         self.workspace = get_or_create_workspace(ada)
         Workspace.objects.filter(pk=self.workspace.pk).update(plan="team")
+        self.workspace.refresh_from_db()
         self.people = {
             "ada": administrator_of(self.workspace),
             "grace": second_member(self.workspace, "grace"),
@@ -231,6 +232,7 @@ class FileAccessTests(TestCase):
         self.ada_user = make_user("ada")
         self.workspace = get_or_create_workspace(self.ada_user)
         Workspace.objects.filter(pk=self.workspace.pk).update(plan="team")
+        self.workspace.refresh_from_db()
         self.ada = administrator_of(self.workspace)
         self.grace = second_member(self.workspace, "grace")
 

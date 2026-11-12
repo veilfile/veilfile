@@ -37,6 +37,7 @@ from drop_core.teams import (
     remove_member,
     set_file_visibility_setting,
     team_held_files,
+    team_summary,
     team_seats_only,
     waiting_administrator_offer,
     waiting_invitations,
@@ -106,7 +107,10 @@ def _rows(workspace):
 
 def _page(request, member, form=None, refusal="", status=200):
     workspace = member.workspace
+    summary = team_summary(member) or {}
     context = {
+        "free_others": summary.get("others_barred", 0),
+        "over_seats": summary.get("over_seats"),
         "rows": _rows(workspace),
         "waiting": waiting_invitations(workspace),
         "offer": waiting_administrator_offer(workspace),

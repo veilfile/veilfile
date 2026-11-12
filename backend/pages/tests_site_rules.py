@@ -340,7 +340,8 @@ READING_TEST_MODULES = ("pages.tests_reading_family", "pages.tests_reading", "pa
                         "drop_core.tests_invitations", "dashboard.tests_members",
                         "drop_core.tests_removal", "dashboard.tests_team",
                         "drop_core.tests_transfer", "drop_core.tests_holds",
-                        "drop_core.tests_account_deletion", "drop_core.tests_bar")
+                        "drop_core.tests_account_deletion", "drop_core.tests_bar",
+                        "dashboard.tests_bar_pages")
 
 
 def cases_defined_in(module):

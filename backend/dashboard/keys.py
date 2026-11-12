@@ -16,7 +16,7 @@ from django.views.decorators.http import require_http_methods
 
 from drop_core import account
 from drop_core.key_caps import key_cap
-from drop_core.models import APIKey, current_membership, has_other_members
+from drop_core.models import APIKey, current_membership, has_other_members, is_barred
 from drop_core.plans import plan_name
 from pages.errors import not_found
 
@@ -42,6 +42,11 @@ def _shows_people(user):
         return False
     member = current_membership(user)
     return member.is_administrator and has_other_members(member.workspace)
+
+
+def _barred(user):
+    """Whether the person is a member of a team that is on Free. False before any query while the switch is off."""
+    return settings.TEAM_SEATS and is_barred(current_membership(user))
 
 
 def _key_rows(user, people=False):
@@ -77,7 +82,7 @@ def _keys_page(request, form, status=200, refusal=None):
     holds a key."""
     people = _shows_people(request.user)
     context = {"rows": _key_rows(request.user, people), "show_people": people, "form": form, "token": issue_key_token(request.session), "refusal": refusal,
-               "active_key_count": _active_key_count(request.user)}
+               "active_key_count": _active_key_count(request.user), "barred": _barred(request.user)}
     response = render(request, "dashboard/keys.html", context, status=status)
     response["Cache-Control"] = "no-store"  # the form carries a one-time token, and Back must not show a spent one
     return response
