@@ -479,6 +479,19 @@ Use the rehearsal kit at `~/dev/veilfile-rehearsal-kit` (`prc2/` is the newest) 
 - [ ] **Step 9: Remove the cluster and the worktree,** and confirm port 8779 is closed and port 5432 is untouched.
 - [ ] **Step 10: Stop for the owner** with the results, the rulings and the screenshots, and the deploy notes: `0020` adds a column and an index to the membership table; rolling back is the code alone, because the previous release never reads the column.
 
+## Changed during the build
+
+- **Staff deletion makes the account inactive and clears its offers first, then checks again under the locks.** The first check runs outside any lock, so an offer accepted or a held file that arrived in between would otherwise go unseen. When something changed, the deletion refuses with "Something changed while the account was being deleted, so it was not deleted. It is inactive now." and the account stays inactive.
+- **A hold takes only live files, and an account deletion never deletes a held file.** A revoke expires its file before it deletes the bytes, and a deletion locks each batch with the held files left out, so a hold and either of them cannot both win on the same file. A held file that arrives during a deletion makes it refuse with the sentence above. The Postgres rehearsal found the deletion's case.
+- **Staff cannot delete the account they are signed in with.** The admin answers "You cannot delete the account you are signed in with. Ask another member of staff to do it." Before, it deleted the account and then failed to log the deletion, with a 500.
+- **A rejoin ends the upload URLs of the person's earlier time on the team,** as reopening a workspace of one's own already did, and a PUT refused because the person was removed keeps its URL used. Otherwise a URL from before a removal could store a file after a re-invite, a rejoin and a new app grant.
+- **Deleting an account locks the month's counters before the workspace rows,** the order `upload_artifact` takes them, and locks the member counters without a join. Deleting a lone administrator while its agents uploaded deadlocked in 13 of 16 rounds before, and in none after. An in-flight request of the account may still fail once its workspace is gone.
+- **Leaving twice lands on Overview** rather than on the shell's 404.
+- **The Members page's actions read as separate links,** and the request lines end in a link of their own.
+- **The switch off differs in the ways C2's does, which nobody sees:** a new address without its trailing slash answers 301, a POST without a CSRF token answers 403, and the stylesheet's hash changes. The admin's changes show with the switch off, because they are staff safeguards: no workspace or membership is added or deleted there, the owner and the membership fields are read-only, and the account delete, the hold and the release are new.
+- **Rollback is the code alone.** The previous release served correctly on the migrated schema under load. `0020`'s ALTER took under 12 ms, but it waits behind any transaction that has already read the membership table, such as a join waiting on a held workspace row (3.5 s behind a 5 s hold).
+- **Left as they are:** staff can delete a held file directly in the admin, as question 2's answer allows; a former administrator's request that is already running when a transfer commits finishes with the administrator's authority; the removal notice "their files are revoked" stays when a held file is kept; staff can still edit the other fields of keys and files in the admin.
+
 ## Carried to D, E and F
 
 These are not part of this plan.
@@ -488,3 +501,4 @@ These are not part of this plan.
 - **E:** the REST and MCP sentences a removed person or a member can reach, and agents choosing visibility, as the C2 plan carried.
 - **F:** the Terms and the Privacy Policy cover removal, leaving, the transfer, staff deletion of a member's account, and what an administrator is told about a held file, in the owner's words, before the switch turns on. They must not promise more than question 3's answer gives, because an administrator can work out whose key a hold stopped.
 - **F:** PRODUCT.md, local and uncommitted, still says a workspace has one member, and is refreshed when the switch turns on.
+- **Later:** `revoke_user_oauth_grants` revokes token by token under the workspace lock, which is fine at today's scale. A person with no workspace who sends several first requests at once can get two workspaces of their own; the rehearsal showed it on main too.
