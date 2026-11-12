@@ -3,7 +3,7 @@
 Run from backend/ inside Django, with SITE_SESSION_FILE as for make_staff_session.py; the fixtures are written beside it, as dashboard-fixtures.json:
   SITE_SESSION_FILE=../site-tests/session.txt python manage.py shell -c "exec(open('../site-tests/make_dashboard_fixtures.py').read())"
 
-It makes nine verified users, who have no password and are reached only through the sessions it writes:
+It makes eight verified users, who have no password and are reached only through the sessions it writes:
   site-dash-owner  a Team workspace: four keys (the longest name a key takes, a revoked one, one to revoke and one that has been used) with room under the plan's cap for
                    the key the checks make, 53 files (so the list has a second page: one with the longest name, one expired, one held, one with secret flags, one to revoke
                    and sizes in gigabytes) and three connected apps (one with the longest name);

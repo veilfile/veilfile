@@ -10652,18 +10652,18 @@ def dashboard_bar_problems(browser, base_url, session_key, fixtures):
                         reply = dash_open(page, base_url, path)
                         if reply.status != 200:
                             problems.append(f"{label}: answers {reply.status}, not 200; the team pages answer only while the switch for team seats is on in the server (ci.yml sets VEILFILE_TEAM_SEATS) and for the fixtures' team ({FIXTURES_STALE})")
-                            continue
-                        words = " ".join(page.locator("main").inner_text().split())
-                        if sentence not in words:
-                            problems.append(f"{label}: <main> does not say {sentence!r} (templates/dashboard, the plan's Words; {FIXTURES_STALE})")
-                        if name.startswith("barred"):
-                            found = page.evaluate("""() => ({ forms: document.querySelectorAll('main form input[name=token], main form input[name=name]').length,
-                                visibility: document.querySelectorAll('main form[action*="/visibility/"]').length, leave: document.querySelectorAll('main a[href="/app/team/leave/"]').length })""")
-                            if found["forms"] or found["visibility"] or "Get connected" in words or "Share with the team" in words or "Make it only mine" in words:
-                                problems.append(f"{label}: a barred member's page has a key form, a Get connected section or a visibility control ({found}); the bar takes them away (dashboard/keys.py, drop_core/file_access.py)")
-                            if name == "barred-overview" and found["leave"] != 1:
-                                problems.append(f"{label}: the Leave link is not there once ({found['leave']}); a barred member can always leave (templates/dashboard/overview.html)")
-                        problems += page_problems(page, label)
+                        else:
+                            words = " ".join(page.locator("main").inner_text().split())
+                            if sentence not in words:
+                                problems.append(f"{label}: <main> does not say {sentence!r} (templates/dashboard, the plan's Words; {FIXTURES_STALE})")
+                            if name.startswith("barred"):
+                                found = page.evaluate("""() => ({ forms: document.querySelectorAll('main form input[name=token], main form input[name=name]').length,
+                                    visibility: document.querySelectorAll('main form[action*="/visibility/"]').length, leave: document.querySelectorAll('main a[href="/app/team/leave/"]').length })""")
+                                if found["forms"] or found["visibility"] or "Get connected" in words or "Share with the team" in words or "Make it only mine" in words:
+                                    problems.append(f"{label}: a barred member's page has a key form, a Get connected section or a visibility control ({found}); the bar takes them away (dashboard/keys.py, drop_core/file_access.py)")
+                                if name == "barred-overview" and found["leave"] != 1:
+                                    problems.append(f"{label}: the Leave link is not there once ({found['leave']}); a barred member can always leave (templates/dashboard/overview.html)")
+                            problems += page_problems(page, label)
                     except PlaywrightError as error:
                         problems.append(f"{label}: could not finish looking at the page: {error.message.splitlines()[0]}")
                     finally:

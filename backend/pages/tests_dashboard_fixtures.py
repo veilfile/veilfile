@@ -6,6 +6,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import tempfile
 from pathlib import Path
 from unittest import mock
@@ -93,6 +94,36 @@ class MakeDashboardFixturesGuardTests(TestCase):
             self.assert_refused("Unset DROP_STORAGE")
 
 
+class BarChecksReadConsoleErrorsTests(TestCase):
+    """dashboard_bar_problems is run here with a browser that is not there: only what it does with a page that answers 404."""
+
+    longMessage = False
+
+    def test_a_page_that_does_not_answer_200_still_has_its_console_errors_collected(self):
+        source = HARNESS.read_text(encoding="utf-8")
+        function = next(node for node in ast.parse(source).body if isinstance(node, ast.FunctionDef) and node.name == "dashboard_bar_problems")
+        closed = []
+
+        class Context:
+            def set_default_timeout(self, ms):
+                pass
+
+            def close(self):
+                closed.append(True)
+
+        fakes = {
+            "SitePage": lambda *args, **kwargs: None, "WIDTHS": (375,), "APPEARANCES": ("paper",), "MOTIONS": ("on",), "FORM_NAV_MS": 1, "FIXTURES_STALE": "",
+            "BAR_OVERVIEW": "{admin}", "BAR_KEYS": "", "BAR_BILLING": "", "BAR_MEMBERS": "", "HEIR_BILLING": "", "PlaywrightError": RuntimeError,
+            "new_context": lambda *args, **kwargs: Context(), "fresh_page": lambda context: (object(), ["console broke"]),
+            "dash_open": lambda page, base_url, path: type("Reply", (), {"status": 404})(), "page_problems": lambda page, label: [],
+        }
+        exec(compile(ast.get_source_segment(source, function), str(HARNESS), "exec"), fakes)
+        sessions = {name: "key" for name in ("barred", "lapsed", "heir")}
+        problems = fakes["dashboard_bar_problems"](None, "http://x", "key", {"bar": {"admin_email": "a@example.com", "file": "f"}, "sessions": sessions})
+        self.assertTrue(any("console error: console broke" in problem for problem in problems), f"site-tests/run_site_checks.py: dashboard_bar_problems drops the console errors of a page that answers {404}: {problems}")
+        self.assertEqual(len(closed), 6, "site-tests/run_site_checks.py: every page's context is closed")
+
+
 class MakeDashboardFixturesTests(TestCase):
     """What a run writes, and that the app answers each of it as the dashboard part expects."""
 
@@ -101,6 +132,12 @@ class MakeDashboardFixturesTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.f = run_script()
+
+    def test_the_docstring_counts_the_users_it_makes(self):
+        words = {"five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10}
+        said = re.search(r"It makes (\w+) verified users", ast.get_docstring(ast.parse(SCRIPT.read_text(encoding="utf-8"))))
+        made = get_user_model().objects.filter(username__startswith="site-dash-").count()
+        self.assertEqual(words.get(said.group(1)), made, f"{PREFIX}: the docstring names the number of users the run makes, {made}")
 
     def test_it_writes_the_sessions_and_the_names_the_harness_reads_and_each_session_opens_every_section(self):
         f = self.f
