@@ -442,7 +442,7 @@ def _sync_from_subscriptions(workspace, subs, customer_id):
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=workspace.pk)
         if locked.stripe_customer_id == customer_id:
-            _apply_subscriptions(locked, subs, customer_id)
+            _report_unadministered(locked, _apply_subscriptions(locked, subs, customer_id))
     return locked
 
 

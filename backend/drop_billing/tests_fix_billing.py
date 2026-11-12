@@ -1371,6 +1371,17 @@ class UnadministeredPaymentTests(FixBillingBase):
         self.assertEqual((ws.plan, ws.stripe_subscription_id), ("team", "sub_A"))
         self.assertEqual([r.getMessage() for r in logs.records], [self.expected()])
 
+    def test_a_status_refresh_that_applies_a_paid_plan_is_reported(self):
+        self.set_billing("free", customer="cus_A")
+        self.close_administrator_row()
+        subs = sub_list(make_sub("sub_A", "active", "price_team"))["data"]
+        from drop_billing import account
+
+        with self.assertLogs("drop_billing", level="ERROR") as logs:
+            account._sync_from_subscriptions(self.ws, subs, "cus_A")
+        self.assertEqual(self.reload().plan, "team")
+        self.assertEqual([r.getMessage() for r in logs.records], [self.expected()])
+
     def test_a_paid_workspace_with_an_administrator_is_not_reported(self):
         self.set_billing("free", customer="cus_A")
         self.patch_stripe("list", return_value=sub_list(make_sub("sub_A", "active", "price_team")))
