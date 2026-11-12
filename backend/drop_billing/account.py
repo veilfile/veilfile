@@ -785,7 +785,8 @@ def _switch(stripe_mod, workspace, plan, price_id):
             return _cancel_pending(stripe_mod, workspace, current)
         return Answer(200, {"plan": workspace.plan, "status": "unchanged"})
 
-    if plan != workspace.plan:
+    # The mirror may lag Stripe, so the skip reads the plan of the item being changed.
+    if plan != _plan_for_price_id(_item_price_id(item)):
         refused = _not_enough_seats(workspace, plan)
         if refused is not None:
             return refused

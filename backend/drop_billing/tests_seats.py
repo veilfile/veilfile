@@ -67,6 +67,13 @@ class SwitchSeatTests(SeatBase):
             self.modify.return_value = make_sub("sub_A", "active", "price_team_year")
             self.assertEqual(self.switch("team", "year").status_code, 200, f"{ACCOUNT}: an interval change keeps the plan, so it is not checked")
 
+    def test_a_stale_plan_does_not_skip_the_seat_check(self):
+        self.subscribed("team", "price_scale", count=6)
+        response = self.switch("team")
+        self.assertEqual(response.status_code, 409, f"{ACCOUNT}: the skip reads the subscription item's plan, not the mirror's")
+        self.assertEqual(response.json()["code"], "not_enough_seats")
+        self.modify.assert_not_called()
+
     def test_waiting_invitations_do_not_count(self):
         self.subscribed("team_plus", "price_teamplus", count=5)
         for number in range(3):
