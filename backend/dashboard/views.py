@@ -169,7 +169,7 @@ def billing(request):
     member = current_membership(request.user)
     team = team_summary(member) if settings.TEAM_SEATS else None
     short = {slug: found for slug in billing_page.paid_plans() if slug != status["plan"] and (found := too_few_seats(member.workspace, slug))} if team else {}
-    return render(request, "dashboard/billing.html", billing_page.page_context(status, pending, team, short))
+    return render(request, "dashboard/billing.html", billing_page.page_context(status, pending, team, short, member.workspace.billing_handed_over_at is not None))
 
 
 def _members_refusal(request, where):

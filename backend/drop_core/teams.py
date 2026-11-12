@@ -596,7 +596,10 @@ def _accept_once(member):
         storage_allowance_bytes=None,
         key_allowance=None,
     )
-    Workspace.objects.filter(pk=team.pk).update(owner_id=row.user_id)
+    changes = {"owner_id": row.user_id}
+    if team.stripe_subscription_id:
+        changes["billing_handed_over_at"] = now
+    Workspace.objects.filter(pk=team.pk).update(**changes)
 
 
 def accept_administrator_offer(member):

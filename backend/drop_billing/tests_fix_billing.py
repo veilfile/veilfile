@@ -155,6 +155,7 @@ class FixBillingBase(TestCase):
             "list": (stripe.Subscription, "list"),
             "modify": (stripe.Subscription, "modify"),
             "customer": (stripe.Customer, "create"),
+            "customer_modify": (stripe.Customer, "modify"),
             "session": (stripe.checkout.Session, "create"),
             "portal": (stripe.billing_portal.Session, "create"),
             "void": (stripe.Invoice, "void_invoice"),

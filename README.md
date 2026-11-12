@@ -97,6 +97,7 @@ Stripe sandbox/test key only on a local or staging copy.
 | `STRIPE_PRICE_TEAM_ANNUAL` | billing | — | Price ID for yearly Team billing, $40/yr (tax-inclusive) |
 | `STRIPE_PRICE_TEAMPLUS_ANNUAL` | billing | — | Price ID for yearly Team Plus billing, $60/yr (tax-inclusive). No underscore between TEAM and PLUS, as in `STRIPE_PRICE_TEAMPLUS` |
 | `STRIPE_PRICE_SCALE_ANNUAL` | billing | — | Price ID for yearly Scale billing, $120/yr (tax-inclusive) |
+| `STRIPE_TEAM_PORTAL_CONFIGURATION` | no | — | Portal configuration ID (`bpc_…`) with plan changes off, used only for a team of more than one person while team seats are on; empty means the default portal |
 | `EMAIL_BACKEND` | prod | console | Set `django.core.mail.backends.smtp.EmailBackend`; without SMTP no new user can verify their email, mint keys or approve CLI logins (`veilfile.W001`) |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | prod | — | SMTP settings (the live service uses Gmail SMTP) |
 | `DEFAULT_FROM_EMAIL` | prod | — | From address, e.g. `support@veilfile.com` |

@@ -37,6 +37,8 @@ class Workspace(models.Model):
     plan = models.CharField(max_length=16, choices=PLAN_CHOICES, default=PLAN_FREE)
     stripe_customer_id = models.CharField(max_length=255, blank=True, default="")
     stripe_subscription_id = models.CharField(max_length=255, blank=True, default="")
+    # Set at a transfer of a paid team, until the new administrator opens Manage billing: their Billing page asks them to check the card.
+    billing_handed_over_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     # Set by a staff action. While set, every key, token, upload URL and device login of the team is refused, and
     # every link of the team answers as a missing file does.

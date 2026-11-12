@@ -9,6 +9,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
 
+from drop_billing import account as billing_account
 from drop_core.email_verification import is_email_verified
 from drop_core.models import Membership, current_membership, is_barred
 from drop_core.teams import (
@@ -106,6 +107,7 @@ def team_administrator(request):
                 return redirect("app-team-administrator")
             messages.info(request, TEAM_SUSPENDED if refused.code == "team_suspended" else REQUEST_NOT_WAITING)
             return redirect("app")
+        billing_account.move_billing_email(member.workspace)
         messages.success(request, "You are now the administrator of this team.")
         return redirect("app-members" if has_team_features(member.workspace) else "app")
     return render(request, "dashboard/team_administrator.html", {"admin_email": offer["admin_email"], "verified": is_email_verified(request.user), "team_on_free": is_barred(member)})

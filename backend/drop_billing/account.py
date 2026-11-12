@@ -22,12 +22,13 @@ import logging
 import os
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
 from drop_core.account import Answer
 from drop_core.key_caps import active_key_count
-from drop_core.models import Artifact, Membership, Workspace, current_membership
+from drop_core.models import Artifact, Membership, Workspace, current_membership, has_other_members
 from drop_core.plans import PLANS
 from drop_core.services import workspace_storage_bytes
 from drop_core.teams import too_few_seats
@@ -218,8 +219,9 @@ def _forget_missing_customer(workspace, customer_id):
         locked.stripe_customer_id = ""
         locked.stripe_subscription_id = ""
         locked.plan = "free"
+        locked.billing_handed_over_at = None
         locked.save(
-            update_fields=["plan", "stripe_customer_id", "stripe_subscription_id"]
+            update_fields=["plan", "stripe_customer_id", "stripe_subscription_id", "billing_handed_over_at"]
         )
         Subscription.objects.filter(workspace=locked).update(
             stripe_customer_id="",
@@ -231,6 +233,7 @@ def _forget_missing_customer(workspace, customer_id):
     workspace.plan = locked.plan
     workspace.stripe_customer_id = ""
     workspace.stripe_subscription_id = ""
+    workspace.billing_handed_over_at = None
     return locked
 
 
@@ -855,6 +858,28 @@ def _cancel_pending(stripe_mod, workspace, current):
     return Answer(200, {"plan": workspace.plan, "status": "pending_cancelled"})
 
 
+def move_billing_email(workspace):
+    """Give the team's Stripe customer the address of the team's open administrator, after a transfer. True when Stripe accepted it
+    or the workspace has no customer. False when Stripe fails or is not configured; that is logged with the exception's class only,
+    and nothing is undone. Call it outside a transaction: it makes a Stripe call."""
+    if not workspace.stripe_customer_id:
+        return True
+    stripe_mod, err = _stripe_or_503()
+    if err is not None:
+        logger.warning("billing: the email of workspace %s did not move: billing is not configured", workspace.pk)
+        return False
+    administrator = _open_administrator(workspace.pk)
+    if administrator is None:
+        logger.warning("billing: the email of workspace %s did not move: no open administrator", workspace.pk)
+        return False
+    try:
+        stripe_mod.Customer.modify(workspace.stripe_customer_id, email=administrator.user.email or None)
+    except Exception as exc:
+        logger.warning("billing: the email of workspace %s did not move: %s", workspace.pk, type(exc).__name__)
+        return False
+    return True
+
+
 def portal(user):
     """POST /api/v1/billing/portal: a Stripe customer-portal session for managing the subscription. The 200 body is
     ``{"portal_url": ...}``; 400 ``no_billing_account`` when the workspace has no Stripe customer."""
@@ -869,10 +894,17 @@ def portal(user):
     if not workspace.stripe_customer_id:
         return Answer(400, {"error": "no_billing_account"})
 
+    handed_over_at = workspace.billing_handed_over_at
+    moved = handed_over_at is None or move_billing_email(workspace)
+    options = {}
+    if settings.STRIPE_TEAM_PORTAL_CONFIGURATION and settings.TEAM_SEATS and has_other_members(workspace):
+        options["configuration"] = settings.STRIPE_TEAM_PORTAL_CONFIGURATION
+
     try:
         session = stripe_mod.billing_portal.Session.create(
             customer=workspace.stripe_customer_id,
             return_url=_base_url() + "/app/",
+            **options,
         )
     except stripe_mod.error.StripeError as exc:
         if _is_missing_customer(exc):
@@ -884,4 +916,6 @@ def portal(user):
             exc,
         )
         return _stripe_error(exc)
+    if handed_over_at is not None and moved:
+        Workspace.objects.filter(pk=workspace.pk, billing_handed_over_at=handed_over_at).update(billing_handed_over_at=None)
     return Answer(200, {"portal_url": session["url"]})
