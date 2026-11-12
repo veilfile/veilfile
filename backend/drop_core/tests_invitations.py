@@ -260,6 +260,18 @@ class PageTests(Base):
             second_member(self.team, name)
         self.refused("no_free_seat")
 
+    def test_no_free_seat_names_the_current_administrator_after_a_transfer(self):
+        for name in ("a", "b", "c"):
+            second_member(self.team, name)
+        hank = second_member(self.team, "hank")
+        teams.offer_administrator(self.admin, hank.pk)
+        teams.accept_administrator_offer(Membership.objects.get(pk=hank.pk))
+        self.grace = type(self.grace).objects.get(pk=self.grace.pk)
+        self.sign_in(self.grace)
+        html = self.page(self.raw)
+        self.assertIn("This team has no free seat. Ask hank@example.com to make room, then open this link again.", html)
+        self.assertNotIn("Ask ada@example.com", html)
+
     def test_a_get_changes_nothing(self):
         own = get_or_create_workspace(self.grace)
         before = (Membership.objects.count(), Workspace.objects.count(), Invitation.objects.values_list("accepted_at", "declined_at"))

@@ -1,6 +1,15 @@
-from django.contrib import admin
+from django.contrib import admin, messages
+from django.contrib.admin.utils import unquote
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin
+from django.core.exceptions import PermissionDenied
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
+from django.urls import reverse
 from django.utils import timezone
 
+from .account_deletion import REFUSALS, DeletionRefused, delete_account, deletion_summary, why_not_delete
+from .holds import hold_files, release_files
 from .models import APIKey, Artifact, EmailVerification, Invitation, MemberUsageCounter, Membership, UsageCounter, Workspace
 
 
@@ -9,8 +18,16 @@ class WorkspaceAdmin(admin.ModelAdmin):
     list_display = ("name", "owner", "plan", "suspended_at", "created_at")
     list_filter = ("plan",)
     # Changed only by the actions below. A full form save would write back a stale plan and stale Stripe values.
-    readonly_fields = ("suspended_at", "file_visibility")
+    readonly_fields = ("owner", "suspended_at", "file_visibility")
     actions = ("suspend_workspaces", "lift_suspensions")
+
+    def has_add_permission(self, request):
+        # A workspace comes from signup, and its owner moves only through an accepted administrator offer.
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # An account's workspace goes with the account, through the user admin's delete.
+        return False
 
     @admin.action(description="Suspend the selected workspaces", permissions=["change"])
     def suspend_workspaces(self, request, queryset):
@@ -46,13 +63,49 @@ class APIKeyAdmin(admin.ModelAdmin):
 class ArtifactAdmin(admin.ModelAdmin):
     list_display = ("filename", "workspace", "member", "size_bytes", "expires_at", "created_at")
     list_filter = ("mime_type",)
-    readonly_fields = ("token",)
+    # safety_status changes only through the actions below, so that no hold skips the notice to the administrator.
+    readonly_fields = ("token", "safety_status")
     raw_id_fields = ("member",)
+    actions = ("hold_selected_files", "release_selected_files")
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
         form.base_fields["member"].required = True
         return form
+
+    @admin.action(description="Hold the selected files", permissions=["change"])
+    def hold_selected_files(self, request, queryset):
+        chosen = list(queryset.exclude(safety_status="held"))
+        result = hold_files([artifact.pk for artifact in chosen])
+        for artifact in chosen:
+            if artifact.pk in result.held_ids:
+                self.log_change(request, artifact, "Held.")
+        told = result.told
+        self.message_user(
+            request,
+            f"{result.held} {'file' if result.held == 1 else 'files'} held. "
+            f"{told} {'administrator was' if told == 1 else 'administrators were'} told.",
+        )
+        if result.not_told:
+            self.message_user(
+                request,
+                f"The notice to {result.not_told} {'administrator' if result.not_told == 1 else 'administrators'} "
+                "could not be sent, so tell them another way.",
+                messages.WARNING,
+            )
+
+    @admin.action(description="Release the selected files", permissions=["change"])
+    def release_selected_files(self, request, queryset):
+        chosen = list(queryset.filter(safety_status="held"))
+        released_ids = release_files([artifact.pk for artifact in chosen])
+        released = len(released_ids)
+        for artifact in chosen:
+            if artifact.pk in released_ids:
+                self.log_change(request, artifact, "Released.")
+        self.message_user(
+            request,
+            f"{released} {'file' if released == 1 else 'files'} released. The keys that uploaded them stay stopped.",
+        )
 
 
 @admin.register(UsageCounter)
@@ -80,7 +133,15 @@ class MembershipAdmin(admin.ModelAdmin):
         "key_allowance",
     )
     list_filter = ("role",)
-    raw_id_fields = ("workspace", "user")
+    # The person, team, role, closing and offer each carry rules of their own, so staff change allowances only.
+    readonly_fields = ("workspace", "user", "role", "removed_at", "offered_administrator_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        # A row is closed, never deleted; it goes with its account.
+        return False
 
 
 @admin.register(MemberUsageCounter)
@@ -94,3 +155,55 @@ class InvitationAdmin(admin.ModelAdmin):
     list_display = ("email", "workspace", "created_at", "expires_at", "accepted_at", "declined_at", "revoked_at")
     exclude = ("token_hash",)
     raw_id_fields = ("workspace", "invited_by")
+
+
+User = get_user_model()
+admin.site.unregister(User)
+
+
+@admin.register(User)
+class AccountAdmin(UserAdmin):
+    """The user admin with a delete of its own. It never opens a transaction and never runs Django's collector, because
+    delete_account takes its steps one at a time and removes each batch of stored bytes after its commit."""
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
+
+    def delete_view(self, request, object_id, extra_context=None):
+        user = self.get_object(request, unquote(object_id))
+        if user is None:
+            return self._get_obj_does_not_exist_redirect(request, self.opts, object_id)
+        if not self.has_delete_permission(request, user):
+            raise PermissionDenied
+        change_url = reverse("admin:auth_user_change", args=[user.pk])
+        if user.pk == request.user.pk:
+            messages.error(request, "You cannot delete the account you are signed in with. Ask another member of staff to do it.")
+            return redirect(change_url)
+        code = why_not_delete(user)
+        if code is not None:
+            messages.error(request, REFUSALS[code])
+            return redirect(change_url)
+        if request.method == "POST" and request.POST.get("post") == "yes":
+            pk = user.pk
+            try:
+                delete_account(user)
+            except DeletionRefused as refused:
+                messages.error(request, REFUSALS[refused.code])
+                return redirect(change_url)
+            user.pk = pk
+            self.log_deletions(request, [user])
+            messages.success(request, "The account is deleted, with its files and keys.")
+            return redirect(reverse("admin:auth_user_changelist"))
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"Delete {user.email or user.get_username()}?",
+            "subject": user.email or user.get_username(),
+            "opts": self.opts,
+            "object": user,
+            "summary": deletion_summary(user),
+            "change_url": change_url,
+            **(extra_context or {}),
+        }
+        return TemplateResponse(request, "admin/auth/user/delete_account.html", context)

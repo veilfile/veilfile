@@ -10562,7 +10562,7 @@ def dash_members_walk_findings(page, label):
         if now["name"] == "email":
             break
     else:
-        return [f"{label}: Tab never reached the address field in 40 presses; it should come after the table's Set allowance links (templates/dashboard/members.html)"]
+        return [f"{label}: Tab never reached the address field in 40 presses; it should come after the Cancel the request link and the table's Set allowance, Make administrator and Remove links (templates/dashboard/members.html)"]
     if not now["ring"]:
         problems.append(f"{label}: the address field has focus after Tab but no focus ring (:focus-visible does not match; static/css/components/field.css)")
     page.keyboard.press("Tab")
@@ -10579,13 +10579,19 @@ def dash_members_walk_findings(page, label):
 
 
 def dashboard_members_problems(browser, base_url, session_key, fixtures):
-    """The team pages as the pages part looks at a page: the Members page and the allowance page as the team's administrator, and a member's Overview, each at 375 and 1280 px, in Paper and
+    """The team pages as the pages part looks at a page: the Members page, the allowance page and the pages for removing a member, asking one to become the administrator and canceling that request as the team's
+    administrator, and a member's Overview and the pages for leaving and accepting the role (the fixture's member has a request waiting), each at 375 and 1280 px, in Paper and
     in Ink, with Motion on and off. Each answers 200, has no sideways scroll, no accessibility violation (axe), no console error and no file that failed to load, and on a phone every
-    field's text is 16 px or more. The Members page lists the waiting invitation's address, and the invite form is walked by keyboard (dash_members_walk_findings). Nothing is sent."""
+    field's text is 16 px or more. The Members page lists the waiting invitation's address, and the invite form is walked by keyboard (dash_members_walk_findings). Each page is opened with a GET and nothing is posted or sent."""
     problems, team = [], fixtures["team"]
     admin, member = fixtures["sessions"]["admin"], fixtures["sessions"]["member"]
     for name, key, path, words in (("members", admin, "/app/members/", team["invitee"]), ("allowance", admin, f"/app/members/{team['member_id']}/allowance/", "Set an allowance"),
-                                   ("member-overview", member, "/app/", "Your use")):
+                                   ("remove", admin, f"/app/members/{team['member_id']}/remove/", "Do you want to remove"),
+                                   ("ask-administrator", admin, f"/app/members/{team['member_id']}/administrator/", "Do you want to make"),
+                                   ("cancel-request", admin, "/app/members/administrator/cancel/", "Do you want to cancel the request?"),
+                                   ("member-overview", member, "/app/", "Review the request"),
+                                   ("leave", member, "/app/team/leave/", "Do you want to leave this team?"),
+                                   ("accept-administrator", member, "/app/team/administrator/", "Do you want to become the administrator of this team?")):
         site_page = SitePage(path, f"dashboard-{name}", signed_in=True)
         for width in WIDTHS:
             for appearance in APPEARANCES:

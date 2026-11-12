@@ -1097,6 +1097,11 @@ html[data-motion="off"] {
   color: var(--muted);
 }
 
+/* Several quiet links in one table cell (the Members page's actions): the same row, with no space above it in the cell. */
+td > .form-links {
+  margin: 0;
+}
+
 /* Words and a link that go together, or a separator and the link after it ("No account?" and Sign up; the dot before Forgot password?): one
    flex item of .form-links, so they wrap as a whole and a separator is never left at the end of a line. Its parts do not wrap to a line
    of their own (a row of flex items does not), so a column too narrow for it wraps the words inside the link, never the dot away from it. */

@@ -160,6 +160,11 @@ DASHBOARD_SECTIONS = {
     "app-file-visibility-setting": "app",
     "app-member-allowance": "app",
     "app-invitation-cancel": "app",
+    "app-member-remove": "app",
+    "app-team-leave": "app",
+    "app-member-administrator": "app",
+    "app-administrator-offer-cancel": "app",
+    "app-team-administrator": "app",
 }
 
 

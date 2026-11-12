@@ -7,9 +7,11 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
 from django.shortcuts import redirect, render
+from django.utils import timezone
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
+from drop_core.file_access import live_files_of
 from drop_core.key_caps import key_cap
 from drop_core.models import (
     FILE_VISIBILITY_ALWAYS_ONLY_ME,
@@ -22,15 +24,21 @@ from drop_core.models import (
 from drop_core.plans import GB, PLANS
 from drop_core.teams import (
     InviteRefused,
+    cancel_administrator_offer,
     cancel_invitation,
+    SeatChangeRefused,
     has_team_features,
     invite,
     member_rows,
+    offer_administrator,
     seat_limit,
     seats_in_use,
     set_allowances,
+    remove_member,
     set_file_visibility_setting,
+    team_held_files,
     team_seats_only,
+    waiting_administrator_offer,
     waiting_invitations,
 )
 
@@ -53,6 +61,15 @@ REFUSALS = {
 }
 BAD_SETTING = "Choose one of the options for new files."
 NOT_WAITING = "That invitation is not waiting any more."
+REQUEST_NOT_WAITING = "That request is not waiting any more."
+PERSON_GONE = "That person is not on the team any more."
+TEAM_SUSPENDED = "This team is suspended, so nobody can be removed or leave it until the suspension ends. Contact support@veilfile.com."
+OFFER_REFUSALS = {
+    "team_suspended": TEAM_SUSPENDED,
+    "person_gone": PERSON_GONE,
+    "chosen_suspended": "That person's account is suspended, so they cannot become the administrator.",
+    "chosen_not_verified": "That person has not verified their email address, so they cannot become the administrator yet.",
+}
 VISIBILITY_CHOICES = (
     (FILE_VISIBILITY_MEMBERS_CHOOSE, "Each person decides", "New files start as only them."),
     (FILE_VISIBILITY_ALWAYS_TEAM, "Everyone on the team", ""),
@@ -92,6 +109,8 @@ def _page(request, member, form=None, refusal="", status=200):
     context = {
         "rows": _rows(workspace),
         "waiting": waiting_invitations(workspace),
+        "offer": waiting_administrator_offer(workspace),
+        "held": team_held_files(workspace),
         "seats_used": seats_in_use(workspace),
         "seat_limit": seat_limit(workspace),
         "form": form or InviteForm(),
@@ -201,3 +220,77 @@ def invitation_cancel(request, invitation_id):
         messages.info(request, NOT_WAITING)
         return redirect("app-members")
     return render(request, "dashboard/invitation_cancel.html", {"address": invitation.email})
+
+
+@team_seats_only
+@dashboard_view
+@require_http_methods(["GET", "HEAD", "POST"])
+def member_remove(request, member_id):
+    """Remove a member: a GET asks first, with the choice for their files, and changes nothing; the POST removes them and goes back to Members.
+
+    Only the exact choice "revoke" ends their files. Anything else lets them run out."""
+    member = _administrator(request)
+    person = Membership.objects.filter(pk=member_id, workspace_id=member.workspace_id).select_related("user").first()
+    if person is None:
+        raise Http404("No such person.")
+    if person.removed_at is not None or person.is_administrator:
+        messages.info(request, PERSON_GONE)
+        return redirect("app-members")
+    if request.method == "POST":
+        revoke = request.POST.get("files") == "revoke"
+        try:
+            remove_member(member, person.pk, revoke_files=revoke)
+        except PermissionDenied:
+            raise Http404("No such page.") from None
+        except SeatChangeRefused as refused:
+            messages.info(request, TEAM_SUSPENDED if refused.code == "team_suspended" else PERSON_GONE)
+            return redirect("app-members")
+        email = person.user.email
+        messages.success(request, f"{email} is no longer on the team, and their files are revoked." if revoke else f"{email} is no longer on the team.")
+        return redirect("app-members" if has_team_features(member.workspace) else "app")
+    count, size = live_files_of(person, timezone.now())
+    return render(request, "dashboard/member_remove.html", {"email": person.user.email, "count": count, "size": size})
+
+
+@team_seats_only
+@dashboard_view
+@require_http_methods(["GET", "HEAD", "POST"])
+def member_administrator(request, member_id):
+    """Ask a member to become the administrator: a GET asks first and changes nothing; the POST asks them and goes back to Members."""
+    member = _administrator(request)
+    person = Membership.objects.filter(pk=member_id, workspace_id=member.workspace_id).select_related("user").first()
+    if person is None:
+        raise Http404("No such person.")
+    if person.removed_at is not None or person.is_administrator:
+        messages.info(request, PERSON_GONE)
+        return redirect("app-members")
+    if request.method == "POST":
+        try:
+            offer_administrator(member, person.pk)
+        except PermissionDenied:
+            raise Http404("No such page.") from None
+        except SeatChangeRefused as refused:
+            messages.info(request, OFFER_REFUSALS[refused.code])
+            return redirect("app-members")
+        messages.success(request, f"{person.user.email} can now accept the request on their Overview page.")
+        return redirect("app-members")
+    return render(request, "dashboard/member_administrator.html", {"email": person.user.email})
+
+
+@team_seats_only
+@dashboard_view
+@require_http_methods(["GET", "HEAD", "POST"])
+def administrator_offer_cancel(request):
+    """Cancel the waiting request: a GET asks first and changes nothing; the POST cancels and goes back to Members."""
+    member = _administrator(request)
+    if request.method == "POST":
+        if cancel_administrator_offer(member):
+            messages.success(request, "The request is canceled.")
+        else:
+            messages.info(request, REQUEST_NOT_WAITING)
+        return redirect("app-members")
+    offer = waiting_administrator_offer(member.workspace)
+    if offer is None:
+        messages.info(request, REQUEST_NOT_WAITING)
+        return redirect("app-members")
+    return render(request, "dashboard/administrator_offer_cancel.html", {"email": offer["email"]})

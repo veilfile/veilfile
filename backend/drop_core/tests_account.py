@@ -528,6 +528,24 @@ class RevokeArtifactTests(AccountCase):
         self.assertEqual(self.client.get(f"/a/{artifact.token}").status_code, 404, ACCOUNT)
         self.assertEqual(account.revoke_artifact(self.user, artifact.id), Answer(204, {"storage_deleted": True}), f"{WHERE}: revoking again retries the delete")
 
+    def test_a_hold_that_lands_between_the_read_and_the_expiry_stops_the_revoke(self):
+        artifact = self.upload()
+        real_now = timezone.now
+
+        def hold_then_now():
+            Artifact.objects.filter(pk=artifact.pk).update(safety_status="held")
+            return real_now()
+
+        with mock.patch("drop_core.services.timezone") as patched:
+            patched.now.side_effect = hold_then_now
+            answer = account.revoke_artifact(self.user, artifact.id)
+        self.assertEqual(
+            answer, Answer(403, {"error": "This file is held, so it was not revoked.", "code": "file_held"}), ACCOUNT
+        )
+        row = Artifact.objects.get(pk=artifact.pk)
+        self.assertFalse(row.is_expired(), f"{WHERE}: the held file's link is not expired")
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, artifact.token)), f"{WHERE}: no bytes are deleted")
+
     def test_another_workspaces_file_and_a_missing_one_are_the_same_404_and_change_nothing(self):
         theirs = self.upload(self.strangers_workspace)
         expected = Answer(404, {"error": "No file with that id exists in this workspace. Check the id.", "code": "not_found"})

@@ -7,13 +7,15 @@ fixtures are created through drop_core's models, and JSON-RPC payloads carry the
 import base64
 import json
 import uuid
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import RequestFactory, TestCase
+from django.utils import timezone
 
-from drop_core.models import APIKey, Artifact, Workspace
+from drop_core.models import APIKey, Artifact, Workspace, administrator_of
 from drop_mcp.views import mcp_endpoint
 
 
@@ -425,6 +427,16 @@ class McpEndpointTests(TestCase):
             'No tool named delete_everything exists. The tools are upload_artifact, '
             'create_upload_url, list_artifacts and revoke_artifact.',
         )
+
+    def test_revoking_a_held_file_is_refused_and_the_file_stays(self):
+        artifact = Artifact.objects.create(
+            workspace=self.workspace, member=administrator_of(self.workspace), filename='held.txt', size_bytes=1,
+            expires_at=timezone.now() + timedelta(days=1), safety_status='held',
+        )
+        response, data = self.call_tool('revoke_artifact', {'id': str(artifact.id)})
+        self.assertEqual(data['error']['code'], -32602)
+        self.assertIn('This file is held, so it was not revoked.', data['error']['message'])
+        self.assertTrue(Artifact.objects.filter(pk=artifact.pk).exists())
 
     def test_revoke_unknown_id_returns_false(self):
         result = self.call_result('revoke_artifact', {'id': str(uuid.uuid4())})

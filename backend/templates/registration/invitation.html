@@ -1,5 +1,5 @@
 {% extends "layouts/form.html" %}
-{# An invitation to a team: what it offers, in the states of the Words table. Context: inviter, address, here (this page's path), code (the refusal, or None for a person who can join) and signed_in. A signed-out visitor is told nothing of whether the address has an account. #}
+{# An invitation to a team: what it offers, in the states of the Words table. Context: inviter, administrator (the team's current administrator), address, here (this page's path), code (the refusal, or None for a person who can join) and signed_in. A signed-out visitor is told nothing of whether the address has an account. #}
 {% block title %}Invitation | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block form_page %}
@@ -30,7 +30,7 @@
 {% elif code == "has_paid_plan" %}
 <p>This account has its own paid plan, so it cannot join a team yet.</p>
 {% elif code == "no_free_seat" %}
-<p>This team has no free seat. Ask {{ inviter }} to make room, then open this link again.</p>
+<p>This team has no free seat. Ask {{ administrator }} to make room, then open this link again.</p>
 {% else %}
 <h2>What joining means</h2>
 <ul>

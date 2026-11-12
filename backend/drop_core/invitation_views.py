@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
 
+from .models import Membership
 from .teams import JoinRefused, accept_invitation, decline_invitation, find_invitation, joined_through, team_seats_only, why_not_join
 
 JOINED = "You have joined the team. Connect your agents again with veilfile login."
@@ -33,8 +34,12 @@ def _page(request, invitation, code=None, status=200):
     user = request.user
     if code is None and user.is_authenticated:
         code = why_not_join(user, invitation)
+    administrator = Membership.objects.filter(
+        workspace=invitation.workspace, role=Membership.ADMINISTRATOR, removed_at__isnull=True
+    ).select_related("user").first()
     context = {
         "inviter": inviter.email,
+        "administrator": administrator.user.email if administrator is not None else inviter.email,
         "address": invitation.email,
         "here": request.path,
         "code": code,

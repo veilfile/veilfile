@@ -335,6 +335,18 @@ class ArtifactAnswerTests(JsonAnswerCase):
             with self.subTest(query=query):
                 self.exact(self.session.get(f"/api/v1/artifacts/?{query}"), 400, text)
 
+    def test_revoking_a_held_file_is_refused(self):
+        row = Artifact.objects.create(
+            workspace=self.workspace, member=administrator_of(self.workspace), filename="held.txt", size_bytes=1,
+            expires_at=timezone.now() + timedelta(days=1), safety_status="held",
+        )
+        for client in (self.session, self.keyed):
+            self.exact(
+                client.delete(f"/api/v1/artifacts/{row.id}/"), 403,
+                '{"error":"This file is held, so it was not revoked.","code":"file_held"}',
+            )
+        self.assertTrue(Artifact.objects.filter(pk=row.pk).exists(), FIX)
+
     def test_expired_and_held_files_are_listed(self):
         self.make_files(1)
         Artifact.objects.create(

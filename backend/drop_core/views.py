@@ -552,10 +552,11 @@ class PendingUploadView(APIView):
                 member=pending.member,
             )
         except (ValueError, StorageError) as exc:
-            if str(exc) != "content_not_allowed":
+            if str(exc) not in ("content_not_allowed", "member_removed"):
                 # Rejected or failed, nothing stored: release the claim so
                 # a corrected retry can use the URL before it expires. A
-                # safety block keeps it consumed.
+                # safety block keeps it consumed, and so does a removal:
+                # the row is closed, and the URL must not read as unused.
                 PendingUpload.objects.filter(pk=pending.pk).update(used=False)
             response = _upload_failure_response(exc)
             if isinstance(exc, StorageError):

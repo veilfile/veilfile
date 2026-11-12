@@ -50,13 +50,21 @@ def shell_templates(root=TEMPLATES):
 TEMPLATE_REFERENCE = re.compile(r"{%\s*(?:include|extends)\s+[\"']([^\"']+)[\"']")
 
 
+def _in_django_admin(name):
+    """Whether a name is one of Django's own admin templates, which a staff page under root may extend."""
+    import django.contrib.admin
+    return name.startswith("admin/") and (Path(django.contrib.admin.__file__).parent / "templates" / name).is_file()
+
+
 def missing_template_references(root):
-    """(file, line, name) for every {% include %} or {% extends %} under root that names a template not under root."""
+    """(file, line, name) for every {% include %} or {% extends %} under root that names a template not under root
+    and is not one of Django's own admin templates."""
     missing = []
     for path in sorted(root.rglob("*.html")):
         for number, line in enumerate(path.read_text(encoding="utf-8").split("\n"), start=1):
             missing += [(path.relative_to(root).as_posix(), number, name)
-                        for name in TEMPLATE_REFERENCE.findall(line) if not (root / name).is_file()]
+                        for name in TEMPLATE_REFERENCE.findall(line)
+                        if not (root / name).is_file() and not _in_django_admin(name)]
     return missing
 
 
@@ -329,7 +337,10 @@ READING_TEST_MODULES = ("pages.tests_reading_family", "pages.tests_reading", "pa
                         "pages.tests_dashboard_fixtures",
                         "dashboard.tests_recipe",
                         "drop_core.tests_teams", "dashboard.tests_switch_off",
-                        "drop_core.tests_invitations", "dashboard.tests_members")
+                        "drop_core.tests_invitations", "dashboard.tests_members",
+                        "drop_core.tests_removal", "dashboard.tests_team",
+                        "drop_core.tests_transfer", "drop_core.tests_holds",
+                        "drop_core.tests_account_deletion")
 
 
 def cases_defined_in(module):
