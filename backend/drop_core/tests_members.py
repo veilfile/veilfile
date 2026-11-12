@@ -57,6 +57,13 @@ def make_user(name, email=""):
     return user
 
 
+def on_team(workspace):
+    """Put the workspace on Team, as a fixture does before a member uses a credential: a member of a team on Free is barred."""
+    Workspace.objects.filter(pk=workspace.pk).update(plan=Workspace.PLAN_TEAM)
+    workspace.refresh_from_db()
+    return workspace
+
+
 def second_member(workspace, name, email=""):
     user = make_user(name, email)
     return Membership.objects.create(workspace=workspace, user=user, role=Membership.MEMBER)
@@ -312,7 +319,7 @@ class CredentialPersonTests(TestCase):
         self.assertIsNone(APIKey.verify(raw))
 
     def test_a_members_key_follows_that_member_not_the_owner(self):
-        workspace = get_or_create_workspace(make_user("ada"))
+        workspace = on_team(get_or_create_workspace(make_user("ada")))
         grace = second_member(workspace, "grace")
         _, raw = APIKey.create_key(workspace, "agent", member=grace)
         User.objects.filter(pk=workspace.owner.pk).update(is_active=False)
@@ -377,7 +384,7 @@ class UploaderTests(TestCase):
         _use_local_dir(self, self.tmpdir)
         self.addCleanup(shutil.rmtree, self.tmpdir, ignore_errors=True)
         self.ada = make_user("ada")
-        self.workspace = get_or_create_workspace(self.ada)
+        self.workspace = on_team(get_or_create_workspace(self.ada))
         self.grace = second_member(self.workspace, "grace")
 
     def _post_file(self, **headers):
@@ -486,7 +493,7 @@ ALLOWED = {}
 
 class PersonReadsTests(TestCase):
     def test_usage_reports_the_keys_person(self):
-        workspace = get_or_create_workspace(make_user("ada", email="ada@example.com"))
+        workspace = on_team(get_or_create_workspace(make_user("ada", email="ada@example.com")))
         grace = second_member(workspace, "grace", email="grace@example.com")
         _, raw = APIKey.create_key(workspace, "agent", member=grace)
         body = self.client.get("/api/v1/usage", HTTP_AUTHORIZATION=f"Bearer {raw}").json()
@@ -494,7 +501,7 @@ class PersonReadsTests(TestCase):
 
     def test_an_oauth_logout_revokes_only_the_callers_grants(self):
         ada = make_user("ada")
-        workspace = get_or_create_workspace(ada)
+        workspace = on_team(get_or_create_workspace(ada))
         grace = second_member(workspace, "grace")
         app = _make_app()
         _issue_token(ada, app)

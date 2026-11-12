@@ -161,6 +161,7 @@ def verification_required(user):
 KEY_NOT_ALLOWED_WORDS = MappingProxyType({
     "workspace_suspended": "This account is suspended, so no key was made. Contact support@veilfile.com.",
     "member_removed": "You are no longer on this team, so no key was made.",
+    "team_on_free": "Your team is on the Free plan, so no key was made. Ask your administrator to choose a paid plan under Billing.",
 })
 
 

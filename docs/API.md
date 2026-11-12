@@ -223,7 +223,8 @@ Response `201 Created`: `api_key` is the full `vlf_...` secret, shown once:
 
 Plan key limits apply (Free: 1 key, Team: 5, Team Plus: 10, Scale: unlimited). Every active
 key counts, including keys issued by `veilfile login`. Exceeding the limit
-returns `402` `key_limit_reached`. An unverified email returns `403`
+returns `402` `key_limit_reached`. A member of a team that is on the Free plan
+returns `403` `team_on_free`, and an unverified email returns `403`
 `email_verification_required`. `name` is optional; a non-string, a name over 255
 characters, or a name containing control characters returns `400`
 `{"code": "invalid_request"}`.
@@ -654,7 +655,7 @@ the URL is already dead and the file is deleted by the next expiry sweep.
 `file_too_large`, `file_type_not_allowed`, `content_not_allowed`,
 `secret_detected`, `monthly_cap_reached`, `storage_cap_reached`,
 `member_monthly_allowance_reached`, `member_storage_allowance_reached`,
-`workspace_suspended`, `member_removed`, `storage_unavailable` and `rate_limited` (with `retry_after` seconds).
+`workspace_suspended`, `member_removed`, `team_on_free`, `storage_unavailable` and `rate_limited` (with `retry_after` seconds).
 Successful results have no `isError` key. `upload_artifact` and
 `create_upload_url` share the 100 uploads/hour/credential limit with REST.
 
@@ -722,6 +723,7 @@ extension, and the allowed list.
 | 403 | `workspace_suspended` | This account is suspended, so nothing was stored. Contact support@veilfile.com. |
 | 403 | `file_held` | This file is held, so it was not revoked. |
 | 403 | `member_removed` | You are no longer on this team, so nothing was stored. |
+| 403 | `team_on_free` | Your team is on the Free plan, so nothing was stored or no key was made. Ask your administrator to choose a paid plan under Billing. |
 | 403 | `forbidden` | The caller is signed in but not permitted, or a session call failed the CSRF check. |
 | 403 | `session_required` | The endpoint needs a dashboard session, not an API key or an OAuth token. |
 | 403 | `email_verification_required` | The account email must be verified first. |

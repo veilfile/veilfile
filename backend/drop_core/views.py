@@ -62,6 +62,7 @@ from .models import (
     PendingUpload,
     current_membership,
     get_or_create_workspace,
+    is_barred,
 )
 from .plans import ANNUAL_PRICE_USD, PLANS, plan_name
 from .services import (
@@ -94,6 +95,7 @@ ERROR_STATUS = {
     "member_storage_allowance_reached": status.HTTP_400_BAD_REQUEST,
     "workspace_suspended": status.HTTP_403_FORBIDDEN,
     "member_removed": status.HTTP_403_FORBIDDEN,
+    "team_on_free": status.HTTP_403_FORBIDDEN,
 }
 
 ERROR_MESSAGES = {
@@ -132,6 +134,9 @@ ERROR_MESSAGES = {
         "This account is suspended, so nothing was stored. Contact support@veilfile.com."
     ),
     "member_removed": "You are no longer on this team, so nothing was stored.",
+    "team_on_free": (
+        "Your team is on the Free plan, so nothing was stored. Ask your administrator to choose a paid plan under Billing."
+    ),
     "invalid_request": (
         "The upload has an invalid parameter. Check on_secret and ttl_days."
     ),
@@ -506,6 +511,9 @@ class PendingUploadView(APIView):
             # A revoked credential's URLs die with it.
             PendingUpload.objects.filter(pk=pending.pk).update(used=True)
             return not_found
+        if is_barred(pending.member, pending.workspace):
+            # Left unused, so the URL works again if the team pays before it expires.
+            return _upload_failure_response(ValueError("team_on_free"))
         try:
             # ?on_secret may tighten the minted value, never loosen it.
             on_secret = stricter_on_secret(

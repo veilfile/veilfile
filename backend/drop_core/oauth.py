@@ -53,7 +53,7 @@ from oauth2_provider.views.dynamic_client_registration import (
 )
 
 from .email_verification import client_ip, is_email_verified, throttle_ip
-from .models import APIKey, current_membership
+from .models import APIKey, current_membership, is_barred
 
 # Single OAuth scope: the agent surface of a vlf_ API key (MCP tools, the
 # artifact API, usage). Key management stays dashboard/API-key only.
@@ -209,6 +209,8 @@ def resolve_oauth_credential(raw_token):
         return None
     member = current_membership(token.user, reopen=False)
     if member is None or member.workspace.suspended_at is not None:
+        return None
+    if is_barred(member):
         return None
     return OAuthCredentialAdapter(token, member.workspace, member)
 

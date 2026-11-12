@@ -195,6 +195,18 @@ def current_membership(user, *, reopen=True):
     return row
 
 
+def is_barred(member, workspace=None):
+    """Whether a team's plan being Free bars this person. It is derived and stored nowhere: an open member row on a workspace
+    whose plan is Free. An administrator row is never barred, and costs no read of the workspace."""
+    if member is None or member.role != Membership.MEMBER or member.removed_at is not None:
+        return False
+    return (workspace or member.workspace).plan == Workspace.PLAN_FREE
+
+
+# The same test as is_barred, for APIKey querysets.
+BARRED = models.Q(member__role=Membership.MEMBER, workspace__plan=Workspace.PLAN_FREE)
+
+
 def has_other_members(workspace):
     """Whether more than one person is currently in the workspace."""
     return Membership.objects.filter(workspace=workspace, removed_at__isnull=True).count() > 1
@@ -277,12 +289,12 @@ class APIKey(models.Model):
     def verify(cls, raw):
         """Return the active APIKey for ``raw``, or None. Fast-path rejects
         anything that isn't a ``vlf_`` key without touching the database.
-        A key verifies while its person is active and still a member, and its team is not suspended."""
+        A key verifies while its person is active and still a member, its team is not suspended, and the person is not barred."""
         if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
             return None
         digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         try:
-            return cls.objects.select_related("member__user").get(
+            return cls.objects.select_related("member__user").exclude(BARRED).get(
                 key_hash=digest,
                 is_active=True,
                 member__user__is_active=True,
