@@ -124,6 +124,7 @@ def mark_held(workspace_id, artifact_ids):
         Artifact.objects.select_for_update()
         .filter(workspace_id=workspace_id, pk__in=list(artifact_ids), expires_at__gt=timezone.now())
         .exclude(safety_status="held")
+        .order_by("pk")
         .values_list("pk", flat=True)
     )
     Artifact.objects.filter(pk__in=changed).update(safety_status="held")

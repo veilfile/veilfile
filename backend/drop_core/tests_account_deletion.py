@@ -355,6 +355,12 @@ class DeleteAccountTests(Base):
         members = last_select("drop_core_memberusagecounter")
         workspaces = last_select("drop_core_workspace")
         self.assertTrue(counters < members < workspaces, (counters, members, workspaces))
+        counter_selects = [
+            q for q in before if q.startswith("SELECT") and 'FROM "drop_core_memberusagecounter"' in q
+        ]
+        self.assertTrue(counter_selects)
+        # A join would make Postgres lock the membership rows too, ahead of the workspace rows.
+        self.assertFalse(any("JOIN" in q for q in counter_selects), counter_selects)
 
 
 @override_settings(TEAM_SEATS=True)

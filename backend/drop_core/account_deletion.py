@@ -115,11 +115,11 @@ def delete_account(user):
     with transaction.atomic():
         owned = _owned_ids(user)
         list(UsageCounter.objects.select_for_update().filter(workspace_id__in=owned).order_by("pk"))
-        list(
-            MemberUsageCounter.objects.select_for_update()
-            .filter(Q(member__workspace_id__in=owned) | Q(member__user=user))
-            .order_by("pk")
+        # No join here: FOR UPDATE over a join would also lock the membership rows, ahead of the workspace rows.
+        member_ids = list(
+            Membership.objects.filter(Q(workspace_id__in=owned) | Q(user=user)).values_list("pk", flat=True)
         )
+        list(MemberUsageCounter.objects.select_for_update().filter(member_id__in=member_ids).order_by("pk"))
         list(Workspace.objects.select_for_update().filter(pk__in=_owned_ids(user)).order_by("pk"))
         if _changed_since_the_check(user):
             raise DeletionRefused("changed")
