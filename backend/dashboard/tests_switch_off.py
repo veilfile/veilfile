@@ -102,3 +102,28 @@ class SwitchOffTests(TestCase):
         _, team = fixture_user("grace", "team")
         client, key = fixture_account("alan", "free", member_of=team)
         self.check("member", client, key)
+
+
+class SwitchOffQueryTests(TestCase):
+    """The counts are what main ran (97f4bd6) for one person on Team Plus with a subscription, a warm session and the switch off."""
+
+    longMessage = False
+
+    def test_billing_and_the_switch_confirmation_run_the_queries_main_ran(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from drop_billing.models import Subscription
+
+        user, workspace = fixture_user("solo", "team_plus")
+        Subscription.objects.create(workspace=workspace, stripe_customer_id="cus_A", stripe_subscription_id="sub_A", status="active")
+        type(workspace).objects.filter(pk=workspace.pk).update(stripe_customer_id="cus_A", stripe_subscription_id="sub_A")
+        client = Client()
+        client.force_login(user)
+        client.get("/app/billing/")
+        with CaptureQueriesContext(connection) as billing:
+            self.assertEqual(client.get("/app/billing/").status_code, 200)
+        with CaptureQueriesContext(connection) as confirm:
+            self.assertEqual(client.get("/app/billing/switch/team/").status_code, 200)
+        self.assertEqual(len(billing), 7, "backend/dashboard/views.py: Billing makes no query that main did not")
+        self.assertEqual(len(confirm), 7, "backend/dashboard/views.py: the confirmation makes no query that main did not")
