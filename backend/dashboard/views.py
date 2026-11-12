@@ -168,7 +168,7 @@ def billing(request):
     pending = billing_page.pending_for(request.session, status["plan"], current_interval=billing_page.interval_of(status["billing_interval"]))
     member = current_membership(request.user)
     team = team_summary(member) if settings.TEAM_SEATS else None
-    short = {slug: found for slug in billing_page.paid_plans() if (found := too_few_seats(member.workspace, slug))} if team else {}
+    short = {slug: found for slug in billing_page.paid_plans() if slug != status["plan"] and (found := too_few_seats(member.workspace, slug))} if team else {}
     return render(request, "dashboard/billing.html", billing_page.page_context(status, pending, team, short))
 
 
@@ -248,7 +248,7 @@ def _confirm_switch(request, plan, interval):
         messages.info(request, billing_page.switch_result(plan, "unchanged", interval))
         return redirect("app-billing")
     context = billing_page.switch_context(status["plan"], plan, current_interval, interval)
-    found = too_few_seats(current_membership(request.user).workspace, plan)
+    found = None if plan == status["plan"] else too_few_seats(current_membership(request.user).workspace, plan)
     context["seats"] = billing_page.with_seat_sentences([context["target"]], {plan: found})[0]["seats"]
     return render(request, "dashboard/billing_switch.html", context)
 

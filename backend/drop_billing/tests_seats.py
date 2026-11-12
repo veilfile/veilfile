@@ -181,6 +181,15 @@ class SeatPageTests(SeatBase):
         self.assertIn("Team has 5 seats, and your team has 6 people.", confirm)
         self.assertNotIn("Switch to Team</button>", confirm, f"{PAGE}: the confirmation has no button either")
 
+    def test_a_team_over_its_own_plan_can_still_go_from_monthly_to_yearly(self):
+        self.subscribed("team", "price_team", count=6)
+        page = self.client.get("/app/billing/").content.decode()
+        self.assertIn("Switch to Team ($", page, f"{PAGE}: the plan the team holds keeps its yearly button")
+        self.assertNotIn("Team has 5 seats, and your team has 6 people.", page, f"{PAGE}: no seat sentence for the held plan")
+        confirm = self.client.get("/app/billing/switch/team/?interval=year").content.decode()
+        self.assertIn("Switch to Team yearly</button>", confirm, "backend/templates/dashboard/billing_switch.html: the form stays")
+        self.assertNotIn("Team has 5 seats, and your team has 6 people.", confirm)
+
     def test_the_refusal_sentence_has_no_reference(self):
         self.subscribed("team_plus", "price_teamplus", count=6)
         with self.assertLogs("drop_billing", level="WARNING") as logs:
