@@ -390,6 +390,18 @@ class ErrorCodeDocsTests(SimpleTestCase):
             self.assertIn(f"`{code}`", text, f"docs/API.md never documents {code}")
 
 
+    def test_team_on_free_row_has_both_sentences_in_both_docs(self):
+        key = "Your team is on the Free plan, so no key was made. Ask your administrator to choose a paid plan under Billing."
+        upload = "Your team is on the Free plan, so nothing was stored. Ask your administrator to choose a paid plan under Billing."
+        for rel in ("docs/API.md", "backend/docs/pages/api.md"):
+            row = next(line for line in _read(REPO / rel).splitlines() if re.match(r"\|\s*403\s*\|\s*`team_on_free`", line))
+            self.assertIn(key, row, f"{rel}: the team_on_free row quotes the key sentence")
+            self.assertIn(upload, row, f"{rel}: the team_on_free row quotes the upload sentence")
+
+    def test_the_api_error_table_stays_in_status_order(self):
+        statuses = [int(m.group(1)) for line in _read(REPO / "docs/API.md").splitlines() if (m := re.match(r"\|\s*(\d{3})\s*\|\s*`[a-z_]+`\s*\|", line))]
+        self.assertEqual(statuses, sorted(statuses), "docs/API.md: the error table is in status order")
+
 class DocumentedPathsResolveTests(SimpleTestCase):
     """bill-13: every endpoint a doc names must exist."""
 

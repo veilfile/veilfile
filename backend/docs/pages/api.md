@@ -87,7 +87,7 @@ Errors are JSON: `{"error": "<message>", "code": "<code>"}`. Branch on `code`.
 | 401 | `unauthorized` | The API key is missing or not valid. |
 | 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
 | 403 | `file_held` | This file is held, so it was not revoked. |
-| 403 | `team_on_free` | Your team is on the Free plan, so nothing was stored. Ask your administrator to choose a paid plan under Billing. |
+| 403 | `team_on_free` | A key request answers with "Your team is on the Free plan, so no key was made. Ask your administrator to choose a paid plan under Billing." An upload answers with "Your team is on the Free plan, so nothing was stored. Ask your administrator to choose a paid plan under Billing." |
 | 404 | `not_found` | The id or token is unknown, or the file is revoked or expired. |
 | 409 | `not_enough_seats` | This team has more people than the plan has seats. Remove people first. (`POST /api/v1/billing/checkout` and `POST /api/v1/billing/switch`, with `plan`, `people` and `seats`.) |
 | 413 | `file_too_large` | The file is larger than 25 MiB. |
