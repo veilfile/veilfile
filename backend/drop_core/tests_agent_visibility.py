@@ -1,5 +1,7 @@
 """Agents choose a file's visibility when they upload (team seats PR E2)."""
 
+import base64
+import json
 import os
 import tempfile
 from unittest import mock
@@ -8,13 +10,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
-from drop_core.models import APIKey, Artifact, UsageCounter, Workspace, administrator_of, get_or_create_workspace
+from drop_core.models import APIKey, Artifact, PendingUpload, UsageCounter, Workspace, administrator_of, get_or_create_workspace
 from drop_core.services import RejectedUpload, mint_upload_url, upload_artifact
 from drop_core.tests_allowances import second_member
 from drop_core.tests_members import make_user
 
 SERVICES = "backend/drop_core/services.py"
 VIEWS = "backend/drop_core/views.py"
+MCP = "backend/drop_mcp/views.py"
 REST_BAD = 'The visibility value is not valid. Send "only_me" or "team".'
 
 
@@ -124,3 +127,67 @@ class RestVisibilityTests(VisibilityBase):
             response = self.post(self.admin_auth, visibility="public")
         self.assertEqual(response.status_code, 201, f"{VIEWS}: ignored with the switch off")
         self.assertEqual(sorted(response.json()), MAIN_KEYS, f"{VIEWS}: main's keys, not {sorted(response.json())}")
+
+
+MCP_DESCRIPTION = (
+    'Who on your team can see the file on their Files page: "only_me" or "team". It is honored only when your '
+    "administrator lets each person decide; otherwise the team's setting applies, and the answer says which visibility "
+    "the file got. The link works for anyone it is sent to either way."
+)
+MCP_BAD = 'Send visibility as "only_me" or "team".'
+HI = base64.b64encode(b"hi").decode()
+
+
+class McpVisibilityTests(VisibilityBase):
+    def setUp(self):
+        super().setUp()
+        _, self.grace_raw = APIKey.create_key(self.workspace, "grace-key", member=self.grace)
+
+    def mcp(self, method, params=None):
+        payload = {"jsonrpc": "2.0", "id": 1, "method": method, **({"params": params} if params is not None else {})}
+        response = self.client.post(
+            "/mcp", data=json.dumps(payload), content_type="application/json", HTTP_AUTHORIZATION=f"Bearer {self.grace_raw}"
+        )
+        return response.json()
+
+    def call(self, name, **arguments):
+        return self.mcp("tools/call", {"name": name, "arguments": arguments})
+
+    def result(self, reply):
+        self.assertNotIn("isError", reply.get("result", {}), f"{MCP}: the tool succeeds, not {reply}")
+        return json.loads(reply["result"]["content"][0]["text"])
+
+    def schemas(self):
+        return {tool["name"]: tool["inputSchema"] for tool in self.mcp("tools/list")["result"]["tools"]}
+
+    def test_both_tools_list_the_visibility_property(self):
+        schemas = self.schemas()
+        for name in ("upload_artifact", "create_upload_url"):
+            with self.subTest(tool=name):
+                expected = {"type": "string", "description": MCP_DESCRIPTION}
+                self.assertEqual(schemas[name]["properties"].get("visibility"), expected, f"{MCP}: {name}'s schema")
+                self.assertNotIn("visibility", schemas[name]["required"], f"{MCP}: optional on {name}")
+
+    def test_upload_artifact_honors_the_choice_and_says_so(self):
+        result = self.result(self.call("upload_artifact", filename="a.txt", content_base64=HI, visibility="team"))
+        self.assertEqual(result.get("visibility"), "team", f"{MCP}: the result says it")
+        self.assertEqual(Artifact.objects.get(pk=result["id"]).visibility, "team", f"{MCP}: the file has it")
+
+    def test_create_upload_url_records_the_choice(self):
+        self.result(self.call("create_upload_url", filename="a.txt", visibility="team"))
+        self.assertEqual(PendingUpload.objects.get().visibility, "team", f"{MCP}: the upload URL records it")
+
+    def test_a_bad_value_is_a_32602_on_both_tools(self):
+        for name, arguments in (("upload_artifact", {"filename": "a.txt", "content_base64": HI}), ("create_upload_url", {"filename": "a.txt"})):
+            with self.subTest(tool=name):
+                error = self.call(name, visibility="public", **arguments).get("error", {})
+                self.assertEqual((error.get("code"), error.get("message")), (-32602, MCP_BAD), f"{MCP}: {name} refuses it")
+        self.assertEqual((Artifact.objects.count(), PendingUpload.objects.count()), (0, 0), f"{MCP}: nothing is stored")
+
+    def test_with_the_switch_off_the_tools_are_mains(self):
+        with override_settings(TEAM_SEATS=False):
+            schemas = self.schemas()
+            reply = self.call("upload_artifact", filename="a.txt", content_base64=HI, visibility="public")
+        for name in ("upload_artifact", "create_upload_url"):
+            self.assertNotIn("visibility", schemas[name]["properties"], f"{MCP}: {name}'s schema is main's")
+        self.assertNotIn("visibility", self.result(reply), f"{MCP}: the result is main's")
