@@ -126,7 +126,12 @@ Voice: complete sentences, semicolons only between independent clauses, no em da
 
 ## Changed during the build
 
+- `PendingUpload.visibility` also has `db_default=""`, so an upload URL that an old instance mints during the deploy, without the column in its insert, still saves.
+- `tools/list` adds the `visibility` property to the two upload tools only while the switch is on (`tools_for_list`), and `TOOLS` itself is unchanged, so the switch-off schemas stay `main`'s.
+- The REST upload trims and lowercases the value, as it does `on_secret`, and both MCP tools take it exactly, as they take `on_secret`.
+
 ## Carried to E3 and F
 
 - **E3:** both CLIs gain a visibility option, after the server, and the owner publishes their releases.
 - **F:** the items carried by the C2, C3, D, D2 and E1 plans, including the one rehearsal on Postgres for D2 and F.
+- **Later, from E2's review:** a test of the setting read at the PUT that leaves the caller's workspace stale, and a REST PUT case; the administrator's own choice under `members_choose`; a test that `docs/API.md` quotes `VISIBILITY_PROPERTY` verbatim and that `tools/list` leaves `TOOLS` unchanged; switch-off tests for `create_upload_url` and for a PUT after the switch goes off; the `visibility` key in `docs/API.md`'s result examples; and whether MCP should trim and lowercase the value as REST does.
