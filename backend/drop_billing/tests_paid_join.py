@@ -12,7 +12,7 @@ import re
 from unittest import mock
 
 import stripe
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import IntegrityError, connection, transaction
 from django.test import Client, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -1014,3 +1014,38 @@ class WebhookSwitchOffTests(FixBillingBase):
         self.assertEqual(on, off, f"{WEBHOOK}: a payer who administers their workspace sees no change")
         self.assertEqual(off[1], "team")
         self.cancel.assert_not_called()
+
+
+class ListUnadministeredTests(FixBillingBase):
+    """`sync_stripe_billing --list-unadministered` reads the database alone, with the switch off."""
+
+    longMessage = False
+    COMMAND = "backend/drop_billing/management/commands/sync_stripe_billing.py"
+    REFUSED = "--list-unadministered reads the database alone; run it without other options."
+
+    def test_the_list_reads_the_database_alone(self):
+        self.set_billing("team", customer="cus_A", sub_id="sub_A")
+        tests_fix_billing.UnadministeredPaymentTests.close_administrator_row(self)
+        paid_team, _ = team_of("ada")
+        Workspace.objects.filter(pk=paid_team.pk).update(plan="team", stripe_subscription_id="sub_T")
+        free_team, _ = team_of("lin")
+        Workspace.objects.filter(pk=free_team.pk).update(plan="free", stripe_subscription_id="")
+        row = Membership.objects.get(workspace=free_team, role=Membership.ADMINISTRATOR, removed_at=None)
+        teams._close_administrator_row(row, timezone.now())
+        listed = self.patch_stripe("list", return_value=sub_list())
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"STRIPE_SECRET_KEY": ""}):
+            call_command("sync_stripe_billing", "--list-unadministered", stdout=out)
+        expected = [
+            f"workspace {self.ws.pk}: plan team, subscription sub_A, customer cus_A, no current administrator",
+            "1 workspace(s) with a paid plan and no current administrator",
+        ]
+        self.assertEqual(out.getvalue().splitlines(), expected, f"{self.COMMAND}: only the paid workspace nobody administers, not {out.getvalue().splitlines()}")
+        listed.assert_not_called()
+
+    def test_the_list_refuses_other_options(self):
+        for option in ("--apply", "--reset-unbilled", "--list-orphans", "--allow-test-key"):
+            with self.subTest(option=option):
+                with self.assertRaises(CommandError) as raised:
+                    call_command("sync_stripe_billing", "--list-unadministered", option, stdout=io.StringIO())
+                self.assertEqual(str(raised.exception), self.REFUSED, f"{self.COMMAND}: {option} is refused")
