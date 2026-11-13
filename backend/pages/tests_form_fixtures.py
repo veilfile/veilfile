@@ -99,9 +99,15 @@ class MakeFormFixturesTests(TestCase):
         self.assertEqual(mail.outbox, [])
 
     @override_settings(TEAM_SEATS=True)
+    def test_a_member_of_a_team_on_free_is_refused_the_consent_page(self):
+        client = signed_in(self.f["sessions"]["barred_member"])
+        self.assertContains(client.get(self.f["oauth"]["authorize"]), "Your team is on the Free plan", status_code=403,
+                            msg_prefix=f"{PREFIX}: the barred member at the consent page")
+
+    @override_settings(TEAM_SEATS=True)
     def test_the_invitation_links_open_the_pages_the_states_mean(self):
         f = self.f
-        self.assertEqual(sorted(f["sessions"]), ["invitee", "invitee_paid", "invitee_unverified", "long", "pending", "verified"], f"{PREFIX}: the sessions run_forms reads")
+        self.assertEqual(sorted(f["sessions"]), ["barred_member", "invitee", "invitee_paid", "invitee_unverified", "long", "pending", "verified"], f"{PREFIX}: the sessions run_forms reads")
         for key, token, status, words in (
                 (None, f["invite"]["token"], 200, "Sign in with that address"), ("invitee", f["invite"]["token"], 200, "Join the team"),
                 ("verified", f["invite"]["token"], 200, "so sign out and sign in with that address"),

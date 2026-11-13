@@ -11,12 +11,16 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from django.conf import settings
-from django.test import Client, SimpleTestCase
+from django.test import Client, SimpleTestCase, override_settings
+from django.utils import timezone
 from django.urls import reverse
 from oauth2_provider.models import get_access_token_model, get_grant_model
 
 from drop_core import tests_oauth
 from drop_core.models import EmailVerification
+from drop_core.tests_bar import drop
+from drop_core.tests_members import second_member
+from drop_core.tests_teams import team_of
 from pages.tests_chapters import BANNED
 from pages.tests_site_rules import shell_templates
 
@@ -427,3 +431,58 @@ class ConsentTemplateTests(SimpleTestCase):
         for name in sorted(used):
             with self.subTest(css_class=name):
                 self.assertIn(f".{name}", css, f"backend/static/css/pages/consent.css: add a rule for .{name}, which the consent page uses")
+
+
+@override_settings(TEAM_SEATS=True)
+class BarredConsentTests(ConsentTestCase):
+    """Grace, a verified member of Ada's team, opens the consent page."""
+
+    TITLE = "Your team is on the Free plan"
+    MESSAGE = (
+        "An app you connect now could not upload or read anything, because your team is on the Free plan. Ask your "
+        "administrator to choose a paid plan under Billing, then connect the app again."
+    )
+    FIX = "backend/drop_core/oauth.py: VeilfileAuthorizationView.dispatch refuses a barred member"
+
+    def setUp(self):
+        super().setUp()
+        self.team, _ = team_of("ada")
+        self.grace = second_member(self.team, "grace")
+        EmailVerification.objects.update_or_create(
+            user=self.grace.user,
+            defaults={"email": self.grace.user.email, "is_verified": True, "verified_at": timezone.now()},
+        )
+
+    def as_grace(self):
+        client = Client()
+        client.force_login(self.grace.user)
+        return client
+
+    def test_a_barred_member_is_told_why_instead_of_offered_authorize(self):
+        drop(self.team)
+        response = self.as_grace().get(tests_oauth._AUTHORIZE_URL, self.params)
+        self.assertEqual(response.status_code, 403, f"{self.FIX}, with 403, not {response.status_code}")
+        found = read(response)
+        self.assertEqual([h1["text"].strip() for h1 in found.h1s], [self.TITLE], f"{self.FIX}: the title")
+        self.assertIn(self.MESSAGE, response.content.decode(), f"{self.FIX}: the message")
+        self.assertEqual(found.forms, [], f"{self.FIX}: nothing on the page can authorize")
+        self.no_grants("a barred member's visit creates no grant")
+
+    def test_a_barred_members_post_of_allow_makes_no_grant(self):
+        drop(self.team)
+        data = dict(self.params, allow="Authorize")
+        response = self.as_grace().post(tests_oauth._AUTHORIZE_URL + "?" + "&".join(f"{k}={v}" for k, v in self.params.items()), data)
+        self.assertEqual(response.status_code, 403, f"{self.FIX} for a POST too, not {response.status_code}")
+        self.no_grants("a barred member's Authorize creates no grant")
+
+    def test_a_member_of_a_paid_team_sees_todays_page(self):
+        response = self.as_grace().get(tests_oauth._AUTHORIZE_URL, self.params)
+        self.assertEqual(response.status_code, 200, "a member of a paid team is offered Authorize")
+        form_with(read(response), "Authorize")
+
+    def test_with_the_switch_off_the_page_is_mains(self):
+        drop(self.team)
+        with override_settings(TEAM_SEATS=False):
+            response = self.as_grace().get(tests_oauth._AUTHORIZE_URL, self.params)
+        self.assertEqual(response.status_code, 200, "with the switch off, the page is main's")
+        form_with(read(response), "Authorize")

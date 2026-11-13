@@ -9249,6 +9249,7 @@ FORM_STATES = (
     FormState("verify-email", "/accounts/verify-email/", who="staff", expect="blank", enter="main input[name=password]"),   # the staff login: no record
     FormState("device-approve-unverified", "/device?user_code={device[consent]}", who="staff", how="approve", status=403),
     FormState("oauth-unverified", "{oauth[authorize]}", who="staff", status=403),
+    FormState("oauth-barred", "{oauth[authorize]}", who="barred_member", status=403),   # a member of a team on Free: no Authorize
     FormState("forbidden", "/admin/auth/user/", who="staff", status=403),
     FormState("verify-pending", "/accounts/verify-email/?sent=1", who="pending", expect="blank"),   # asked for a link a moment ago; the longest address
     FormState("verify-errors", "/accounts/verify-email/", who="pending", how="verify_errors", expect="field"),

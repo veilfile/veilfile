@@ -145,10 +145,16 @@ invitee = make_user("site-invitee", "site-invitee@example.com", verified=True)  
 unverified_invitee = make_user("site-invitee-unverified", "site-invitee-unverified@example.com", verified=False, last_sent_at=timezone.now() + timedelta(hours=1))   # a resend is too soon: no mail
 paid_invitee = make_user("site-invitee-paid", "site-invitee-paid@example.com", verified=True)   # a paid plan with a Stripe customer: the invitation page offers to end it. A GET makes no Stripe call
 Workspace.objects.filter(pk=get_or_create_workspace(paid_invitee).pk).update(plan="team", stripe_customer_id="cus_site_checks")
+barred_admin = make_user("site-barred-admin", "site-barred-admin@example.com", verified=True)   # a team on Free with one member: the consent page refuses that member
+barred_team = get_or_create_workspace(barred_admin)
+Workspace.objects.filter(pk=barred_team.pk).update(plan="free")
+barred_member = make_user("site-barred-member", "site-barred-member@example.com", verified=True)
+Membership.objects.get_or_create(workspace=barred_team, user=barred_member, role=Membership.MEMBER, removed_at=None)
 
 fixtures = {
     "sessions": {"verified": session_for(verified), "long": session_for(long_user), "pending": session_for(pending),
-                 "invitee": session_for(invitee), "invitee_paid": session_for(paid_invitee), "invitee_unverified": session_for(unverified_invitee)},
+                 "invitee": session_for(invitee), "invitee_paid": session_for(paid_invitee), "invitee_unverified": session_for(unverified_invitee),
+                 "barred_member": session_for(barred_member)},
     "invite": {"token": invite(team, team_admin, invitee.email), "unverified_token": invite(team, team_admin, unverified_invitee.email),
                "paid_token": invite(team, team_admin, paid_invitee.email), "missing": "site-checks-not-a-token"},
     "accounts": {"verified": {"username": verified.username, "password": PASSWORD}},

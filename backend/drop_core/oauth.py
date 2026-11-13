@@ -31,6 +31,7 @@ import json
 import re
 from urllib.parse import urlparse, urlsplit
 
+from django.conf import settings
 from django.core.cache import cache
 from django.http import JsonResponse
 from django.shortcuts import render
@@ -361,6 +362,18 @@ class VeilfileAuthorizationView(AuthorizationView):
                 403,
                 show_resend=True,
             )
+        if request.user.is_authenticated and settings.TEAM_SEATS:
+            member = current_membership(request.user, reopen=False)
+            if member is not None and is_barred(member):
+                # A token made now would be refused on every call until the team pays, so no grant is offered.
+                return self._error_page(
+                    "Your team is on the Free plan",
+                    (
+                        "An app you connect now could not upload or read anything, because your team is on the Free "
+                        "plan. Ask your administrator to choose a paid plan under Billing, then connect the app again."
+                    ),
+                    403,
+                )
         return super().dispatch(request, *args, **kwargs)
 
     def _error_page(self, title, message, status, show_resend=False):
