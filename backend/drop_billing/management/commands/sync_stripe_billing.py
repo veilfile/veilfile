@@ -8,7 +8,9 @@ subscriptions entitle it to, exactly as the webhook would compute it.
 Paid workspaces with no Stripe customer at all (manual or test grants) are
 listed, and only moved to free with --reset-unbilled. --list-orphans also
 lists live subscriptions whose customer is on no workspace (paying without
-a plan).
+a plan). --list-unadministered prints the workspaces with a paid plan or a
+subscription id that have no current administrator, from the database
+alone, and contacts nothing.
 
 --apply refuses to run with a test-mode key unless --allow-test-key is
 given: against the production database, a test key would report every live
@@ -19,6 +21,7 @@ import os
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
 
 from drop_billing.views import (
     LIVE_STATUSES,
@@ -32,7 +35,7 @@ from drop_billing.views import (
     _stripe_or_503,
     _subscription_plan,
 )
-from drop_core.models import Workspace
+from drop_core.models import Membership, Workspace
 
 
 def _key_mode(key):
@@ -78,8 +81,52 @@ class Command(BaseCommand):
             action="store_true",
             help="Allow --apply with a test-mode STRIPE_SECRET_KEY.",
         )
+        parser.add_argument(
+            "--list-unadministered",
+            action="store_true",
+            help=(
+                "List workspaces with a paid plan or a subscription id that have "
+                "no current administrator, from the database alone (read-only)."
+            ),
+        )
+
+    def list_unadministered(self):
+        """Print each workspace with a paid plan or a subscription id and no
+        open administrator row, in the order they were made. Reads the
+        database alone."""
+        open_administrator = Membership.objects.filter(
+            workspace=OuterRef("pk"),
+            role=Membership.ADMINISTRATOR,
+            removed_at__isnull=True,
+        )
+        workspaces = (
+            Workspace.objects.filter(~Q(plan="free") | ~Q(stripe_subscription_id=""))
+            .exclude(Exists(open_administrator))
+            .order_by("created_at", "pk")
+        )
+        count = 0
+        for ws in workspaces:
+            count += 1
+            self.stdout.write(
+                f"workspace {ws.pk}: plan {ws.plan}, "
+                f"subscription {ws.stripe_subscription_id or '-'}, "
+                f"customer {ws.stripe_customer_id or '-'}, no current administrator"
+            )
+        self.stdout.write(
+            f"{count} workspace(s) with a paid plan or a subscription id and no "
+            "current administrator"
+        )
 
     def handle(self, *args, **options):
+        if options["list_unadministered"]:
+            others = ("apply", "reset_unbilled", "list_orphans", "allow_test_key")
+            if any(options[name] for name in others):
+                raise CommandError(
+                    "--list-unadministered reads the database alone; run it "
+                    "without other options."
+                )
+            self.list_unadministered()
+            return
         stripe_mod, err = _stripe_or_503()
         if err is not None:
             raise CommandError("STRIPE_SECRET_KEY is not set.")

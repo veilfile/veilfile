@@ -429,6 +429,7 @@ These are not part of this plan.
   - When a paid individual joins, it ends their plan with the unused part credited, after the owner's test-mode check.
   - It ends a subscription paid for a workspace nobody administers (decision 12).
   - It settles how the Terms' refund and cancellation sentences meet an immediate ending.
+  The D2 plan, `docs/superpowers/plans/2026-11-12-team-seats-pr-d2-paid-join.md`, does the first two, and it leaves the third to the owner in F, through its question 4.
 - **The C2 and C3 carry lists for E and F stay open as written there.** That includes agents choosing visibility, the upgrade sentences a member reads, the Plans page's seats, the sending service and `SITE_INVITES_PER_DAY`, the relay timeout, removing `dashboard/golden/` and `SwitchOffTests`, PRODUCT.md, and the Terms and Privacy Policy on invitations, removal, leaving, the transfer, staff deletion and the hold notice.
 - **E:** the REST and MCP sentences a barred member's agent reaches, including the 401 of decision 16, and the OAuth consent page for a barred member (decision 3).
 - **F:**
