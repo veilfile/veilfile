@@ -60,7 +60,7 @@ Monthly upload caps: Free 100/mo, Team $4 2,000/mo, Team Plus $6 4,000/mo, Scale
 Yearly prices: Team $40/yr, Team Plus $60/yr, Scale $120/yr
 Yearly billing costs ten months' price, so two months are free, and a yearly plan has the same caps as the monthly one.
 Hard storage caps: Free 1 GB, Team 25 GB, Team Plus 40 GB, Scale 100 GB
-Only successful uploads count toward the monthly cap, and rejected 4xx uploads never consume quota. Paid prices are tax-inclusive in every country. An upload over the storage cap fails with `402` `storage_cap_reached`, and an upload over the monthly cap fails with `429` `monthly_cap_reached`. Retrying fixes neither, so tell the user to revoke files or upgrade for storage, or to wait for next month or upgrade for the monthly cap.
+Only successful uploads count toward the monthly cap, and rejected 4xx uploads never consume quota. Paid prices are tax-inclusive in every country. An upload over the storage cap fails with `402` `storage_cap_reached`, and an upload over the monthly cap fails with `429` `monthly_cap_reached`. Retrying fixes neither, so tell the user to revoke files or upgrade for storage, or to wait for next month or upgrade for the monthly cap. A member of a team cannot change the plan, so tell them to ask their administrator instead. A `401` whose sentence says the team is on the Free plan means the key or app is paused, not wrong: do not ask for a new key, and tell the user to ask their administrator to choose a paid plan.
 
 Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every failure including auth and throttling (`unauthorized`, `forbidden`, `not_found`, `rate_limited`, `file_type_not_allowed`, `file_too_large`, `storage_cap_reached`, `monthly_cap_reached`, …); branch on `code`. HTTP statuses are standard. A `429` carries `Retry-After` only when its code is `rate_limited`: wait that many seconds, then try again. Over MCP, tool failures are results with `isError: true` and the same JSON in the text content, and `rate_limited` gives the wait as `retry_after`.
 
@@ -138,7 +138,7 @@ unverified email addresses or deactivated accounts never authorize.
 plan's monthly upload count, the key meter (`keys_used`/`keys_cap`) plus the
 live storage meter (bytes used against the hard storage cap). The dashboard shows the same meter. When an upload
 fails with 402 `storage_cap_reached`, have the human check the dashboard:
-delete old artifacts or upgrade the plan.
+delete old artifacts or upgrade the plan. A member of a team asks their administrator to choose a larger plan.
 
 ## Pages for people
 

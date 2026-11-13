@@ -84,14 +84,14 @@ Errors are JSON: `{"error": "<message>", "code": "<code>"}`. Branch on `code`.
 | 400 | `file_type_not_allowed` | The file type is not in the allowed list. |
 | 400 | `secret_detected` | The scan found secret-shaped content and `on_secret` is `reject`, so nothing was stored. |
 | 400 | `invalid_request` | A parameter is not valid, for example a `ttl_days` that is not a whole number. |
-| 401 | `unauthorized` | The API key is missing or not valid. |
-| 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. |
+| 401 | `unauthorized` | The API key is missing or not valid. When a team member's key is refused because the team is on Free, the sentence says so, and the key works again once the team pays. |
+| 402 | `storage_cap_reached` | The workspace has reached its plan's storage cap. Revoke files you no longer need, or upgrade. A member of a team reads that their administrator can choose a larger plan under Billing. |
 | 403 | `file_held` | This file is held, so it was not revoked. |
 | 403 | `team_on_free` | A key request answers with "Your team is on the Free plan, so no key was made. Ask your administrator to choose a paid plan under Billing." An upload answers with "Your team is on the Free plan, so nothing was stored. Ask your administrator to choose a paid plan under Billing." |
 | 404 | `not_found` | The id or token is unknown, or the file is revoked or expired. |
 | 409 | `not_enough_seats` | This team has more people than the plan has seats. Remove people first. (`POST /api/v1/billing/checkout` and `POST /api/v1/billing/switch`, with `plan`, `people` and `seats`.) |
 | 413 | `file_too_large` | The file is larger than 25 MiB. |
-| 429 | `monthly_cap_reached` | The workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade. |
+| 429 | `monthly_cap_reached` | The workspace has reached its plan's monthly upload cap. Uploads work again next month, or you can upgrade. A member of a team reads that their administrator can choose a larger plan under Billing. |
 | 429 | `rate_limited` | There were too many requests. Wait the number of seconds in `Retry-After`, then try again. |
 
 The rate limit is 100 uploads per hour for each API key or connected app, and REST and MCP uploads share it.
