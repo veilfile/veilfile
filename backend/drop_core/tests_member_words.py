@@ -6,14 +6,20 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from drop_core.account import create_key as account_create_key
-from drop_core.key_caps import active_key_count
-from drop_core.models import APIKey, EmailVerification, UsageCounter, administrator_of
+from drop_core.auth import barred_credential
+from drop_core.key_caps import active_key_count, create_key_within_cap
+from drop_core.models import APIKey, EmailVerification, Membership, UsageCounter, administrator_of
 from drop_core.plans import PLANS
 from drop_core.services import _current_month
 from drop_core.tests_allowances import live_file, second_member
+from drop_core.tests_bar import Base as BarBase
+from drop_core.tests_bar import bearer, drop, restore, rpc
+from drop_core.tests_members import _issue_token, _make_app
 from drop_mcp.tests_fix_mcp import McpFixTestBase, _b64
 
 WORDS = "backend/drop_core/cap_words.py"
+AUTH = "backend/drop_core/auth.py"
+MCP = "backend/drop_mcp/views.py"
 
 # The sentences main answers for everyone, copied from main at 5b41aa2.
 MAIN_MONTHLY = (
@@ -35,6 +41,12 @@ MEMBER_KEYS = (
     "under Billing."
 )
 
+
+TODAY_401 = "The API key is not valid, or the connected app's access has ended. Send a current key, or reconnect the app."
+BARRED_401 = (
+    "Your team is on the Free plan, so its members' API keys and connected apps are paused. Ask your administrator "
+    "to choose a paid plan under Billing."
+)
 
 
 @override_settings(TEAM_SEATS=True)
@@ -120,3 +132,60 @@ class MemberCapTests(McpFixTestBase):
             self.at_key_limit()
             keys = self.key_answer(self.user)
             self.assertEqual(keys, (402, {"error": MAIN_KEYS, "code": "key_limit_reached"}), f"{WORDS}: keys, not {keys}")
+
+
+class BarredCredentialTests(BarBase):
+    """Grace, a member of Ada's team, holds a key and an OAuth token, and the team then sits on Free."""
+
+    def setUp(self):
+        super().setUp()
+        self.raw_token, _, _ = _issue_token(self.grace.user, _make_app())
+
+    def rest_401(self, raw):
+        response = self.post_file(**bearer(raw))
+        self.assertEqual(response.status_code, 401, f"{AUTH}: a refused credential is a 401")
+        return response.json()["code"], response.json()["error"], response["WWW-Authenticate"]
+
+    def test_a_barred_members_key_gets_the_barred_sentence_on_rest(self):
+        drop(self.team)
+        for name, raw in (("key", self.raw), ("token", self.raw_token)):
+            with self.subTest(credential=name):
+                self.assertEqual(self.rest_401(raw), ("unauthorized", BARRED_401, "Bearer"), f"{AUTH}: the {name}")
+
+    def test_a_barred_members_token_gets_the_barred_sentence_on_mcp(self):
+        drop(self.team)
+        for name, raw in (("token", self.raw_token), ("key", self.raw)):
+            with self.subTest(credential=name):
+                response = rpc(self.client, "list_artifacts", {}, raw)
+                self.assertEqual(response.status_code, 401, f"{MCP}: the {name} is refused")
+                error = response.json()["error"]
+                self.assertEqual((error["code"], error["message"]), (-32001, BARRED_401), f"{MCP}: the {name}")
+                self.assertIn("resource_metadata=", response["WWW-Authenticate"], f"{MCP}: the challenge is unchanged")
+
+    def test_other_refused_credentials_keep_todays_sentence(self):
+        lin = second_member(self.team, "lin")
+        _, lins_raw = create_key_within_cap(self.team, "lin-key", member=lin)
+        Membership.objects.filter(pk=lin.pk).update(removed_at=timezone.now())
+        APIKey.objects.filter(pk=self.key.pk).update(is_active=False)
+        drop(self.team)
+        cases = (("a removed member's key", lins_raw), ("a revoked key", self.raw), ("an unknown key", "vlf_" + "0" * 40))
+        for name, raw in cases:
+            with self.subTest(credential=name):
+                self.assertEqual(self.rest_401(raw)[1], TODAY_401, f"{AUTH}: {name} is not barred")
+
+    def test_the_check_leaves_the_key_untouched_and_it_works_once_the_team_pays(self):
+        drop(self.team)
+        before = APIKey.objects.filter(pk=self.key.pk).values_list("last_used_at", "is_active").get()
+        self.assertEqual(self.rest_401(self.raw)[1], BARRED_401)
+        after = APIKey.objects.filter(pk=self.key.pk).values_list("last_used_at", "is_active").get()
+        self.assertEqual(after, before, f"{AUTH}: the check writes nothing")
+        restore(self.team)
+        self.assertEqual(self.post_file(**bearer(self.raw)).status_code, 201, f"{AUTH}: the same key works once the team pays")
+
+    def test_with_the_switch_off_the_check_asks_nothing(self):
+        drop(self.team)
+        with override_settings(TEAM_SEATS=False):
+            with self.assertNumQueries(0):
+                self.assertFalse(barred_credential(self.raw), f"{AUTH}: the key")
+                self.assertFalse(barred_credential(self.raw_token), f"{AUTH}: the token")
+            self.assertEqual(self.rest_401(self.raw)[1], TODAY_401, f"{AUTH}: the switch-off answer is main's")

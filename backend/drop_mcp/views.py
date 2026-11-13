@@ -26,6 +26,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from drop_core import funnel
+from drop_core.auth import BARRED_MESSAGE, barred_credential
 from drop_core.email_verification import client_ip, throttle_ip
 from drop_core.file_access import NotYourFile, file_to_revoke, files_visible_to
 from drop_core.models import APIKey, Artifact
@@ -265,16 +266,20 @@ def _authenticate(request):
     OAuthCredentialAdapter. Both expose ``.workspace``; tools use only
     that, except the services' ``api_key`` FK, which is None for OAuth.
     """
-    auth = request.headers.get('Authorization', '')
-    scheme, _, credentials = auth.partition(' ')
-    if scheme.lower() != 'bearer' or not credentials.strip():
+    credential = _bearer_credential(request)
+    if not credential:
         return None
-    credential = credentials.strip()
     key = APIKey.verify(credential)
     if key is not None:
         _touch_last_used(key)
         return key
     return resolve_oauth_credential(credential)
+
+
+def _bearer_credential(request):
+    """The credential of ``Authorization: Bearer <credential>``, or an empty string."""
+    scheme, _, credentials = request.headers.get('Authorization', '').partition(' ')
+    return credentials.strip() if scheme.lower() == 'bearer' else ''
 
 
 def _touch_last_used(key):
@@ -501,7 +506,7 @@ def _handle_unauthenticated(request):
         return _rate_limited(None)
     payload = _peek_payload(request)
     if payload is None:
-        return _unauthenticated(None)
+        return _unauthenticated(None, request)
     request_id = payload.get('id')
     if not _valid_id(request_id):
         return _rpc_error(None, ERR_INVALID_REQUEST, 'Send id as a string or a number.', http_status=400)
@@ -517,7 +522,7 @@ def _handle_unauthenticated(request):
             http_status=400,
         )
     if method not in _PUBLIC_METHODS:
-        return _unauthenticated(request_id)
+        return _unauthenticated(request_id, request)
     if method != 'initialize':
         # Sent by clients after the handshake; initialize negotiates in-band.
         version = request.headers.get('MCP-Protocol-Version')
@@ -547,16 +552,17 @@ def _service_api_key(key):
     return key if isinstance(key, APIKey) else None
 
 
-def _unauthenticated(request_id):
+def _unauthenticated(request_id, request=None):
     """401 with the JSON-RPC error body plus the MCP-spec WWW-Authenticate
-    challenge pointing at the protected-resource metadata document."""
-    response = _rpc_error(
-        request_id,
-        ERR_UNAUTHORIZED,
+    challenge pointing at the protected-resource metadata document. When
+    ``request`` carries a barred member's credential, the sentence says why."""
+    message = (
         'The request has no valid API key or connected app access. Send a current '
-        'API key as Authorization: Bearer <API key>, or reconnect the app.',
-        http_status=401,
+        'API key as Authorization: Bearer <API key>, or reconnect the app.'
     )
+    if request is not None and barred_credential(_bearer_credential(request)):
+        message = BARRED_MESSAGE
+    response = _rpc_error(request_id, ERR_UNAUTHORIZED, message, http_status=401)
     metadata_url = (
         settings.DROP_BASE_URL.rstrip('/')
         + '/.well-known/oauth-protected-resource'
@@ -918,7 +924,7 @@ def _handle_post(request):
     key = _authenticate(request)
     if key is None:
         if _authorization_presented(request):
-            return _unauthenticated(_peek_request_id(request))
+            return _unauthenticated(_peek_request_id(request), request)
         return _handle_unauthenticated(request)
 
     try:

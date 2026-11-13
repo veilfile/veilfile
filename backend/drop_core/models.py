@@ -294,17 +294,29 @@ class APIKey(models.Model):
         A key verifies while its person is active and still a member, its team is not suspended, and the person is not barred."""
         if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
             return None
-        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
         try:
-            return cls.objects.select_related("member__user").exclude(BARRED).get(
-                key_hash=digest,
-                is_active=True,
-                member__user__is_active=True,
-                member__removed_at__isnull=True,
-                workspace__suspended_at__isnull=True,
-            )
+            return cls._verifiable(raw).exclude(BARRED).get()
         except cls.DoesNotExist:
             return None
+
+    @classmethod
+    def is_barred_key(cls, raw):
+        """True when ``raw`` is a key that ``verify`` refuses only because its member is barred. It writes nothing."""
+        if not isinstance(raw, str) or not raw.startswith(cls.KEY_PREFIX):
+            return False
+        return cls._verifiable(raw).filter(BARRED).exists()
+
+    @classmethod
+    def _verifiable(cls, raw):
+        """The key for ``raw`` that passes every check of ``verify`` but the bar: at most one, as ``key_hash`` is unique."""
+        digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        return cls.objects.select_related("member__user").filter(
+            key_hash=digest,
+            is_active=True,
+            member__user__is_active=True,
+            member__removed_at__isnull=True,
+            workspace__suspended_at__isnull=True,
+        )
 
 
 def _new_token():

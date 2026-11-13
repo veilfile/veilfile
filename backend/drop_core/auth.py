@@ -8,6 +8,7 @@ resolves for a deactivated user, and OAuth also requires a verified email.
 The ``vlf_`` path is checked first; OAuth is only attempted when the
 fast-path rejects."""
 
+from django.conf import settings
 from django.utils import timezone
 from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import AuthenticationFailed
@@ -15,6 +16,21 @@ from rest_framework.permissions import BasePermission
 
 from . import oauth as oauth_layer
 from .models import APIKey
+
+# A barred member's key or token is refused with today's 401 and kept, so it works again once the team pays. While
+# the switch is on, the 401 says why.
+BARRED_MESSAGE = (
+    "Your team is on the Free plan, so its members' API keys and connected apps are paused. Ask your administrator "
+    "to choose a paid plan under Billing."
+)
+
+
+def barred_credential(raw):
+    """True when ``raw`` is a key or an OAuth token that would be accepted but for its member's team being on Free.
+    False before any query while the team seats switch is off. It writes nothing: no ``last_used_at``, no revoke."""
+    if not settings.TEAM_SEATS:
+        return False
+    return APIKey.is_barred_key(raw) or oauth_layer.token_is_barred(raw)
 
 
 class APIKeyAuthentication(BaseAuthentication):
@@ -45,6 +61,8 @@ class APIKeyAuthentication(BaseAuthentication):
         # Parallel OAuth credential (mcp:use scope).
         adapter = oauth_layer.resolve_oauth_credential(credential)
         if adapter is None:
+            if barred_credential(credential):
+                raise AuthenticationFailed(BARRED_MESSAGE)
             raise AuthenticationFailed((
                 "The API key is not valid, or the connected app's access has "
                 "ended. Send a current key, or reconnect the app."

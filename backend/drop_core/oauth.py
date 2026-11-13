@@ -188,6 +188,23 @@ def resolve_oauth_credential(raw_token):
     re-check closes any token-issuing path that skipped the consent-page
     gate. The raw token value is never logged.
     """
+    found = _token_and_member(raw_token)
+    if found is None or is_barred(found[1]):
+        return None
+    token, member = found
+    return OAuthCredentialAdapter(token, member.workspace, member)
+
+
+def token_is_barred(raw_token):
+    """True when ``raw_token`` is a token that ``resolve_oauth_credential`` refuses only because its member is barred.
+    It writes nothing."""
+    found = _token_and_member(raw_token)
+    return found is not None and is_barred(found[1])
+
+
+def _token_and_member(raw_token):
+    """The access token for ``raw_token`` and its person's current membership, when they pass every check of
+    ``resolve_oauth_credential`` but the bar, else None."""
     if not isinstance(raw_token, str) or not raw_token.strip():
         return None
     access_token_model = get_access_token_model()
@@ -210,9 +227,7 @@ def resolve_oauth_credential(raw_token):
     member = current_membership(token.user, reopen=False)
     if member is None or member.workspace.suspended_at is not None:
         return None
-    if is_barred(member):
-        return None
-    return OAuthCredentialAdapter(token, member.workspace, member)
+    return token, member
 
 
 class VeilfileOAuth2Validator(OAuth2Validator):
