@@ -5,19 +5,22 @@ shows no plan.
 Every class sets longMessage = False (pages.tests_site_rules holds this module to it).
 """
 import copy
+import io
 import logging
 import os
 import re
 from unittest import mock
 
 import stripe
+from django.core.management import call_command
 from django.db import IntegrityError, connection, transaction
 from django.test import Client, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from drop_billing import account
-from drop_billing.models import Subscription
-from drop_billing.tests_fix_billing import FixBillingBase, make_event, make_sub, missing_customer_error, sub_list
+from drop_billing import account, tests_fix_billing
+from drop_billing.models import ProcessedStripeEvent, Subscription
+from drop_billing.tests_fix_billing import FixBillingBase, checkout_completed, make_event, make_sub, missing_customer_error, sub_list
 from drop_core import teams
 from drop_core.models import APIKey, EmailVerification, Invitation, Membership, Workspace, administrator_of
 from drop_core.teams import JoinRefused, accept_invitation, cancel_invitation, invite, leave_team, remove_member
@@ -28,6 +31,7 @@ from drop_core.tests_teams import team_of
 ACCOUNT = "backend/drop_billing/account.py"
 TEAMS = "backend/drop_core/teams.py"
 VIEW = "backend/drop_core/invitation_views.py"
+WEBHOOK = "backend/drop_billing/views.py"
 PAGE = "backend/templates/registration/invitation.html"
 NOT_APPLIED = "changed while its subscriptions were being read, so that listing was not applied"
 PLAN_NOT_ENDED = REFUSALS["plan_not_ended"]
@@ -787,3 +791,226 @@ class PaidJoinPageTests(PaidJoinBase):
         self.assertIn(JOIN_BUTTON, html, f"{PAGE}: the offer shows Join")
         self.listed.assert_not_called()
         self.assertEqual(self.rows(), before, f"{VIEW}: a GET writes nothing")
+
+
+class UnadministeredEndingTests(PaidJoinBase):
+    """The payer is Free with a Checkout page left open, joins Ada's team, and then that Checkout is paid."""
+
+    MESSAGE = tests_fix_billing.UnadministeredPaymentTests.MESSAGE
+    ENDED = "billing: ended the paid plan of workspace %s (subscription %s) because nobody administers it"
+    NOT_ENDED = (
+        "billing: the paid plan of workspace %s was not ended, and nobody administers it, so the webhook answers 500 "
+        "and Stripe retries"
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.set_billing("free", customer="cus_A")
+        self.at_stripe = {"sub_N": make_sub("sub_N", "active", "price_team", metadata={"workspace_id": str(self.ws.pk)})}
+
+    def join_for_real(self):
+        response = self.join(follow=True)
+        self.assertEqual(response.redirect_chain[-1][0], "/app/", f"{TEAMS}: a Free payer joins")
+        self.listed.assert_not_called()
+        self.assertIsNone(account._open_administrator(self.ws.pk), f"{TEAMS}: nobody administers the old workspace")
+
+    def checkout(self):
+        return self.post_event(checkout_completed(sub_id="sub_N"))
+
+    def test_a_checkout_paid_after_a_real_join_is_ended_with_a_credit(self):
+        self.join_for_real()
+        event = checkout_completed(sub_id="sub_N")
+        with self.assertLogs("drop_billing", level="WARNING") as logs:
+            response = self.post_event(event)
+        self.assertEqual(response.status_code, 200, f"{WEBHOOK}: the ending took effect")
+        self.cancel.assert_called_once_with("sub_N", prorate=True, invoice_now=True, max_network_retries=0)
+        self.assertEqual(self.state(), ("free", ""), f"{ACCOUNT}: the read-back is applied")
+        self.assertTrue(ProcessedStripeEvent.objects.filter(event_id=event["id"]).exists(), f"{WEBHOOK}: the event is done")
+        self.assertEqual([r.getMessage() for r in logs.records], [self.ENDED % (self.ws.pk, "sub_N")], f"{ACCOUNT}: one WARNING")
+
+    def test_a_failed_ending_answers_500_and_records_nothing(self):
+        self.join_for_real()
+        event = checkout_completed(sub_id="sub_N")
+        self.cancel.side_effect = stripe.APIConnectionError("secret detail")
+        with self.assertLogs("drop_billing", level="ERROR") as logs, self.assertLogs("django.request", level="ERROR"):
+            response = self.post_event(event)
+        self.assertEqual(response.status_code, 500, f"{WEBHOOK}: Stripe retries")
+        self.assertFalse(ProcessedStripeEvent.objects.filter(event_id=event["id"]).exists(), f"{WEBHOOK}: nothing is recorded")
+        pk = self.ws.pk
+        expected = [
+            self.MESSAGE % (pk, "sub_N"),
+            f"billing: the plan of workspace {pk} was not ended: the listing read after the calls still shows subscription sub_N (active)",
+            self.NOT_ENDED % pk,
+        ]
+        self.assertEqual([r.getMessage() for r in logs.records], expected, f"{ACCOUNT}: the three ERROR lines, in order")
+        self.cancel.side_effect = self.canceling
+        self.assertEqual(self.post_event(event).status_code, 200, f"{WEBHOOK}: the retry ends the plan")
+        self.assertEqual(self.state(), ("free", ""), f"{ACCOUNT}: the retry leaves the workspace Free")
+
+    def test_the_webhooks_ending_runs_after_its_lock_is_released(self):
+        self.join_for_real()
+        depths = []
+
+        def canceling(sub_id, **kwargs):
+            depths.append(len(connection.savepoint_ids))
+            return self.canceling(sub_id, **kwargs)
+
+        self.cancel.side_effect = canceling
+        baseline = len(connection.savepoint_ids)
+        with self.assertLogs("drop_billing", level="WARNING"):
+            self.assertEqual(self.checkout().status_code, 200)
+        self.assertEqual(depths, [baseline], f"{WEBHOOK}: the cancel is sent outside every transaction the webhook opens")
+
+    def test_a_paid_workspace_with_an_administrator_is_not_ended(self):
+        with self.assertNoLogs("drop_billing", level="WARNING"):
+            self.assertEqual(self.checkout().status_code, 200)
+        self.cancel.assert_not_called()
+        self.assertEqual(self.state(), ("team", "sub_N"), f"{WEBHOOK}: the checkout applies Team")
+
+    def test_a_free_workspace_nobody_administers_is_not_ended(self):
+        self.join_for_real()
+        self.at_stripe = {}
+        with self.assertNoLogs("drop_billing", level="WARNING"):
+            self.assertEqual(self.checkout().status_code, 200)
+        self.cancel.assert_not_called()
+        self.assertEqual(self.state(), ("free", ""), f"{WEBHOOK}: nothing is live, so nothing changes")
+
+    def test_a_delivery_that_finds_the_plan_already_ended_logs_nothing(self):
+        self.join_for_real()
+
+        def listing_then_ended(*args, **kwargs):
+            listed = self.listing()
+            self.at_stripe["sub_N"]["status"] = "canceled"
+            return listed
+
+        self.listed.side_effect = listing_then_ended
+        with self.assertNoLogs("drop_billing", level="WARNING"):
+            self.assertEqual(self.checkout().status_code, 200)
+        self.cancel.assert_not_called()
+        self.assertEqual(self.state(), ("free", ""), f"{ACCOUNT}: the ending's own listing is applied")
+
+    def test_a_person_who_came_back_during_the_sync_is_not_ended(self):
+        self.join_for_real()
+
+        def listing_after_coming_back(*args, **kwargs):
+            self.listed.side_effect = self.listing
+            Membership.objects.filter(user=self.user, workspace=self.team, removed_at__isnull=True).update(removed_at=timezone.now())
+            row = Membership.objects.filter(user=self.user, workspace=self.ws, role=Membership.ADMINISTRATOR).latest("pk")
+            Membership.objects.filter(pk=row.pk).update(removed_at=None)
+            return self.listing()
+
+        self.listed.side_effect = listing_after_coming_back
+        self.assertEqual(self.checkout().status_code, 200)
+        self.cancel.assert_not_called()
+        self.assertEqual(self.state(), ("team", "sub_N"), f"{ACCOUNT}: a workspace with an administrator keeps its plan")
+
+    def test_with_the_switch_off_the_webhook_reports_and_ends_nothing(self):
+        self.join_for_real()
+        before = self.listed.call_count
+        with override_settings(TEAM_SEATS=False), self.assertLogs("drop_billing", level="ERROR") as logs:
+            self.assertEqual(self.checkout().status_code, 200)
+        self.assertEqual([r.getMessage() for r in logs.records], [self.MESSAGE % (self.ws.pk, "sub_N")], f"{WEBHOOK}: as before")
+        self.assertEqual(self.listed.call_count, before + 1, f"{WEBHOOK}: one listing, as before")
+        self.void.assert_not_called()
+        self.cancel.assert_not_called()
+        self.assertEqual(self.state(), ("team", "sub_N"), f"{WEBHOOK}: the payment is applied, as before")
+
+    def test_with_the_switch_on_the_status_refresh_and_the_command_report_and_end_nothing(self):
+        self.join_for_real()
+        expected = [self.MESSAGE % (self.ws.pk, "sub_N")]
+        with self.assertLogs("drop_billing", level="ERROR") as logs:
+            account._sync_from_subscriptions(self.ws, self.listing()["data"], "cus_A")
+        self.assertEqual([r.getMessage() for r in logs.records], expected, f"{ACCOUNT}: the status refresh reports")
+        with mock.patch.dict(os.environ, {"STRIPE_SECRET_KEY": "sk_live_" + "fixbilling"}):
+            with self.assertLogs("drop_billing", level="ERROR") as logs:
+                call_command("sync_stripe_billing", "--apply", stdout=io.StringIO())
+        self.assertEqual([r.getMessage() for r in logs.records], expected, "the command reports")
+        self.cancel.assert_not_called()
+        self.assertEqual(self.reload().plan, "team", "neither ends the plan")
+
+    def test_with_the_switch_off_end_unadministered_asks_nothing(self):
+        self.join_for_real()
+        Workspace.objects.filter(pk=self.ws.pk).update(plan="team", stripe_subscription_id="sub_N")
+        self.reload()
+        stripe_mod, _ = account._stripe_or_503()
+        with override_settings(TEAM_SEATS=False), self.assertNumQueries(0):
+            self.assertIsNone(account.end_unadministered(stripe_mod, self.ws))
+        self.listed.assert_not_called()
+        self.void.assert_not_called()
+        self.cancel.assert_not_called()
+
+
+class CreditEventTests(PaidJoinBase):
+    def test_the_credit_invoices_events_leave_the_old_workspace_free(self):
+        response = self.join(follow=True)
+        self.assertEqual(response.redirect_chain[-1][0], "/app/", f"{TEAMS}: the join ended sub_A and committed")
+        self.assertEqual(self.state(), ("free", ""))
+        team_plan = Workspace.objects.get(pk=self.team.pk).plan
+        paid = {"object": "invoice", "id": "in_credit", "customer": "cus_A", "subscription": "sub_A", "status": "paid",
+                "billing_reason": "subscription_cycle", "total": -500}
+        deleted = {"object": "subscription", "id": "sub_A", "customer": "cus_A", "status": "canceled"}
+        events = [make_event("invoice.paid", dict(paid)), make_event("customer.subscription.deleted", dict(deleted)),
+                  make_event("customer.subscription.deleted", dict(deleted)), make_event("invoice.paid", dict(paid))]
+        events.append(events[1])
+        with self.assertNoLogs("drop_billing", level="ERROR"):
+            for event in events:
+                self.assertEqual(self.post_event(event).status_code, 200, f"{WEBHOOK}: {event['type']} is answered")
+                self.assertEqual(self.state(), ("free", ""), f"{WEBHOOK}: {event['type']} leaves the old workspace Free")
+        self.assertEqual(Workspace.objects.get(pk=self.team.pk).plan, team_plan, f"{WEBHOOK}: the team's plan is unchanged")
+
+
+# The queries a paid checkout event ran on main before D2, read from a run against main's views.py and account.py:
+# for a payer with an open administrator row, and for one whose row is closed.
+WITH_ADMINISTRATOR, WITHOUT_ADMINISTRATOR = 18, 16
+
+
+class WebhookSwitchOffTests(FixBillingBase):
+    """With the switch off, the webhook runs the queries and gives the answers it gave before D2."""
+
+    longMessage = False
+
+    def setUp(self):
+        super().setUp()
+        self.listed = self.patch_stripe("list", return_value=sub_list(make_sub("sub_A", "active", "price_team")))
+        self.cancel = self.patch_stripe("cancel")
+
+    def queries_for_checkout(self):
+        self.set_billing("free", customer="cus_A")
+        with CaptureQueriesContext(connection) as queries:
+            self.assertEqual(self.post_event(checkout_completed()).status_code, 200)
+        return len(queries)
+
+    def test_with_the_switch_off_the_webhook_runs_the_queries_main_ran(self):
+        with_administrator = self.queries_for_checkout()
+        tests_fix_billing.UnadministeredPaymentTests.close_administrator_row(self)
+        with self.assertLogs("drop_billing", level="ERROR"):
+            without_administrator = self.queries_for_checkout()
+        self.assertEqual((with_administrator, without_administrator), (WITH_ADMINISTRATOR, WITHOUT_ADMINISTRATOR),
+                         f"{WEBHOOK}: the queries main ran, not {(with_administrator, without_administrator)}")
+
+    def outcome(self, on):
+        self.set_billing("free", customer="cus_A")
+        self.listed.reset_mock()
+        records = []
+        handler = logging.Handler(level=logging.INFO)
+        handler.emit = records.append
+        log = logging.getLogger("drop_billing")
+        old_level = log.level
+        log.addHandler(handler)
+        log.setLevel(logging.INFO)
+        try:
+            with override_settings(TEAM_SEATS=on):
+                status = self.post_event(checkout_completed()).status_code
+        finally:
+            log.removeHandler(handler)
+            log.setLevel(old_level)
+        ws = self.reload()
+        mirror = Subscription.objects.get(workspace=ws).status
+        return status, ws.plan, ws.stripe_subscription_id, mirror, self.listed.call_count, [r.getMessage() for r in records]
+
+    def test_a_one_person_paid_webhook_is_the_same_with_the_switch_on(self):
+        off = self.outcome(False)
+        on = self.outcome(True)
+        self.assertEqual(on, off, f"{WEBHOOK}: a payer who administers their workspace sees no change")
+        self.assertEqual(off[1], "team")
+        self.cancel.assert_not_called()

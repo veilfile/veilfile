@@ -34,6 +34,7 @@ import logging
 import os
 
 import stripe
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseBadRequest
@@ -131,7 +132,9 @@ def _sync_workspace(stripe_mod, workspace, event_customer=""):
                 raise CustomerNotVisible(customer_id)
             return _forget_missing_customer(workspace, customer_id)
         plan = _apply_subscriptions(workspace, subs, customer_id)
-        _report_unadministered(workspace, plan)
+        if not settings.TEAM_SEATS:
+            # With the switch on, account.end_unadministered ends such a plan after this lock is released.
+            _report_unadministered(workspace, plan)
     return workspace
 
 
@@ -365,7 +368,9 @@ def _handle_event(stripe_mod, event_type, data, event_id):
             "; the customer may be paying without a plan" if paid else "",
         )
         return
-    _sync_workspace(stripe_mod, workspace, event_customer=customer_id)
+    workspace = _sync_workspace(stripe_mod, workspace, event_customer=customer_id)
+    if settings.TEAM_SEATS:
+        account.end_unadministered(stripe_mod, workspace)
 
 
 @csrf_exempt
@@ -427,6 +432,10 @@ def webhook(request):
     except CustomerNotVisible:
         # Logged in _sync_workspace. Answer 500 so Stripe retries once the
         # keys are fixed; the plan is left as it was.
+        return HttpResponse(status=500)
+    except account.PlanNotEnded:
+        # Logged in end_unadministered. Answer 500 so Stripe retries the
+        # ending; no ProcessedStripeEvent is recorded.
         return HttpResponse(status=500)
 
     if event_id:

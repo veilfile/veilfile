@@ -1098,6 +1098,39 @@ def end_plans_before_joining(workspaces):
     return Ending(True, cut, stuck)
 
 
+class PlanNotEnded(Exception):
+    """A paid plan on a workspace nobody administers was not ended, so the webhook answers 500 and Stripe retries."""
+
+
+def end_unadministered(stripe_mod, workspace):
+    """End the paid plan of a workspace that nobody administers, as when its payer joined a team before a Checkout
+    they had left open was paid. Returns None, or raises ``PlanNotEnded`` when the plan was not ended.
+
+    It returns before any query while the switch is off, and at once for a Free workspace or one with an open
+    administrator row. A subscription that names another workspace, or an unmarked one the workspace does not hold, is
+    left alone, as at the join. Call it after the webhook's lock is released: the Stripe calls hold no lock."""
+    if not settings.TEAM_SEATS:
+        return None
+    if workspace.plan == "free" or _open_administrator(workspace.pk) is not None:
+        return None
+    held_id = workspace.stripe_subscription_id
+    ending = _end_live_subscriptions(stripe_mod, workspace)
+    if not ending.done:
+        logger.error(
+            "billing: the paid plan of workspace %s was not ended, and nobody administers it, so the webhook answers "
+            "500 and Stripe retries",
+            workspace.pk,
+        )
+        raise PlanNotEnded(workspace.pk)
+    if ending.cut:
+        logger.warning(
+            "billing: ended the paid plan of workspace %s (subscription %s) because nobody administers it",
+            workspace.pk,
+            held_id,
+        )
+    return None
+
+
 MOVE_ATTEMPTS = 3
 
 
