@@ -397,6 +397,7 @@ Before Task 1, a scan of the whole plan found six places where its text disagree
 
 - The guard on `_sync_from_subscriptions` takes `known_ids`, the ids of the listing together with the id that the row named when the request read it. With the listing's ids alone, a row that named an id Stripe does not list would never have been applied, and that person would have met the offer on every press.
 - Five sentences were made exact. The byte rule for the templates leaves out `has_paid_plan`. The "reconcile it by hand" ERROR comes only from a read-back that is applied. A subscription of another workspace stops a join only while it grants a plan. The rehearsal's checkout race expects one "keep one and refund the others" ERROR. The rehearsal's delayed cancel takes effect before it waits.
+- After Tasks 2 and 3, their reviews left three small findings, and a short task (3b) fixed them. An ending whose listing was not applied because the workspace had moved to another customer now counts as not done, as decision 6 says, and it logs the same INFO line. A workspace with no Stripe customer makes no listing and counts as done, and a test now pins that. The new test module no longer imports a name that it does not use.
 
 ## Carried to E and F
 
