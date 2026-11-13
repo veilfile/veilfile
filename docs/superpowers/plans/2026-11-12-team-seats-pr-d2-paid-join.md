@@ -400,6 +400,7 @@ Before Task 1, a scan of the whole plan found six places where its text disagree
 - After Tasks 2 and 3, their reviews left three small findings, and a short task (3b) fixed them. An ending whose listing was not applied because the workspace had moved to another customer now counts as not done, as decision 6 says, and it logs the same INFO line. A workspace with no Stripe customer makes no listing and counts as done, and a test now pins that. The new test module no longer imports a name that it does not use.
 - The build was split in two. Part 1 is Tasks 1 to 3 and the short task 3b, and it opens as its own pull request. Part 2 is Tasks 4 to 7 and the review of the whole branch. Until part 2 merges, a payment for a workspace nobody administers is applied and logged as an ERROR, as it was before this plan, AGENTS.md does not yet describe the join from a paid plan, and the join has not been rehearsed on Postgres.
 - After part 1 was pushed, an automated security review found that the ending also canceled a live subscription with no `metadata.workspace_id`. The ending now fails closed: it ends only a subscription that names this workspace, or one with no such metadata that is the subscription the workspace holds, and any other live subscription makes it stuck, with an ERROR that names the subscription. Checkout always sets the metadata, so only a subscription made by hand in Stripe is affected. Task 4's ending of a payment nobody administers follows the same rule.
+- Part 2 built Tasks 4 to 6 without a rehearsal. After the build moved to a smaller token budget, the owner chose to run Task 7's rehearsal on Postgres once, for D2 and F together, before the switch turns on. Part 2 opens after one review of its own commits.
 
 ## Carried to E and F
 
@@ -414,6 +415,7 @@ These are not part of this plan.
   - No two workspaces share a Stripe customer id. F's checklist runs `Workspace.objects.exclude(stripe_customer_id="").values("stripe_customer_id").annotate(n=Count("pk")).filter(n__gt=1)` in a shell and expects no row.
   - Who bears the tax on a credit under Managed Payments, when the ended invoice carried tax, is settled.
   - Support has written steps for refunding a checkout paid after a join (question 2).
+  - One rehearsal on Postgres covers D2 and F together, with Task 7's steps of this plan and F's own, and the switch turns on only after it passes.
   - F's checklist runs `sync_stripe_billing --list-unadministered` and expects only the line `0 workspace(s) with a paid plan and no current administrator`.
   - If question 1 had no answer when D2's pull request opened, F carries the third offer sentence. If it shows that a later Checkout does not spend the credit, F builds a way for the credit to pay toward a new subscription, or the spec's promise changes.
 - **E or F:** a sentence on Leave, Overview, Billing or the JOINED flash about a waiting credit, which needs a local field or a Stripe read.
