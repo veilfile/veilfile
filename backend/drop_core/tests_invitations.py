@@ -47,6 +47,7 @@ CAN_JOIN = [
     "If you leave the team or are removed, this account is a Free account again.",
 ]
 INVITED = "ada@example.com invited grace@example.com to join their team on Veilfile."
+SET_BY_HAND = "This account's plan was set by Veilfile, not bought through Stripe, so it cannot join a team yet. Contact support@veilfile.com."
 REFUSALS = {
     "wrong_person": "You are signed in as lin@example.com. This invitation is for grace@example.com, so sign out and sign in with that address to accept it.",
     "email_verification_required": "Verify grace@example.com first, then open this link again.",
@@ -54,7 +55,7 @@ REFUSALS = {
     "on_another_team": "You are already on a team. Leave it before you join another.",
     "administers_people": "You administer a team with other people on it, so you cannot join another one until you hand the role to someone else.",
     "account_suspended": "This account is suspended, so it cannot join a team. Contact support@veilfile.com.",
-    "has_paid_plan": "This account's plan was set by Veilfile, not bought through Stripe, so it cannot join a team yet. Contact support@veilfile.com.",
+    "has_paid_plan": SET_BY_HAND,
     "no_free_seat": "This team has no free seat. Ask ada@example.com to make room, then open this link again.",
     "plan_not_ended": "Stripe did not confirm that your own plan has ended, so you have not joined the team. Wait a moment, then open this link again. If it happens again, contact support@veilfile.com.",
 }
