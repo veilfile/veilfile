@@ -1,5 +1,5 @@
 {% extends "layouts/form.html" %}
-{# An invitation to a team: what it offers, in the states of the Words table. Context: inviter, administrator (the team's current administrator), address, here (this page's path), code (the refusal, or None for a person who can join) and signed_in. A signed-out visitor is told nothing of whether the address has an account. #}
+{# An invitation to a team: what it offers, in the states of the Words table. Context: inviter, administrator (the team's current administrator), address, here (this page's path), code (the refusal, or None for a person who can join; own_plan_ends is an offer and shows the join form) and signed_in. A signed-out visitor is told nothing of whether the address has an account. #}
 {% block title %}Invitation | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block form_page %}
@@ -28,13 +28,16 @@
 {% elif code == "account_suspended" %}
 <p>This account is suspended, so it cannot join a team. Contact support@veilfile.com.</p>
 {% elif code == "has_paid_plan" %}
-<p>This account has its own paid plan, so it cannot join a team yet.</p>
+<p>This account's plan was set by Veilfile, not bought through Stripe, so it cannot join a team yet. Contact support@veilfile.com.</p>
 {% elif code == "no_free_seat" %}
 <p>This team has no free seat. Ask {{ administrator }} to make room, then open this link again.</p>
 {% else %}
 <h2>What joining means</h2>
 <ul>
-<li>You share the team's limits with everyone on it.</li>
+{% if code == "own_plan_ends" %}<li>Your own paid plan ends as soon as you join.</li>
+<li>Any unused part of what you paid becomes a credit on your Stripe customer balance, not a refund.</li>
+<li>If you subscribe again on your own later, the credit pays toward it.</li>
+{% endif %}<li>You share the team's limits with everyone on it.</li>
 <li>Your API keys stop working, and your connected apps are disconnected. Connect your agents again with veilfile login.</li>
 <li>Files you already have keep working until they expire. Only you can see them, and they do not count toward the team's limits.</li>
 <li>The administrator chooses whether your new files are shared with the team or stay only yours.</li>
@@ -44,7 +47,8 @@
 <form method="post">
 {% csrf_token %}
 <input type="hidden" name="action" value="accept">
-<button class="action interactive" type="submit">Join the team</button>
+{% if code == "own_plan_ends" %}<input type="hidden" name="own_plan" value="ends">
+{% endif %}<button class="action interactive" type="submit">Join the team</button>
 </form>
 {% endif %}
 <form method="post">

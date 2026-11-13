@@ -9268,6 +9268,7 @@ FORM_STATES = (
     FormState("invitation-signed-out", "/accounts/invitations/{invite[token]}/"),   # needs the switch for team seats; a visitor is told nothing of whether the address has an account
     FormState("invitation-join", "/accounts/invitations/{invite[token]}/", who="invitee"),
     FormState("invitation-wrong-person", "/accounts/invitations/{invite[token]}/", who="verified"),
+    FormState("invitation-own-plan", "/accounts/invitations/{invite[paid_token]}/", who="invitee_paid"),
     FormState("invitation-unverified", "/accounts/invitations/{invite[unverified_token]}/", who="invitee_unverified"),
     FormState("invitation-not-valid", "/accounts/invitations/{invite[missing]}/", status=404),
     FormState("login-throttled", "/accounts/login/", how="login_throttled", status=429, separated=True, spends=True),

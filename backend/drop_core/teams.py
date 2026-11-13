@@ -269,7 +269,9 @@ class SeatChangeRefused(Exception):
 
 
 class JoinRefused(Exception):
-    """A person was not joined. `code` is one of why_not_join's, or not_valid for a link that no longer works."""
+    """A person was not joined. `code` is one of why_not_join's, or not_valid for a link that no longer works. own_plan_ends
+    is the offer that the join makes and the person has not agreed to, and plan_not_ended is a plan of the person's own that
+    Stripe did not confirm as ended."""
 
     def __init__(self, code):
         super().__init__(code)
@@ -281,11 +283,17 @@ def _current_workspace_ids(user):
     return list(Membership.objects.filter(user=user, removed_at__isnull=True).values_list("workspace_id", flat=True))
 
 
+def _shows_a_plan(workspace):
+    """True when the workspace's mirror shows a plan: one that is not Free, or a subscription id. It reads nothing."""
+    return workspace.plan != Workspace.PLAN_FREE or bool(workspace.stripe_subscription_id)
+
+
 def why_not_join(user, invitation):
     """The code that would refuse `user` joining the invitation's team, or None. It writes nothing.
 
     The codes are checked in this order: wrong_person, email_verification_required, on_this_team, on_another_team,
-    administers_people, account_suspended, has_paid_plan, no_free_seat."""
+    administers_people, account_suspended, has_paid_plan (a plan with no Stripe customer, set by hand), no_free_seat,
+    own_plan_ends (a plan with a Stripe customer, which joining ends)."""
     if not settings.TEAM_SEATS:
         return None
     if not same_address(user.email, invitation.email):
@@ -302,12 +310,14 @@ def why_not_join(user, invitation):
         return "administers_people"
     if any(workspace.suspended_at is not None for workspace in administered):
         return "account_suspended"
-    if any(workspace.plan != Workspace.PLAN_FREE or workspace.stripe_subscription_id for workspace in administered):
+    if any(_shows_a_plan(workspace) and not workspace.stripe_customer_id for workspace in administered):
         return "has_paid_plan"
     limit = seat_limit(invitation.workspace)
     # The invitation's own hold becomes this person's seat, so only the people count.
     if limit is not None and Membership.objects.filter(workspace=invitation.workspace, removed_at__isnull=True).count() >= limit:
         return "no_free_seat"
+    if any(_shows_a_plan(workspace) for workspace in administered):
+        return "own_plan_ends"
     return None
 
 

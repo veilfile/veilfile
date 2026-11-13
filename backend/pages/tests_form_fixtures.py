@@ -101,20 +101,21 @@ class MakeFormFixturesTests(TestCase):
     @override_settings(TEAM_SEATS=True)
     def test_the_invitation_links_open_the_pages_the_states_mean(self):
         f = self.f
-        self.assertEqual(sorted(f["sessions"]), ["invitee", "invitee_unverified", "long", "pending", "verified"], f"{PREFIX}: the sessions run_forms reads")
+        self.assertEqual(sorted(f["sessions"]), ["invitee", "invitee_paid", "invitee_unverified", "long", "pending", "verified"], f"{PREFIX}: the sessions run_forms reads")
         for key, token, status, words in (
                 (None, f["invite"]["token"], 200, "Sign in with that address"), ("invitee", f["invite"]["token"], 200, "Join the team"),
                 ("verified", f["invite"]["token"], 200, "so sign out and sign in with that address"),
                 ("invitee_unverified", f["invite"]["unverified_token"], 200, "first, then open this link again"),
+                ("invitee_paid", f["invite"]["paid_token"], 200, "Your own paid plan ends as soon as you join."),
                 (None, f["invite"]["missing"], 404, "This invitation is no longer valid")):
             client = signed_in(f["sessions"][key]) if key else Client()
             self.assertContains(client.get(f"/accounts/invitations/{token}/"), words, status_code=status, msg_prefix=f"{PREFIX}: {key or 'nobody'} at the invitation {token[:6]}")
 
     def test_the_invitations_are_made_directly_and_a_second_run_leaves_one_of_each(self):
         team = Membership.objects.get(user__username="site-team-admin", role=Membership.ADMINISTRATOR).workspace
-        self.assertEqual((team.plan, Invitation.objects.filter(workspace=team).count()), ("team", 2), f"{PREFIX}: a Team workspace with two waiting invitations")
+        self.assertEqual((team.plan, Invitation.objects.filter(workspace=team).count()), ("team", 3), f"{PREFIX}: a Team workspace with three waiting invitations")
         run_script()
-        self.assertEqual((Invitation.objects.filter(workspace=team).count(), Membership.objects.filter(workspace=team).count()), (2, 1),
+        self.assertEqual((Invitation.objects.filter(workspace=team).count(), Membership.objects.filter(workspace=team).count()), (3, 1),
                          f"{PREFIX}: a run starts by deleting the team's invitations and people other than its administrator")
         self.assertEqual(mail.outbox, [], f"{PREFIX}: no mail is sent for an invitation")
 
