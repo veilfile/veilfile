@@ -4,14 +4,17 @@ import os
 import tempfile
 from unittest import mock
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
+from rest_framework.test import APIClient
 
-from drop_core.models import Artifact, UsageCounter, Workspace, administrator_of, get_or_create_workspace
+from drop_core.models import APIKey, Artifact, UsageCounter, Workspace, administrator_of, get_or_create_workspace
 from drop_core.services import RejectedUpload, mint_upload_url, upload_artifact
 from drop_core.tests_allowances import second_member
 from drop_core.tests_members import make_user
 
 SERVICES = "backend/drop_core/services.py"
+VIEWS = "backend/drop_core/views.py"
 REST_BAD = 'The visibility value is not valid. Send "only_me" or "team".'
 
 
@@ -78,3 +81,46 @@ class ServiceVisibilityTests(VisibilityBase):
                     self.assertEqual(self.upload(value, member=self.admin).visibility, "only_me", f"{SERVICES}: ignored")
             pending = mint_upload_url(self.workspace, None, "a.txt", visibility="public")
             self.assertEqual(pending.visibility, "", f"{SERVICES}: an upload URL records nothing")
+
+
+# The keys of a 201 on main, for an upload with no secret flags and no adjusted TTL.
+MAIN_KEYS = ["expires_at", "id", "secret_flags", "size_bytes", "url"]
+
+
+class RestVisibilityTests(VisibilityBase):
+    def setUp(self):
+        super().setUp()
+        _, grace_raw = APIKey.create_key(self.workspace, "grace-key", member=self.grace)
+        _, admin_raw = APIKey.create_key(self.workspace, "ada-key")
+        self.grace_auth = {"HTTP_AUTHORIZATION": f"Bearer {grace_raw}"}
+        self.admin_auth = {"HTTP_AUTHORIZATION": f"Bearer {admin_raw}"}
+
+    def post(self, auth, **fields):
+        return APIClient().post("/api/v1/artifacts/", {"file": SimpleUploadedFile("a.txt", b"hi"), **fields}, **auth)
+
+    def test_a_member_chooses_team_and_a_teammate_sees_the_file(self):
+        response = self.post(self.grace_auth, visibility="team")
+        self.assertEqual((response.status_code, response.json().get("visibility")), (201, "team"), f"{VIEWS}: the answer")
+        listed = APIClient().get("/api/v1/artifacts/", **self.admin_auth)
+        self.assertIn(response.json()["id"], listed.content.decode(), f"{VIEWS}: the administrator lists the team file")
+
+    def test_the_answer_says_what_the_team_rule_gave(self):
+        self.setting("always_only_me")
+        response = self.post(self.grace_auth, visibility="team")
+        self.assertEqual((response.status_code, response.json().get("visibility")), (201, "only_me"), f"{VIEWS}: the rule")
+
+    def test_a_bad_value_answers_400(self):
+        response = self.post(self.grace_auth, visibility="public")
+        expected = (400, {"error": REST_BAD, "code": "invalid_request", "detail": REST_BAD})
+        self.assertEqual((response.status_code, response.json()), expected, f"{VIEWS}: refused as on_secret is")
+
+    def test_the_put_answers_the_visibility_it_gave(self):
+        pending = mint_upload_url(self.workspace, None, "a.txt", member=self.grace, visibility="team")
+        response = self.client.put(f"/api/v1/uploads/{pending.token}", b"hi", content_type="application/octet-stream")
+        self.assertEqual((response.status_code, response.json().get("visibility")), (201, "team"), f"{VIEWS}: the PUT")
+
+    def test_with_the_switch_off_the_answer_is_mains(self):
+        with override_settings(TEAM_SEATS=False):
+            response = self.post(self.admin_auth, visibility="public")
+        self.assertEqual(response.status_code, 201, f"{VIEWS}: ignored with the switch off")
+        self.assertEqual(sorted(response.json()), MAIN_KEYS, f"{VIEWS}: main's keys, not {sorted(response.json())}")
