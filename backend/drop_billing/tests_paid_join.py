@@ -19,7 +19,7 @@ from drop_billing import account
 from drop_billing.models import Subscription
 from drop_billing.tests_fix_billing import FixBillingBase, make_event, make_sub, missing_customer_error, sub_list
 from drop_core import teams
-from drop_core.models import APIKey, EmailVerification, Invitation, Membership, Workspace, administrator_of, current_membership
+from drop_core.models import APIKey, EmailVerification, Invitation, Membership, Workspace, administrator_of
 from drop_core.teams import JoinRefused, accept_invitation, cancel_invitation, invite, leave_team, remove_member
 from drop_core.tests_invitations import CAN_JOIN, JOINED, NOT_VALID, OWN_PLAN, PLAN_ENDED, REFUSALS, url
 from drop_core.tests_members import second_member
@@ -234,6 +234,33 @@ class EndingTests(PaidJoinBase):
         self.assertEqual(self.state(), ("free", ""), f"{ACCOUNT}: the id the row held when the ending began is known")
         self.assertEqual(ending, account.Ending(True, False, False), f"{ACCOUNT}: the listing was applied, so the ending is done")
         self.assertFalse(any(NOT_APPLIED in line for line in logged.output), f"{ACCOUNT}: that listing is applied")
+
+    def test_a_customer_changed_meanwhile_is_not_done(self):
+        self.at_stripe["sub_A"]["status"] = "canceled"
+        Workspace.objects.filter(pk=self.ws.pk).update(stripe_customer_id="cus_moved")
+        with self.assertLogs("drop_billing", level="INFO") as logged:
+            ending = self.end()
+        self.cancel.assert_not_called()
+        self.void.assert_not_called()
+        self.assertEqual(self.listed.call_count, 1, f"{ACCOUNT}: nothing live needs no read-back")
+        self.assertEqual(ending, account.Ending(False, False, False), f"{ACCOUNT}: a listing that was not applied does not end the plan")
+        self.assertEqual(sum(NOT_APPLIED in line for line in logged.output), 1, f"{ACCOUNT}: the skipped listing is logged once")
+        self.assertFalse(any(line.startswith("ERROR") for line in logged.output), f"{ACCOUNT}: a customer changed meanwhile is not an error")
+        self.reload()
+        row = (self.ws.plan, self.ws.stripe_customer_id, self.ws.stripe_subscription_id)
+        self.assertEqual(row, ("team", "cus_moved", "sub_A"), f"{ACCOUNT}: nothing is written for a customer the workspace has left")
+
+    def test_a_workspace_with_no_customer_makes_no_call(self):
+        Workspace.objects.filter(pk=self.ws.pk).update(plan="team", stripe_customer_id="", stripe_subscription_id="")
+        self.reload()
+        ending = self.end()
+        self.listed.assert_not_called()
+        self.cancel.assert_not_called()
+        self.void.assert_not_called()
+        self.assertEqual(ending, account.Ending(True, False, False), f"{ACCOUNT}: nothing at Stripe belongs to a workspace with no customer")
+        self.reload()
+        row = (self.ws.plan, self.ws.stripe_customer_id, self.ws.stripe_subscription_id)
+        self.assertEqual(row, ("team", "", ""), f"{ACCOUNT}: a plan set by hand is left as it is")
 
     def test_a_subscription_that_names_this_workspace_is_ended(self):
         self.at_stripe = {"sub_A": make_sub("sub_A", "active", "price_team", metadata={"workspace_id": str(self.ws.pk)})}

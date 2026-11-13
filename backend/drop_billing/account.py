@@ -936,13 +936,14 @@ def _how_to_end(sub):
 def _apply_ending(workspace, subs, customer_id, held_id):
     """Apply a listing of an ending through ``_sync_from_subscriptions`` with the ids it knows: those in the listing and
     ``held_id``, the subscription id that the caller's copy of the workspace held when the ending began. Returns False,
-    and logs it, when the row names a subscription outside them, which a webhook wrote after the listing was read, so
-    the listing was not applied."""
+    and logs it, when the listing was not applied. That happens when the row names a subscription outside them, which a
+    webhook wrote after the listing was read, and when the workspace has moved to another customer meanwhile."""
     known_ids = {sub.get("id") for sub in subs if sub.get("id")}
     if held_id:
         known_ids.add(held_id)
     row = _sync_from_subscriptions(workspace, subs, customer_id, known_ids=known_ids)
-    if row.stripe_subscription_id and row.stripe_subscription_id not in known_ids:
+    newer = row.stripe_subscription_id and row.stripe_subscription_id not in known_ids
+    if newer or row.stripe_customer_id != customer_id:
         logger.info(
             "billing: workspace %s changed while its subscriptions were being read, so that listing was not applied",
             workspace.pk,
