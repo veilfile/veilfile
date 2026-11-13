@@ -36,6 +36,7 @@ from .auth import (
     IsAPIKeyAuthenticated,
     IsAPIKeyOrSessionAuthenticated,
 )
+from .cap_words import cap_message
 from .errors import answer_response
 from .oauth import revoke_user_oauth_grants
 from . import account
@@ -161,8 +162,9 @@ def _request_member(request):
     return request._person_membership
 
 
-def _upload_failure_response(exc):
-    """Map an upload_artifact failure to an error response."""
+def _upload_failure_response(exc, member=None):
+    """Map an upload_artifact failure to an error response. ``member`` is the person the upload acted as, so that a
+    member of a team reads the member's sentence at a plan's cap."""
     if isinstance(exc, StorageError):
         return Response(
             {"error": (
@@ -172,11 +174,11 @@ def _upload_failure_response(exc):
             status=status.HTTP_502_BAD_GATEWAY,
         )
     code = str(exc)
-    body = {"error": ERROR_MESSAGES.get(
+    body = {"error": cap_message(code, member, ERROR_MESSAGES.get(
             code,
             "The upload failed. Try again, and check the file and its "
             "parameters if it fails again.",
-        ), "code": code}
+        )), "code": code}
     # Rejections that know why (e.g. file_type_not_allowed) say so;
     # safety-seam blocks stay deliberately bare.
     detail = getattr(exc, "detail", "")
@@ -445,7 +447,7 @@ class ArtifactListCreateView(APIView):
                 member=_request_member(request),
             )
         except (ValueError, StorageError) as exc:
-            return _upload_failure_response(exc)
+            return _upload_failure_response(exc, member=_request_member(request))
         workspace = _request_workspace(request)
         upload_number = Artifact.objects.filter(workspace=workspace).count()
         funnel.record(
@@ -521,7 +523,7 @@ class PendingUploadView(APIView):
                 normalize_on_secret(request.query_params.get("on_secret")),
             )
         except RejectedUpload as exc:
-            return _upload_failure_response(exc)
+            return _upload_failure_response(exc, member=pending.member)
         try:
             declared = int(request.META.get("CONTENT_LENGTH") or 0)
         except (TypeError, ValueError):
@@ -566,7 +568,7 @@ class PendingUploadView(APIView):
                 # safety block keeps it consumed, and so does a removal:
                 # the row is closed, and the URL must not read as unused.
                 PendingUpload.objects.filter(pk=pending.pk).update(used=False)
-            response = _upload_failure_response(exc)
+            response = _upload_failure_response(exc, member=pending.member)
             if isinstance(exc, StorageError):
                 # The service logged it by artifact id. django.request
                 # would log the 502 with the path, which holds the upload
