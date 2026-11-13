@@ -127,8 +127,14 @@ Voice: complete sentences, semicolons only between independent clauses, no em da
 
 ## Changed during the build
 
+- `cap_message` lives in a new module, `backend/drop_core/cap_words.py`, and takes the sentence everyone else reads as a third argument, `cap_message(code, member, message)`. `views.py` imports `account.py`, so `account.py` cannot import `views.py`, and the text of `key_limit_reached` stays in `account.py`.
+- The key and token checks were split, so that `APIKey.is_barred_key` and `oauth.token_is_barred` reuse every check of `APIKey.verify` and `resolve_oauth_credential` except the bar, instead of copying them.
+- The browser form checks for the new `oauth-barred` state run in CI's site-forms check, which runs the site with the switch on.
+- The review corrected AGENTS.md, which said that no JSON answer changes with the switch on or off. Its minor findings are carried below.
+
 ## Carried to E2, E3 and F
 
 - **E2:** agents choose visibility on the REST upload and both MCP upload tools, honored only under `members_choose`, with `docs/API.md`, `docs/llms.txt` and `backend/docs/pages/`.
 - **E3:** both CLIs gain the visibility option, after the server, and the owner publishes their releases.
 - **F:** the items carried by the C2, C3, D and D2 plans, including the one rehearsal on Postgres for D2 and F.
+- **Later, from E1's review:** tests for the member sentence on an upload URL's PUT and on MCP `create_upload_url` at a cap, and switch-off tests for the MCP 401, a member's storage cap and a barred token on REST. The barred check could skip the token lookup for a `vlf_` string. The device poll's key-limit sentence (`backend/drop_core/device.py:508`) still says "workspace" to a member.
