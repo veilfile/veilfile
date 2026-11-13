@@ -41,6 +41,7 @@ from drop_core.services import (
     revoke_artifact,
     upload_artifact,
 )
+from drop_core.cap_words import cap_message
 from drop_core.views import ERROR_MESSAGES, APIKeyUploadThrottle
 
 logger = logging.getLogger(__name__)
@@ -607,7 +608,7 @@ class ToolError(Exception):
         return body
 
 
-def _service_failure(exc):
+def _service_failure(exc, member=None):
     """Map an upload-service failure to a ToolError with the REST code."""
     if isinstance(exc, StorageError):
         return ToolError(
@@ -617,7 +618,9 @@ def _service_failure(exc):
     code = getattr(exc, 'code', '') or str(exc)
     return ToolError(
         code,
-        ERROR_MESSAGES.get(code, 'The upload failed. Try again, and check the file and its parameters if it fails again.'),
+        cap_message(code, member, ERROR_MESSAGES.get(
+            code, 'The upload failed. Try again, and check the file and its parameters if it fails again.'
+        )),
         detail=getattr(exc, 'detail', ''),
     )
 
@@ -729,7 +732,7 @@ def _tool_upload_artifact(key, args, request):
             member=key.acting_member,
         )
     except (ValueError, StorageError) as exc:
-        raise _service_failure(exc) from exc
+        raise _service_failure(exc, member=key.acting_member) from exc
     upload_number = Artifact.objects.filter(workspace=key.workspace).count()
     funnel.record_workspace_event(
         key.workspace, funnel.UPLOAD_COMPLETED, upload_number=upload_number
@@ -794,7 +797,7 @@ def _tool_create_upload_url(key, args, request):
         )
     except ValueError as exc:
         # RejectedUpload: a tool error carrying its code and detail.
-        raise _service_failure(exc) from exc
+        raise _service_failure(exc, member=key.acting_member) from exc
 
     base = settings.DROP_BASE_URL.rstrip('/')
     result = {

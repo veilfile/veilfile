@@ -25,6 +25,7 @@ from django.db.models import Q
 from oauth2_provider.models import get_application_model, get_grant_model
 
 from . import funnel
+from .cap_words import cap_message
 from .email_verification import is_email_verified
 from .file_access import NotYourFile, file_to_revoke, files_visible_to
 from .key_caps import KeyCapReached, KeyNotAllowed, MemberKeyCapReached, active_key_count, create_key_within_cap
@@ -208,7 +209,11 @@ def create_key(user, name, *, request=None, body_is_object=True):
         return Answer(
             402,
             {
-                "error": "Your workspace has reached its plan's API key limit. Revoke a key or upgrade your plan.",
+                "error": cap_message(
+                    "key_limit_reached",
+                    member,
+                    "Your workspace has reached its plan's API key limit. Revoke a key or upgrade your plan.",
+                ),
                 "code": "key_limit_reached",
             },
         )
