@@ -4,7 +4,7 @@ Run from backend/ inside Django, with SITE_SESSION_FILE as for make_staff_sessio
   SITE_SESSION_FILE=../site-tests/session.txt python manage.py shell -c "exec(open('../site-tests/make_form_fixtures.py').read())"
 
 It makes verified users and their sessions (one with the longest values the models take), a user whose verification link went a moment ago, a user to reset, device codes,
-OAuth clients registered through /o/register/, the links of the reset and verification emails, a team with two waiting invitations (made directly, so that the raw tokens are
+OAuth clients registered through /o/register/, the links of the reset and verification emails, a team with three waiting invitations (made directly, so that the raw tokens are
 known; the invitation page answers only while the switch for team seats is on in the server), and the 404 and the 500 as production draws them: the dev server runs with
 DEBUG on, which never calls the site's error handlers, so those two are drawn here with DEBUG off, by the whole request stack, and the checks serve those bytes.
 A run first deletes what an earlier one left. It refuses to run unless DEBUG is on and the database is SQLite or on this machine: it sets a known password on users.
@@ -143,11 +143,14 @@ Invitation.objects.filter(workspace=team).delete()   # the team's invitations an
 Membership.objects.filter(workspace=team).exclude(user=team_admin).delete()
 invitee = make_user("site-invitee", "site-invitee@example.com", verified=True)   # the address of the first invitation, verified: the invitation page offers to join
 unverified_invitee = make_user("site-invitee-unverified", "site-invitee-unverified@example.com", verified=False, last_sent_at=timezone.now() + timedelta(hours=1))   # a resend is too soon: no mail
+paid_invitee = make_user("site-invitee-paid", "site-invitee-paid@example.com", verified=True)   # a paid plan with a Stripe customer: the invitation page offers to end it. A GET makes no Stripe call
+Workspace.objects.filter(pk=get_or_create_workspace(paid_invitee).pk).update(plan="team", stripe_customer_id="cus_site_checks")
 
 fixtures = {
     "sessions": {"verified": session_for(verified), "long": session_for(long_user), "pending": session_for(pending),
-                 "invitee": session_for(invitee), "invitee_unverified": session_for(unverified_invitee)},
-    "invite": {"token": invite(team, team_admin, invitee.email), "unverified_token": invite(team, team_admin, unverified_invitee.email), "missing": "site-checks-not-a-token"},
+                 "invitee": session_for(invitee), "invitee_paid": session_for(paid_invitee), "invitee_unverified": session_for(unverified_invitee)},
+    "invite": {"token": invite(team, team_admin, invitee.email), "unverified_token": invite(team, team_admin, unverified_invitee.email),
+               "paid_token": invite(team, team_admin, paid_invitee.email), "missing": "site-checks-not-a-token"},
     "accounts": {"verified": {"username": verified.username, "password": PASSWORD}},
     "device": {"consent": make_code("veilfile-cli/0.4.0 (site checks)"), "long": make_code("U" * 256),
                "expired": make_code("veilfile-cli/0.4.0 (site checks)", lasts=timedelta(seconds=-30)), "unknown": "ZZZZ-2222",

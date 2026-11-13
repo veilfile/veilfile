@@ -220,7 +220,7 @@ class BillingCase(FixBillingBase):
 
     def no_stripe(self):
         """Every Stripe call these pages could make, patched; assertNoStripe says none was made."""
-        return {key: self.patch_stripe(key) for key in ("list", "modify", "customer", "session", "portal", "void", "retrieve_customer")}
+        return {key: self.patch_stripe(key) for key in ("list", "modify", "cancel", "customer", "session", "portal", "void", "retrieve_customer")}
 
     def assertNoStripe(self, calls, message):
         for key, patched in calls.items():

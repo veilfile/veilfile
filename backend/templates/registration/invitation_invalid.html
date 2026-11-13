@@ -1,8 +1,9 @@
 {% extends "layouts/form.html" %}
-{# An invitation link that does not work. It says so the same way whatever the reason, and shows nothing of the link. #}
+{# An invitation link that does not work. It says so the same way whatever the reason, and shows nothing of the link. Context: plan_ended, true when this request ended the person's own plan before the link was found not to work, which adds one sentence. #}
 {% block title %}Invitation not valid | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block form_page %}
 <h1>This invitation is no longer valid</h1>
 <p>Ask the person who invited you for a new one.</p>
-{% endblock %}
+{% if plan_ended %}<p>Your own plan has ended, and any unused part of what you paid will be credited to your Stripe customer balance.</p>
+{% endif %}{% endblock %}

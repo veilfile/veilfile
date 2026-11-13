@@ -47,6 +47,7 @@ CAN_JOIN = [
     "If you leave the team or are removed, this account is a Free account again.",
 ]
 INVITED = "ada@example.com invited grace@example.com to join their team on Veilfile."
+SET_BY_HAND = "This account's plan was set by Veilfile, not bought through Stripe, so it cannot join a team yet. Contact support@veilfile.com."
 REFUSALS = {
     "wrong_person": "You are signed in as lin@example.com. This invitation is for grace@example.com, so sign out and sign in with that address to accept it.",
     "email_verification_required": "Verify grace@example.com first, then open this link again.",
@@ -54,9 +55,16 @@ REFUSALS = {
     "on_another_team": "You are already on a team. Leave it before you join another.",
     "administers_people": "You administer a team with other people on it, so you cannot join another one until you hand the role to someone else.",
     "account_suspended": "This account is suspended, so it cannot join a team. Contact support@veilfile.com.",
-    "has_paid_plan": "This account has its own paid plan, so it cannot join a team yet.",
+    "has_paid_plan": SET_BY_HAND,
     "no_free_seat": "This team has no free seat. Ask ada@example.com to make room, then open this link again.",
+    "plan_not_ended": "Stripe did not confirm that your own plan has ended, so you have not joined the team. Wait a moment, then open this link again. If it happens again, contact support@veilfile.com.",
 }
+OWN_PLAN = [
+    "Your own paid plan ends as soon as you join.",
+    "Any unused part of what you paid becomes a credit on your Stripe customer balance, not a refund.",
+    "If you subscribe again on your own later, the credit pays toward it.",
+]
+PLAN_ENDED = "Your own plan has ended, and any unused part of what you paid will be credited to your Stripe customer balance."
 NOT_VALID = "This invitation is no longer valid"
 JOINED = "You have joined the team. Connect your agents again with veilfile login."
 TOKEN = re.compile(r'name="csrfmiddlewaretoken" value="([^"]+)"')
@@ -115,6 +123,7 @@ class PageTests(Base):
             self.assertEqual(response.status_code, 404, f"{VIEW}: a suspended team's link must answer 404 on a GET")
             self.assertEqual(response.content, bad.content, f"{VIEW}: a suspended team's link must read like a bad one")
             self.assertNotIn("What joining means", response.content.decode())
+            self.assertNotIn(PLAN_ENDED, response.content.decode())
 
     def test_a_bad_expired_used_or_cancelled_link_gets_one_answer(self):
         expired, expired_raw = self.send("expired@example.com")
@@ -135,6 +144,7 @@ class PageTests(Base):
             body = next(iter(answers))[1].decode()
             self.assertIn(NOT_VALID, body)
             self.assertIn("Ask the person who invited you for a new one.", body)
+            self.assertNotIn(PLAN_ENDED, body)
 
     def test_signed_out_it_offers_sign_in_sign_up_and_decline(self):
         html = self.page(self.raw)
@@ -213,6 +223,7 @@ class PageTests(Base):
         self.assertEqual(why_not_join(self.grace, self.invitation), code, f"{HERE}: why_not_join must give {code}")
         self.assertIn(REFUSALS[code], html, f"{PAGE}: the sentence for {code}")
         self.assertNotIn("Join the team", html)
+        self.assertNotIn(PLAN_ENDED, html)
         for other, sentence in REFUSALS.items():
             if other != code:
                 self.assertNotIn(sentence, html)
@@ -259,6 +270,51 @@ class PageTests(Base):
         for name in ("a", "b", "c", "d"):
             second_member(self.team, name)
         self.refused("no_free_seat")
+
+    def paid_own_workspace(self):
+        own = get_or_create_workspace(self.grace)
+        Workspace.objects.filter(pk=own.pk).update(plan=Workspace.PLAN_TEAM, stripe_customer_id="cus_G")
+        self.grace = type(self.grace).objects.get(pk=self.grace.pk)
+        self.sign_in(self.grace)
+        return own
+
+    def test_own_plan_ends_is_an_offer_with_its_sentences(self):
+        self.paid_own_workspace()
+        self.assertEqual(why_not_join(self.grace, self.invitation), "own_plan_ends", f"{HERE}: a plan with a Stripe customer is an offer")
+        html = self.page(self.raw)
+        for sentence in OWN_PLAN + CAN_JOIN:
+            self.assertIn(sentence, html, f"{PAGE}: the own-plan sentences and the Can join row must be on the page")
+        self.assertIn(">Join the team</button>", html)
+        self.assertIn('<input type="hidden" name="own_plan" value="ends">', html)
+        for sentence in REFUSALS.values():
+            self.assertNotIn(sentence, html)
+        self.assertLess(html.index(OWN_PLAN[2]), html.index(CAN_JOIN[1]), f"{PAGE}: the own-plan sentences come first")
+
+    def test_a_person_with_no_plan_reads_no_own_plan_words(self):
+        self.sign_in(self.grace)
+        html = self.page(self.raw)
+        for sentence in CAN_JOIN:
+            self.assertIn(sentence, html)
+        for sentence in OWN_PLAN:
+            self.assertNotIn(sentence, html)
+        self.assertNotIn('name="own_plan"', html)
+
+    def test_a_full_team_is_refused_before_the_offer(self):
+        self.paid_own_workspace()
+        for name in ("a", "b", "c", "d"):
+            second_member(self.team, name)
+        self.assertEqual(why_not_join(self.grace, self.invitation), "no_free_seat", f"{HERE}: no_free_seat comes before own_plan_ends")
+
+    def test_an_accept_without_the_consent_field_is_offered_again(self):
+        self.paid_own_workspace()
+        response = self.post(self.raw, "accept")
+        self.assertEqual(response.status_code, 400)
+        html = response.content.decode()
+        for sentence in OWN_PLAN:
+            self.assertIn(sentence, html)
+        self.assertIn('<input type="hidden" name="own_plan" value="ends">', html)
+        self.assertFalse(Membership.objects.filter(workspace=self.team, user=self.grace).exists())
+        self.assertIsNone(Invitation.objects.get(pk=self.invitation.pk).accepted_at)
 
     def test_no_free_seat_names_the_current_administrator_after_a_transfer(self):
         for name in ("a", "b", "c"):

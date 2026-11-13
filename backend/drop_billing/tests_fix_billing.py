@@ -154,6 +154,7 @@ class FixBillingBase(TestCase):
         target = {
             "list": (stripe.Subscription, "list"),
             "modify": (stripe.Subscription, "modify"),
+            "cancel": (stripe.Subscription, "cancel"),
             "customer": (stripe.Customer, "create"),
             "customer_modify": (stripe.Customer, "modify"),
             "session": (stripe.checkout.Session, "create"),

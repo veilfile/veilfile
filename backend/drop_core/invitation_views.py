@@ -1,7 +1,9 @@
 """The invitation page: what an invitation offers, joining and declining.
 
 The words are in templates/registration/invitation.html, invitation_invalid.html and invitation_declined.html. A link that is
-not valid says so one way whatever the reason, and a signed-out page says nothing of whether an account exists.
+not valid says so one way whatever the reason, and a signed-out page says nothing of whether an account exists. When this
+request ended the person's own plan and the join was then refused, the not-valid page adds one sentence that says so, as the
+invitation page does.
 """
 from django.contrib import messages
 from django.shortcuts import redirect, render
@@ -15,22 +17,24 @@ from .teams import JoinRefused, accept_invitation, decline_invitation, find_invi
 JOINED = "You have joined the team. Connect your agents again with veilfile login."
 
 
-def _invalid(request):
-    return render(request, "registration/invitation_invalid.html", status=404)
+def _invalid(request, plan_ended=False):
+    """The not-valid page. `plan_ended` adds the sentence that this request ended the person's own plan."""
+    return render(request, "registration/invitation_invalid.html", {"plan_ended": plan_ended}, status=404)
 
 
-def _invalid_or_joined(request, token):
+def _invalid_or_joined(request, token, plan_ended=False):
     """The not-valid answer, except for a second click on Join by a person already on that team, who goes to Overview."""
     if request.method == "POST" and request.POST.get("action") == "accept" and joined_through(request.user, token):
         return redirect("app")
-    return _invalid(request)
+    return _invalid(request, plan_ended)
 
 
-def _page(request, invitation, code=None, status=200):
-    """The invitation's page for this visitor. `code` is the refusal to show, or None to work it out."""
+def _page(request, invitation, code=None, status=200, plan_ended=False):
+    """The invitation's page for this visitor. `code` is the refusal to show, or None to work it out. `plan_ended` adds the
+    sentence that this request ended the person's own plan."""
     inviter = invitation.invited_by
     if inviter is None:
-        return _invalid(request)
+        return _invalid(request, plan_ended)
     user = request.user
     if code is None and user.is_authenticated:
         code = why_not_join(user, invitation)
@@ -44,6 +48,7 @@ def _page(request, invitation, code=None, status=200):
         "here": request.path,
         "code": code,
         "signed_in": user.is_authenticated,
+        "plan_ended": plan_ended,
     }
     return render(request, "registration/invitation.html", context, status=status)
 
@@ -63,11 +68,11 @@ def _answer(request, token):
     if not request.user.is_authenticated:
         return redirect(f"{reverse('login')}?next={request.path}")
     try:
-        accept_invitation(request.user, token)
+        accept_invitation(request.user, token, own_plan_agreed=request.POST.get("own_plan") == "ends")
     except JoinRefused as refused:
         if refused.code == "not_valid":
-            return _invalid_or_joined(request, token)
-        return _page(request, invitation, code=refused.code, status=400)
+            return _invalid_or_joined(request, token, refused.plan_ended)
+        return _page(request, invitation, code=refused.code, status=400, plan_ended=refused.plan_ended)
     messages.success(request, JOINED)
     return redirect("app")
 
