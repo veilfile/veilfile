@@ -21,6 +21,7 @@ import datetime
 import logging
 import os
 from datetime import timedelta
+from typing import NamedTuple
 
 from django.conf import settings
 from django.db import transaction
@@ -442,12 +443,23 @@ def _report_unadministered(workspace, plan):
     )
 
 
-def _sync_from_subscriptions(workspace, subs, customer_id):
+def _sync_from_subscriptions(workspace, subs, customer_id, *, known_ids=None):
     """Apply an already fetched subscription list under the row lock,
-    unless the workspace has moved to another customer meanwhile."""
+    unless the workspace has moved to another customer meanwhile.
+
+    ``known_ids``, when given, are the subscription ids the caller knew of
+    when it read the list. A locked row that names a subscription outside
+    them was written after the list was read, as by a webhook for a new
+    subscription, so nothing is written or reported. The locked row is
+    returned either way."""
     with transaction.atomic():
         locked = Workspace.objects.select_for_update().get(pk=workspace.pk)
-        if locked.stripe_customer_id == customer_id:
+        newer = (
+            known_ids is not None
+            and locked.stripe_subscription_id
+            and locked.stripe_subscription_id not in known_ids
+        )
+        if locked.stripe_customer_id == customer_id and not newer:
             _report_unadministered(locked, _apply_subscriptions(locked, subs, customer_id))
     return locked
 
@@ -860,8 +872,7 @@ def _cancel_pending(stripe_mod, workspace, current):
     """Keep the current plan: void the invoice of a pending (unpaid)
     switch, which is how Stripe cancels a pending update. Otherwise
     paying that invoice later would still apply the abandoned switch."""
-    invoice = current.get("latest_invoice")
-    invoice_id = invoice.get("id") if isinstance(invoice, dict) else invoice
+    invoice_id = _latest_invoice_id(current)
     if not invoice_id:
         logger.warning(
             "billing: subscription %s has a pending update but no latest "
@@ -880,6 +891,201 @@ def _cancel_pending(stripe_mod, workspace, current):
         workspace.plan,
     )
     return Answer(200, {"plan": workspace.plan, "status": "pending_cancelled"})
+
+
+# ---------------------------------------------------------------------------
+# Ending a person's own plans before they join a team
+# ---------------------------------------------------------------------------
+
+
+class Ending(NamedTuple):
+    """What an attempt to end a workspace's plans at Stripe found.
+
+    ``done`` is true when the last listing read, with each cancel's reply in it, shows nothing in ``LIVE_STATUSES`` and
+    was applied, or when the workspace has no customer that Stripe knows. ``cut`` is true when a cancel the attempt sent
+    took effect, by its reply or by the listing read after the calls. ``stuck`` is true when a subscription the attempt
+    tried to end is still live in that listing, when it left alone a subscription that names another workspace, or
+    when a listing failed."""
+
+    done: bool
+    cut: bool
+    stuck: bool
+
+
+def _latest_invoice_id(sub):
+    """The id of the subscription's latest invoice, whether Stripe gave the id or the expanded invoice, or ""."""
+    invoice = sub.get("latest_invoice")
+    invoice_id = invoice.get("id") if isinstance(invoice, dict) else invoice
+    return invoice_id or ""
+
+
+def _how_to_end(sub):
+    """``(void_first, prorate)`` for ending a live subscription, by its status. The cancel's ``invoice_now`` always
+    equals ``prorate``.
+
+    An active subscription is canceled with proration, so its unused time becomes a credit on the customer's balance,
+    and with a pending update its latest invoice is voided first, which undoes the pending switch. A past_due or unpaid
+    subscription has its latest invoice voided first and is canceled without proration, as Stripe advises for unpaid
+    time. A trialing, paused or incomplete subscription is canceled without proration."""
+    status = sub.get("status")
+    if status == "active":
+        return bool(sub.get("pending_update")), True
+    return status in ("past_due", "unpaid"), False
+
+
+def _apply_ending(workspace, subs, customer_id, held_id):
+    """Apply a listing of an ending through ``_sync_from_subscriptions`` with the ids it knows: those in the listing and
+    ``held_id``, the subscription id that the caller's copy of the workspace held when the ending began. Returns False,
+    and logs it, when the row names a subscription outside them, which a webhook wrote after the listing was read, so
+    the listing was not applied."""
+    known_ids = {sub.get("id") for sub in subs if sub.get("id")}
+    if held_id:
+        known_ids.add(held_id)
+    row = _sync_from_subscriptions(workspace, subs, customer_id, known_ids=known_ids)
+    if row.stripe_subscription_id and row.stripe_subscription_id not in known_ids:
+        logger.info(
+            "billing: workspace %s changed while its subscriptions were being read, so that listing was not applied",
+            workspace.pk,
+        )
+        return False
+    return True
+
+
+def _end_live_subscriptions(stripe_mod, workspace):
+    """End every live subscription on the workspace's Stripe customer, each by ``_how_to_end``, then list the
+    customer's subscriptions again and apply that listing once. Returns an ``Ending``.
+
+    The subscriptions are taken in the order of the first listing, and each one's void, when it has a latest invoice,
+    is sent just before its cancel. A failed void sends no cancel for that subscription. A live subscription whose
+    ``metadata.workspace_id`` names another workspace gets no void and no cancel, because a customer id can be shared
+    by a staff edit and a cancel cannot be undone. When the first listing has nothing to end, no call is made and that
+    listing is applied. Each cancel's reply replaces its subscription in the listing read after the calls.
+
+    It never raises a StripeError: each failure is logged with the exception's class, never Stripe's text, and shows in
+    the result. Call it outside any transaction: the Stripe calls hold no lock, and the one write takes its own."""
+    customer_id = workspace.stripe_customer_id
+    held_id = workspace.stripe_subscription_id
+    if not customer_id:
+        # Nothing at Stripe belongs to a workspace without a customer, and a listing is never made without one.
+        return Ending(True, False, False)
+    try:
+        subs = _list_subscriptions(stripe_mod, customer_id)
+    except stripe_mod.error.StripeError as exc:
+        logger.error("billing: the subscriptions of workspace %s could not be read: %s", workspace.pk, type(exc).__name__)
+        return Ending(False, False, True)
+    if subs is None:
+        _forget_missing_customer(workspace, customer_id)
+        return Ending(True, False, False)
+
+    stuck = False
+    to_end = []
+    for sub in subs:
+        if sub.get("status") not in LIVE_STATUSES:
+            continue
+        named = (sub.get("metadata") or {}).get("workspace_id")
+        if named and named != str(workspace.pk):
+            logger.error(
+                "billing: subscription %s on the customer of workspace %s names workspace %s, so it was not ended",
+                sub.get("id"),
+                workspace.pk,
+                named,
+            )
+            stuck = True
+        else:
+            to_end.append(sub)
+    if not to_end:
+        applied = _apply_ending(workspace, subs, customer_id, held_id)
+        return Ending(applied and not any(sub.get("status") in LIVE_STATUSES for sub in subs), False, stuck)
+
+    tried = []
+    sent = set()
+    replies = {}
+    for sub in to_end:
+        sub_id = sub.get("id")
+        void_first, prorate = _how_to_end(sub)
+        invoice_id = _latest_invoice_id(sub) if void_first else ""
+        tried.append(sub_id)
+        if invoice_id:
+            try:
+                stripe_mod.Invoice.void_invoice(invoice_id)
+            except stripe_mod.error.StripeError as exc:
+                logger.warning(
+                    "billing: Stripe did not confirm the void of invoice %s of subscription %s (workspace %s), "
+                    "so no cancel was sent: %s",
+                    invoice_id,
+                    sub_id,
+                    workspace.pk,
+                    type(exc).__name__,
+                )
+                continue
+        sent.add(sub_id)
+        try:
+            # Both flags are explicit, because the library's and the API's defaults for invoice_now differ. A cancel
+            # carries no idempotency key, so the library must not retry one that may have taken effect.
+            reply = stripe_mod.Subscription.cancel(sub_id, prorate=prorate, invoice_now=prorate, max_network_retries=0)
+        except stripe_mod.error.StripeError as exc:
+            logger.warning(
+                "billing: Stripe did not confirm the cancel of subscription %s of workspace %s: %s",
+                sub_id,
+                workspace.pk,
+                type(exc).__name__,
+            )
+            continue
+        replies[sub_id] = reply
+        if reply.get("status") == "canceled":
+            logger.info("billing: ended subscription %s of workspace %s (prorate %s)", sub_id, workspace.pk, prorate)
+    cut = any(reply.get("status") == "canceled" for reply in replies.values())
+
+    # Read back, whether or not a call raised: a cancel whose answer was lost may have taken effect, and a checkout
+    # completed during the calls must be seen rather than overwritten with Free.
+    try:
+        after = _list_subscriptions(stripe_mod, customer_id)
+    except stripe_mod.error.StripeError as exc:
+        logger.error("billing: the subscriptions of workspace %s could not be read: %s", workspace.pk, type(exc).__name__)
+        return Ending(False, cut, True)
+    if after is None:
+        _forget_missing_customer(workspace, customer_id)
+        return Ending(True, cut, stuck)
+    after = [replies.get(sub.get("id"), sub) for sub in after]
+    status_of = {sub.get("id"): sub.get("status") for sub in after}
+    cut = cut or any(status_of.get(sub_id) == "canceled" for sub_id in sent)
+    applied = _apply_ending(workspace, after, customer_id, held_id)
+    left = next((sub_id for sub_id in tried if status_of.get(sub_id) in LIVE_STATUSES), None)
+    if left is not None:
+        logger.error(
+            "billing: the plan of workspace %s was not ended: the listing read after the calls still shows subscription %s (%s)",
+            workspace.pk,
+            left,
+            status_of[left],
+        )
+        stuck = True
+    return Ending(applied and not any(sub.get("status") in LIVE_STATUSES for sub in after), cut, stuck)
+
+
+def end_plans_before_joining(workspaces):
+    """End the plans of the workspaces a person administers before they join a team, and return one ``Ending``.
+
+    The result is done when every workspace's ending is done, and it is cut or stuck when any workspace's ending is. It
+    stops at the first workspace whose ending is not done, so a refused join ends as little as possible. An empty list
+    makes no call. While the switch is off it returns ``Ending(False, False, False)`` before any query or Stripe call.
+    Call it outside any transaction."""
+    if not settings.TEAM_SEATS:
+        return Ending(False, False, False)
+    workspaces = list(workspaces)
+    if not workspaces:
+        return Ending(True, False, False)
+    stripe_mod, err = _stripe_or_503()
+    if err is not None:
+        logger.error("billing: the plan of workspace %s was not ended: billing is not configured", workspaces[0].pk)
+        return Ending(False, False, True)
+    cut = stuck = False
+    for workspace in workspaces:
+        ending = _end_live_subscriptions(stripe_mod, workspace)
+        cut = cut or ending.cut
+        stuck = stuck or ending.stuck
+        if not ending.done:
+            return Ending(False, cut, stuck)
+    return Ending(True, cut, stuck)
 
 
 MOVE_ATTEMPTS = 3
