@@ -271,11 +271,13 @@ class SeatChangeRefused(Exception):
 class JoinRefused(Exception):
     """A person was not joined. `code` is one of why_not_join's, or not_valid for a link that no longer works. own_plan_ends
     is the offer that the join makes and the person has not agreed to, and plan_not_ended is a plan of the person's own that
-    Stripe did not confirm as ended."""
+    Stripe did not confirm as ended. `plan_ended` is true when a cancel that this request sent took effect before the
+    refusal, so the page can say that the person's own plan has ended."""
 
-    def __init__(self, code):
+    def __init__(self, code, plan_ended=False):
         super().__init__(code)
         self.code = code
+        self.plan_ended = plan_ended
 
 
 def _current_workspace_ids(user):
@@ -286,6 +288,15 @@ def _current_workspace_ids(user):
 def _shows_a_plan(workspace):
     """True when the workspace's mirror shows a plan: one that is not Free, or a subscription id. It reads nothing."""
     return workspace.plan != Workspace.PLAN_FREE or bool(workspace.stripe_subscription_id)
+
+
+def _plans_to_end(user):
+    """The workspaces of the person's open administrator rows whose mirror shows a plan and that have a Stripe customer, in
+    primary-key order. These are the plans that joining a team ends. It is one read, with no lock."""
+    rows = Membership.objects.filter(
+        user=user, role=Membership.ADMINISTRATOR, removed_at__isnull=True
+    ).select_related("workspace").order_by("workspace_id")
+    return [row.workspace for row in rows if _shows_a_plan(row.workspace) and row.workspace.stripe_customer_id]
 
 
 def why_not_join(user, invitation):
@@ -364,11 +375,15 @@ def _join_once(user, digest, team_id):
         return row
 
 
-def accept_invitation(user, raw_token):
+def accept_invitation(user, raw_token, *, own_plan_agreed=False):
     """Move `user` onto the invitation's team, and stop what their own account made. Returns the new Membership.
 
-    Raises JoinRefused. The workspace rows of the team and of the person's own places are locked in primary-key order, and
-    the person's rows are read again under the locks."""
+    Raises JoinRefused. When the person's own plan is what stands between them and the team (own_plan_ends), the join needs
+    `own_plan_agreed`, the consent field of the Join form, and that plan is then ended at Stripe first, before the locks and
+    outside every transaction. The workspace rows of the team and of the person's own places are then locked in primary-key
+    order, and the person's rows are read again under the locks, so the join commits only when the mirror it reads there
+    shows no plan. A refusal after a cancel that took effect carries plan_ended. own_plan_ends under the locks after an
+    ending that is stuck is plan_not_ended."""
     if not settings.TEAM_SEATS:
         raise JoinRefused("not_valid")
     current_membership(user)  # before any lock: it can write
@@ -376,15 +391,33 @@ def accept_invitation(user, raw_token):
     team_id = Invitation.objects.filter(token_hash=digest).values_list("workspace_id", flat=True).first()
     if team_id is None:
         raise JoinRefused("not_valid")
+    attempted = False
+    ending = None
+    invitation = find_invitation(raw_token)
+    if invitation is not None and invitation.workspace.suspended_at is None and why_not_join(user, invitation) == "own_plan_ends":
+        if not own_plan_agreed:
+            raise JoinRefused("own_plan_ends")
+        # account.py imports this module when it loads, so this import waits until a plan is to be ended.
+        from drop_billing.account import end_plans_before_joining
+
+        attempted = True
+        ending = end_plans_before_joining(_plans_to_end(user))
     try:
         for _ in range(3):
             row = _join_once(user, digest, team_id)
             if row is not None:
                 return row
+        code = "on_another_team"
     except IntegrityError:
         # membership_one_team: the person joined somewhere else in the meantime.
-        raise JoinRefused("on_another_team") from None
-    raise JoinRefused("on_another_team")
+        code = "on_another_team"
+    except JoinRefused as refused:
+        code = refused.code
+    if code == "own_plan_ends" and attempted and ending.stuck:
+        # The ending is stuck: a subscription it tried to end is still live, one that names another workspace was left
+        # alone, or Stripe could not be read.
+        raise JoinRefused("plan_not_ended")
+    raise JoinRefused(code, plan_ended=attempted and ending.cut)
 
 
 def decline_invitation(raw_token):

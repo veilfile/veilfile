@@ -1,11 +1,12 @@
 {% extends "layouts/form.html" %}
-{# An invitation to a team: what it offers, in the states of the Words table. Context: inviter, administrator (the team's current administrator), address, here (this page's path), code (the refusal, None for a person who can join, or own_plan_ends, an offer that shows the join form) and signed_in. A signed-out visitor is told nothing of whether the address has an account. #}
+{# An invitation to a team: what it offers, in the states of the Words table. Context: inviter, administrator (the team's current administrator), address, here (this page's path), code (the refusal, None for a person who can join, or own_plan_ends, an offer that shows the join form), signed_in and plan_ended (true when this request ended the person's own plan before the join was refused, which adds one sentence). plan_not_ended has its own branch, because the else branch shows Join for any code it does not name. A signed-out visitor is told nothing of whether the address has an account. #}
 {% block title %}Invitation | Veilfile{% endblock %}
 {% block meta %}<meta name="robots" content="noindex, nofollow">{% endblock %}
 {% block form_page %}
 <h1>You are invited to a team</h1>
 <p>{{ inviter }} invited {{ address }} to join their team on Veilfile.</p>
-{% if not signed_in %}
+{% if plan_ended %}<p>Your own plan has ended, and any unused part of what you paid will be credited to your Stripe customer balance.</p>
+{% endif %}{% if not signed_in %}
 <p>Sign in with that address, or sign up with it, to accept.</p>
 <p>A new account must verify its address first, then open this link again.</p>
 <p class="form-links"><a class="action interactive" href="{% url 'login' %}?next={{ here|urlencode }}">Sign in</a> <a class="label interactive" href="{% url 'signup' %}?next={{ here|urlencode }}">Sign up</a></p>
@@ -31,6 +32,8 @@
 <p>This account's plan was set by Veilfile, not bought through Stripe, so it cannot join a team yet. Contact support@veilfile.com.</p>
 {% elif code == "no_free_seat" %}
 <p>This team has no free seat. Ask {{ administrator }} to make room, then open this link again.</p>
+{% elif code == "plan_not_ended" %}
+<p>Stripe did not confirm that your own plan has ended, so you have not joined the team. Wait a moment, then open this link again. If it happens again, contact support@veilfile.com.</p>
 {% else %}
 <h2>What joining means</h2>
 <ul>
