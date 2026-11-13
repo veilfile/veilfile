@@ -8,8 +8,9 @@ subscriptions entitle it to, exactly as the webhook would compute it.
 Paid workspaces with no Stripe customer at all (manual or test grants) are
 listed, and only moved to free with --reset-unbilled. --list-orphans also
 lists live subscriptions whose customer is on no workspace (paying without
-a plan). --list-unadministered prints the paid workspaces that have no
-current administrator, from the database alone, and contacts nothing.
+a plan). --list-unadministered prints the workspaces with a paid plan or a
+subscription id that have no current administrator, from the database
+alone, and contacts nothing.
 
 --apply refuses to run with a test-mode key unless --allow-test-key is
 given: against the production database, a test key would report every live
@@ -84,8 +85,8 @@ class Command(BaseCommand):
             "--list-unadministered",
             action="store_true",
             help=(
-                "List paid workspaces that have no current administrator, from "
-                "the database alone (read-only)."
+                "List workspaces with a paid plan or a subscription id that have "
+                "no current administrator, from the database alone (read-only)."
             ),
         )
 
@@ -112,7 +113,8 @@ class Command(BaseCommand):
                 f"customer {ws.stripe_customer_id or '-'}, no current administrator"
             )
         self.stdout.write(
-            f"{count} workspace(s) with a paid plan and no current administrator"
+            f"{count} workspace(s) with a paid plan or a subscription id and no "
+            "current administrator"
         )
 
     def handle(self, *args, **options):

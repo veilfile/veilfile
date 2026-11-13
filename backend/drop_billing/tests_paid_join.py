@@ -928,6 +928,19 @@ class UnadministeredEndingTests(PaidJoinBase):
         self.cancel.assert_not_called()
         self.assertEqual(self.reload().plan, "team", "neither ends the plan")
 
+    def test_a_subscription_of_another_workspace_makes_the_webhook_answer_500(self):
+        self.join_for_real()
+        self.at_stripe["sub_N"]["metadata"] = {"workspace_id": "another-workspace"}
+        event = checkout_completed(sub_id="sub_N")
+        with self.assertLogs("drop_billing", level="ERROR") as logs, self.assertLogs("django.request", level="ERROR"):
+            response = self.post_event(event)
+        self.assertEqual(response.status_code, 500, f"{WEBHOOK}: Stripe retries until staff act")
+        self.assertFalse(ProcessedStripeEvent.objects.filter(event_id=event["id"]).exists(), f"{WEBHOOK}: nothing is recorded")
+        self.cancel.assert_not_called()
+        self.void.assert_not_called()
+        self.assertEqual(self.state(), ("team", "sub_N"), f"{ACCOUNT}: the plan is left for staff")
+        self.assertIn(self.NOT_ENDED % self.ws.pk, [r.getMessage() for r in logs.records], f"{ACCOUNT}: the failure is logged")
+
     def test_with_the_switch_off_end_unadministered_asks_nothing(self):
         self.join_for_real()
         Workspace.objects.filter(pk=self.ws.pk).update(plan="team", stripe_subscription_id="sub_N")
@@ -1032,13 +1045,18 @@ class ListUnadministeredTests(FixBillingBase):
         Workspace.objects.filter(pk=free_team.pk).update(plan="free", stripe_subscription_id="")
         row = Membership.objects.get(workspace=free_team, role=Membership.ADMINISTRATOR, removed_at=None)
         teams._close_administrator_row(row, timezone.now())
+        stale_team, _ = team_of("kim")
+        Workspace.objects.filter(pk=stale_team.pk).update(plan="free", stripe_subscription_id="sub_K")
+        row = Membership.objects.get(workspace=stale_team, role=Membership.ADMINISTRATOR, removed_at=None)
+        teams._close_administrator_row(row, timezone.now())
         listed = self.patch_stripe("list", return_value=sub_list())
         out = io.StringIO()
         with mock.patch.dict(os.environ, {"STRIPE_SECRET_KEY": ""}):
             call_command("sync_stripe_billing", "--list-unadministered", stdout=out)
         expected = [
             f"workspace {self.ws.pk}: plan team, subscription sub_A, customer cus_A, no current administrator",
-            "1 workspace(s) with a paid plan and no current administrator",
+            f"workspace {stale_team.pk}: plan free, subscription sub_K, customer -, no current administrator",
+            "2 workspace(s) with a paid plan or a subscription id and no current administrator",
         ]
         self.assertEqual(out.getvalue().splitlines(), expected, f"{self.COMMAND}: only the paid workspace nobody administers, not {out.getvalue().splitlines()}")
         listed.assert_not_called()
