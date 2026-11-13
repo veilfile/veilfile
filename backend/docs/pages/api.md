@@ -31,6 +31,7 @@ Multipart form:
 | `file` | yes | Send the file bytes. The maximum size is 25 MiB. |
 | `ttl_days` | no | Set the number of whole days until expiry. The default is the plan max. Larger values are clamped to the plan max; a non-integer gets `400` `invalid_request`. |
 | `on_secret` | no | `flag` (default) or `reject`. `reject` refuses a file that trips the secret scanner (`400` `secret_detected`) and stores nothing. |
+| `visibility` | no | For a team, `only_me` or `team`, case-insensitive: who on the team can see the file on their Files page. It is honored only when the administrator lets each person decide; otherwise the team's setting applies. The answer's `visibility` says which one the file got, and any other value returns `400` `invalid_request`. |
 
 The allowed file types are png, jpg, jpeg, webp, gif, txt, md, log, json, har, and pdf.
 

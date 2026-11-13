@@ -41,7 +41,7 @@ If the base URL above still reads YOUR-DEPLOY, replace it with the address of yo
 
 ## Endpoints
 
-- `POST /api/v1/artifacts`: upload a file as multipart form data (`file`, optional `ttl_days`, `on_secret`). The maximum size is 25 MiB. The allowed types are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf. The stored type comes from the extension; filenames are sanitized.
+- `POST /api/v1/artifacts`: upload a file as multipart form data (`file`, optional `ttl_days`, `on_secret` and, for a team, `visibility` of `only_me` or `team`). The maximum size is 25 MiB. The allowed types are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf. The stored type comes from the extension; filenames are sanitized.
 - `PUT /api/v1/uploads/<token>`: complete a one-time upload minted by `create_upload_url`. It needs no auth header, because the token authorizes the request.
 - `GET /a/<token>`: download a file. It is public and needs no auth, because the 256-bit token authorizes the request. Images, PDF and `.txt`/`.log`/`.md` files display inline, and everything else (JSON, HAR) downloads as an attachment. An expired or revoked file returns 404, and a storage outage returns 503 with `Retry-After`. The response carries `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, which ask caches not to store the bytes and crawlers not to index them.
 - `GET /api/v1/artifacts`: list own artifacts, newest first, as a bare JSON array (key auth). It accepts an optional `limit` (1 to 200) and `cursor`. The `X-Next-Cursor` and `Link: rel="next"` headers point to the next page.

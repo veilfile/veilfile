@@ -18,7 +18,7 @@ Most setups below read the key from `VEILFILE_API_KEY`. A key saved by `veilfile
 
 Keys start with `vlf_`. The server exposes four tools: `upload_artifact`, `create_upload_url`, `list_artifacts`, and `revoke_artifact`.
 
-`upload_artifact` takes the file as base64, which suits small files. For anything over a few MB (HAR files, log bundles, recordings), call `create_upload_url` and then `curl --upload-file` the raw bytes to the URL it returns. Failures come back as tool results with `isError: true` and a JSON `{error, code}` body.
+`upload_artifact` takes the file as base64, which suits small files. For anything over a few MB (HAR files, log bundles, recordings), call `create_upload_url` and then `curl --upload-file` the raw bytes to the URL it returns. On a team, both tools take an optional `visibility` of `only_me` or `team`, honored when the administrator lets each person decide, and the upload's result says which one the file got. Failures come back as tool results with `isError: true` and a JSON `{error, code}` body.
 
 ### Claude Code
 
