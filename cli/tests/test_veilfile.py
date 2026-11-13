@@ -444,6 +444,89 @@ class CliTestCase(unittest.TestCase):
         content_type = headers.get("Content-type", "")
         self.assertTrue(content_type.startswith("multipart/form-data; boundary="))
 
+    def test_push_success_prints_expiry_and_files_pointer(self):
+        self._write_key_file()
+        target = self._write_upload_file()
+        http = ScriptedHttp(
+            [
+                (
+                    201,
+                    {
+                        "url": "https://veilfile.com/a/abc123",
+                        "expires_at": "2026-11-11T18:30:00+00:00",
+                        "secret_flags": [],
+                        "size_bytes": 14,
+                    },
+                )
+            ]
+        )
+        code, out, _ = self.run_cli(["push", str(target)], http)
+        self.assertEqual(code, 0)
+        self.assertIn("https://veilfile.com/a/abc123", out)
+        self.assertIn("Expires November 11, 2026 at 6:30 PM UTC.", out)
+        self.assertIn(
+            "Manage or delete this file under Files: "
+            "https://veilfile.com/app/files/",
+            out,
+        )
+        self.assertNotIn("adjusted", out)
+
+    def test_push_success_notes_ttl_adjusted(self):
+        self._write_key_file()
+        target = self._write_upload_file()
+        http = ScriptedHttp(
+            [
+                (
+                    201,
+                    {
+                        "url": "https://veilfile.com/a/abc123",
+                        "expires_at": "2026-11-11T18:30:00+00:00",
+                        "ttl_adjusted": True,
+                        "secret_flags": [],
+                    },
+                )
+            ]
+        )
+        code, out, _ = self.run_cli(["push", str(target)], http)
+        self.assertEqual(code, 0)
+        self.assertIn("Expires November 11, 2026 at 6:30 PM UTC.", out)
+        self.assertIn("lifetime was adjusted to fit your plan", out)
+
+    def test_push_success_without_expiry_still_prints_pointer(self):
+        self._write_key_file()
+        target = self._write_upload_file()
+        http = ScriptedHttp(
+            [(201, {"url": "https://veilfile.com/a/abc123", "secret_flags": []})]
+        )
+        code, out, _ = self.run_cli(["push", str(target)], http)
+        self.assertEqual(code, 0)
+        self.assertNotIn("Expires", out)
+        self.assertIn(
+            "Manage or delete this file under Files: "
+            "https://veilfile.com/app/files/",
+            out,
+        )
+
+    def test_push_success_ignores_unparseable_expiry(self):
+        self._write_key_file()
+        target = self._write_upload_file()
+        http = ScriptedHttp(
+            [
+                (
+                    201,
+                    {
+                        "url": "https://veilfile.com/a/abc123",
+                        "expires_at": "not-a-date",
+                        "secret_flags": [],
+                    },
+                )
+            ]
+        )
+        code, out, _ = self.run_cli(["push", str(target)], http)
+        self.assertEqual(code, 0)
+        self.assertNotIn("Expires", out)
+        self.assertIn("https://veilfile.com/a/abc123", out)
+
     def test_push_warns_on_secret_flags(self):
         self._write_key_file()
         target = self._write_upload_file()
