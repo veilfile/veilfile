@@ -957,9 +957,10 @@ def _end_live_subscriptions(stripe_mod, workspace):
     customer's subscriptions again and apply that listing once. Returns an ``Ending``.
 
     The subscriptions are taken in the order of the first listing, and each one's void, when it has a latest invoice,
-    is sent just before its cancel. A failed void sends no cancel for that subscription. A live subscription whose
-    ``metadata.workspace_id`` names another workspace gets no void and no cancel, because a customer id can be shared
-    by a staff edit and a cancel cannot be undone. When the first listing has nothing to end, no call is made and that
+    is sent just before its cancel. A failed void sends no cancel for that subscription. Only a live subscription whose
+    ``metadata.workspace_id`` names this workspace, or one with no such metadata that is the subscription the workspace
+    holds, is ended. Any other live subscription gets no void and no cancel and makes the ending stuck, because a
+    customer id can be shared by a staff edit and a cancel cannot be undone. When the first listing has nothing to end, no call is made and that
     listing is applied. Each cancel's reply replaces its subscription in the listing read after the calls.
 
     It never raises a StripeError: each failure is logged with the exception's class, never Stripe's text, and shows in
@@ -984,7 +985,9 @@ def _end_live_subscriptions(stripe_mod, workspace):
         if sub.get("status") not in LIVE_STATUSES:
             continue
         named = (sub.get("metadata") or {}).get("workspace_id")
-        if named and named != str(workspace.pk):
+        if named == str(workspace.pk) or (not named and held_id and sub.get("id") == held_id):
+            to_end.append(sub)
+        elif named:
             logger.error(
                 "billing: subscription %s on the customer of workspace %s names workspace %s, so it was not ended",
                 sub.get("id"),
@@ -993,7 +996,13 @@ def _end_live_subscriptions(stripe_mod, workspace):
             )
             stuck = True
         else:
-            to_end.append(sub)
+            logger.error(
+                "billing: subscription %s on the customer of workspace %s names no workspace and is not the one that "
+                "workspace holds, so it was not ended",
+                sub.get("id"),
+                workspace.pk,
+            )
+            stuck = True
     if not to_end:
         applied = _apply_ending(workspace, subs, customer_id, held_id)
         return Ending(applied and not any(sub.get("status") in LIVE_STATUSES for sub in subs), False, stuck)

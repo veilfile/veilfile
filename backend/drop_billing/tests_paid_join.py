@@ -262,6 +262,16 @@ class EndingTests(PaidJoinBase):
         row = (self.ws.plan, self.ws.stripe_customer_id, self.ws.stripe_subscription_id)
         self.assertEqual(row, ("team", "", ""), f"{ACCOUNT}: a plan set by hand is left as it is")
 
+    def test_an_unmarked_subscription_that_the_workspace_does_not_hold_is_not_ended(self):
+        self.at_stripe["sub_M"] = make_sub("sub_M", "active", "price_team", created=2)
+        with self.assertLogs("drop_billing", level="ERROR") as logged:
+            ending = self.end()
+        self.assertEqual(self.calls, ["cancel sub_A"], f"{ACCOUNT}: only the subscription the workspace holds is ended")
+        self.assertEqual(ending, account.Ending(False, True, True), f"{ACCOUNT}: a live subscription is left, so the ending is stuck")
+        errors = [line for line in logged.output if "names no workspace" in line]
+        self.assertEqual(len(errors), 1, f"{ACCOUNT}: the subscription that was left is logged once")
+        self.assertIn("sub_M", errors[0], f"{ACCOUNT}: the log names the subscription")
+
     def test_a_subscription_that_names_this_workspace_is_ended(self):
         self.at_stripe = {"sub_A": make_sub("sub_A", "active", "price_team", metadata={"workspace_id": str(self.ws.pk)})}
         ending = self.end()
@@ -310,7 +320,7 @@ class EndingTests(PaidJoinBase):
         self.assertNotIn("secret detail", "\n".join(logged.output), f"{ACCOUNT}: no line carries Stripe's text")
 
     def test_two_live_subscriptions_are_both_ended_and_applied_once(self):
-        self.at_stripe["sub_U"] = make_sub("sub_U", "unpaid", "price_team", created=2)
+        self.at_stripe["sub_U"] = make_sub("sub_U", "unpaid", "price_team", created=2, metadata={"workspace_id": str(self.ws.pk)})
         self.at_stripe["sub_U"]["latest_invoice"] = "in_U"
         with mock.patch.object(account, "_sync_from_subscriptions", wraps=account._sync_from_subscriptions) as synced:
             ending = self.end()
@@ -556,7 +566,7 @@ class PaidJoinTests(PaidJoinBase):
         self.assertTrue(self.on_the_team(), f"{TEAMS}: the payer is a member of the team")
 
     def test_a_leftover_that_grants_nothing_does_not_stop_the_join(self):
-        self.at_stripe["sub_U"] = make_sub("sub_U", "unpaid", "price_team", created=2)
+        self.at_stripe["sub_U"] = make_sub("sub_U", "unpaid", "price_team", created=2, metadata={"workspace_id": str(self.ws.pk)})
         self.at_stripe["sub_U"]["latest_invoice"] = "in_U"
 
         def void_refused(invoice_id, **kwargs):
