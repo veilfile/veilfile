@@ -62,7 +62,7 @@ class APIKeyAdmin(admin.ModelAdmin):
 @admin.register(Artifact)
 class ArtifactAdmin(admin.ModelAdmin):
     list_display = ("filename", "workspace", "member", "size_bytes", "expires_at", "created_at")
-    list_filter = ("mime_type",)
+    list_filter = ("mime_type", "safety_status")
     # safety_status changes only through the actions below, so that no hold skips the notice to the administrator.
     readonly_fields = ("token", "safety_status")
     raw_id_fields = ("member",)
@@ -102,9 +102,18 @@ class ArtifactAdmin(admin.ModelAdmin):
         for artifact in chosen:
             if artifact.pk in released_ids:
                 self.log_change(request, artifact, "Released.")
+        now = timezone.now()
+        past = sum(1 for artifact in chosen if artifact.pk in released_ids and artifact.expires_at <= now)
+        swept_next = (
+            f" {past} {'file was' if past == 1 else 'files were'} past {'its' if past == 1 else 'their'} expiry and will "
+            "be deleted by the next sweep."
+            if past
+            else ""
+        )
         self.message_user(
             request,
-            f"{released} {'file' if released == 1 else 'files'} released. The keys that uploaded them stay stopped.",
+            f"{released} {'file' if released == 1 else 'files'} released. The keys that uploaded them stay stopped."
+            + swept_next,
         )
 
 

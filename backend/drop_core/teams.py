@@ -46,6 +46,9 @@ INVITES_PER_ADDRESS_PER_DAY = 3
 MAX_WAITING = 25
 SITE_INVITES_PER_DAY = 100
 DECLINE_WAIT = timedelta(days=30)
+# How long an invitation is kept after it ends, the Privacy Policy's 30 days. Never shorter than DECLINE_WAIT, which reads
+# declined rows, and longer than the hour and day the limits look back.
+INVITATION_KEEP = timedelta(days=30)
 GONE_NOTICE = timedelta(days=7)
 OFFER_TTL = timedelta(days=7)
 FILE_VISIBILITY_SETTINGS = (FILE_VISIBILITY_MEMBERS_CHOOSE, FILE_VISIBILITY_ALWAYS_TEAM, FILE_VISIBILITY_ALWAYS_ONLY_ME)
@@ -104,6 +107,20 @@ def _open(workspace):
     return Invitation.objects.filter(
         workspace=workspace, accepted_at__isnull=True, declined_at__isnull=True, revoked_at__isnull=True
     )
+
+
+def purge_ended_invitations(now=None):
+    """Delete every invitation that ended INVITATION_KEEP ago or more, and return how many went. An invitation ends at the
+    first of its accept, decline, revoke and expiry, so one closed as revoked long after it expired counts from the expiry.
+    The sweep runs this."""
+    cutoff = (now or timezone.now()) - INVITATION_KEEP
+    _, by_model = Invitation.objects.filter(
+        Q(accepted_at__lte=cutoff) | Q(declined_at__lte=cutoff) | Q(revoked_at__lte=cutoff) | Q(expires_at__lte=cutoff)
+    ).delete()
+    deleted = by_model.get(Invitation._meta.label, 0)
+    if deleted:
+        logger.info("sweep: deleted %d invitation(s) that ended 30 or more days ago", deleted)
+    return deleted
 
 
 def seats_in_use(workspace):

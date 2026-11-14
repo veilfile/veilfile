@@ -22,6 +22,9 @@ A storage-delete failure keeps the DB row so the next run retries; the row
 is only deleted after the file is gone, so files are never orphaned.
 Revoked artifacts whose storage delete failed are kept expired, so the
 sweep retries those too. Sweep failures never propagate from maybe_sweep.
+
+A held file is not deleted at its expiry. It waits until staff release it,
+and the next sweep deletes it.
 """
 
 import datetime
@@ -78,8 +81,11 @@ def sweep_expired(limit=None, time_budget=None, stop_on_failure=False):
 
     storage = get_storage()
     started = time.monotonic()
-    expired = Artifact.objects.filter(expires_at__lte=timezone.now()).order_by(
-        "expires_at"
+    # A held file is left out of the query, not skipped in the loop, so held rows never fill a batch.
+    expired = (
+        Artifact.objects.filter(expires_at__lte=timezone.now())
+        .exclude(safety_status="held")
+        .order_by("expires_at")
     )
     if limit is not None:
         expired = expired[:limit]
@@ -130,6 +136,13 @@ def sweep_expired(limit=None, time_budget=None, stop_on_failure=False):
         purge_stale_device_codes()
     except Exception:
         logger.exception("sweep: purging stale device codes failed")
+    # Invitations 30 days after they end (the Privacy Policy); a failure here must not fail the sweep either.
+    try:
+        from .teams import purge_ended_invitations
+
+        purge_ended_invitations()
+    except Exception:
+        logger.exception("sweep: deleting ended invitations failed")
     return SweepResult(swept, freed, failed, complete)
 
 

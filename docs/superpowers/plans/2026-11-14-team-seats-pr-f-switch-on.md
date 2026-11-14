@@ -26,6 +26,7 @@ Each has a recommendation, and the plan proceeds on it.
 
 - **F1, the words.** I draft the Terms and Privacy wording into `~/dev/veilfile-legal-drafts/`, one file each, in the form of `terms-joining-a-team.md`: where each sentence goes, and the code it describes. The topics are seats; what an administrator can see and do; invitations, and how long an invited address is kept; removal, leaving and the transfer, with the Stripe customer's email at a transfer; staff deletion of a member's account; the hold notice, which must not promise more than an administrator can work out; the bar on members when a team drops to Free; and joining from a paid plan, with that file's three open sentences. I also draft support's steps for refunding a checkout paid after a join, for `veilfile/ops`. You decide every sentence.
 - **F2, the code** (tasks below, branch `seats/ready-for-switch`).
+- **F2b, keep and forget** (`2026-11-14-team-seats-pr-f2b-keep-and-forget.md`). The sweep deletes invitations 30 days after they end, and it keeps held files until staff release them.
 - **F3, the rehearsal.** On Postgres, never port 5432, from a copy migrated from the previous release, with the kit in `~/dev/veilfile-rehearsal-kit/prd2` and D2's Task 7 steps. With the switch on, it checks the following:
   - Every existing account is a team of one, with its dashboard, keys, files, limits and billing unchanged.
   - The Plans page states seats.
@@ -131,9 +132,9 @@ Voice: complete sentences, semicolons only between independent clauses, no em da
 
 - The component catalog shows seats when the switch is on, as the Plans page does. `plans.html` has two adjacent `{% if team_seats %}` blocks that could be one. An invoice that is neither void nor open, such as a draft, still goes to the void, and a refused void ends in `plan_not_ended`, as D2 allowed.
 
-## Owner decisions raised by F1
+## Owner decisions raised by F1 (answered 2026-11-14)
 
-- Whether F2 or a later slice deletes an invitation 30 days after it ends, so that the Privacy Policy can say so.
-- Whether members of a team on Free may sign in, as the code allows, or are refused, as the spec's decision 13 says.
-- Whether a held file must be preserved past its expiry.
-
+- **Invitations:** each one is deleted 30 days after it is accepted, declined, withdrawn or expires. F2b does it (`2026-11-14-team-seats-pr-f2b-keep-and-forget.md`).
+- **A team on Free:** its members other than the administrator can still sign in, but only to see and revoke their own files or leave, as the code does. The spec's item 10 settles it over decision 13's "cannot sign in". The Terms say so, and no code changes.
+- **Held files:** each one is kept past its expiry until staff release it, and F2b does it. A lawyer approves the policy sentence, since a report to NCMEC may oblige Veilfile to keep a file for a year.
+- **The three joining sentences in `terms-joining-a-team.md`:** all go in. Someone who joins within 14 days can ask for the first payment back in place of the credit. A payment that completes after a join is credited, or refunded on request. Unused credit is refunded before staff delete an account.

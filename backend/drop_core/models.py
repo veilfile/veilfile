@@ -750,7 +750,7 @@ class Invitation(models.Model):
     """An administrator's invitation of one address to the team. While it waits and has not expired, it holds a seat.
 
     Only the hash of the link's token is stored. An invitation ends in exactly one of accepted, declined or revoked;
-    an expired one is closed as revoked the next time its team invites."""
+    an expired one is closed as revoked the next time its team invites. The sweep deletes it 30 days after it ends."""
 
     TTL = timedelta(days=7)
 
