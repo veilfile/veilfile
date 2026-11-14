@@ -160,6 +160,7 @@ class FixBillingBase(TestCase):
             "session": (stripe.checkout.Session, "create"),
             "portal": (stripe.billing_portal.Session, "create"),
             "void": (stripe.Invoice, "void_invoice"),
+            "retrieve_invoice": (stripe.Invoice, "retrieve"),
             "retrieve_customer": (stripe.Customer, "retrieve"),
         }[name]
         patcher = mock.patch.object(*target, **kwargs)

@@ -1016,6 +1016,21 @@ def _end_live_subscriptions(stripe_mod, workspace):
         invoice_id = _latest_invoice_id(sub) if void_first else ""
         tried.append(sub_id)
         if invoice_id:
+            # Read the invoice first, so that an invoice an earlier press already voided is not voided again (D2
+            # decision 15). A read is safe to retry, so it keeps the library's retries. A failed read sends nothing.
+            try:
+                already_void = stripe_mod.Invoice.retrieve(invoice_id).get("status") == "void"
+            except stripe_mod.error.StripeError as exc:
+                logger.warning(
+                    "billing: Stripe did not answer the read of invoice %s of subscription %s (workspace %s), "
+                    "so no void or cancel was sent: %s",
+                    invoice_id,
+                    sub_id,
+                    workspace.pk,
+                    type(exc).__name__,
+                )
+                continue
+        if invoice_id and not already_void:
             try:
                 stripe_mod.Invoice.void_invoice(invoice_id)
             except stripe_mod.error.StripeError as exc:

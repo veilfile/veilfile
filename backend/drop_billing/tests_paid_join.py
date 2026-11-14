@@ -68,6 +68,9 @@ class PaidJoinBase(FixBillingBase):
         self.listed = self.patch_stripe("list", side_effect=self.listing)
         self.cancel = self.patch_stripe("cancel", side_effect=self.canceling)
         self.void = self.patch_stripe("void", side_effect=self.voiding)
+        # Each latest invoice is open unless a test says otherwise. Reads are not added to `calls`.
+        self.invoice_status = {}
+        self.read_invoice = self.patch_stripe("retrieve_invoice", side_effect=self.reading_invoice)
 
     def listing(self, *args, **kwargs):
         """What Stripe lists now, copied, so that a listing never changes after it is returned."""
@@ -77,6 +80,9 @@ class PaidJoinBase(FixBillingBase):
         self.calls.append(f"cancel {sub_id}")
         self.at_stripe[sub_id]["status"] = "canceled"
         return copy.deepcopy(self.at_stripe[sub_id])
+
+    def reading_invoice(self, invoice_id, **kwargs):
+        return {"id": invoice_id, "status": self.invoice_status.get(invoice_id, "open")}
 
     def voiding(self, invoice_id, **kwargs):
         self.calls.append(f"void {invoice_id}")
@@ -400,6 +406,44 @@ class EndingTests(PaidJoinBase):
         self.assertTrue(ending.done, f"{ACCOUNT}: the active plan ends")
         refund.assert_not_called()
         credit_note.assert_not_called()
+
+
+class AlreadyVoidTests(PaidJoinBase):
+    """F2: the ending reads the latest invoice before it voids, so a second press after a void that worked and a cancel
+    that failed does not meet Stripe's answer to a second void (D2 decision 15)."""
+
+    def end(self):
+        stripe_mod, _ = account._stripe_or_503()
+        return account._end_live_subscriptions(stripe_mod, self.ws)
+
+    def test_an_invoice_already_void_is_not_voided_again(self):
+        self.at_stripe["sub_A"].update(status="past_due", latest_invoice="in_A")
+        self.invoice_status["in_A"] = "void"
+        ending = self.end()
+        self.void.assert_not_called()
+        self.assertEqual(self.calls, ["cancel sub_A"], f"{ACCOUNT}: an invoice already void goes straight to the cancel")
+        self.assertEqual(ending, account.Ending(True, True, False), f"{ACCOUNT}: the ending is done and cut")
+        self.assertEqual(self.state(), ("free", ""), f"{ACCOUNT}: the read-back is applied")
+
+    def test_a_failed_read_sends_no_cancel(self):
+        self.at_stripe["sub_A"].update(status="unpaid", latest_invoice="in_A")
+        self.read_invoice.side_effect = stripe.APIConnectionError("secret detail")
+        with self.assertLogs("drop_billing", level="WARNING") as logged:
+            ending = self.end()
+        self.void.assert_not_called()
+        self.cancel.assert_not_called()
+        self.assertEqual(ending, account.Ending(False, False, True), f"{ACCOUNT}: a failed read leaves the plan live, so it is stuck")
+        warnings = messages(logged, logging.WARNING)
+        self.assertEqual(len(warnings), 1, f"{ACCOUNT}: the failed read logs one WARNING")
+        for named in ("in_A", "sub_A", str(self.ws.pk), "APIConnectionError"):
+            self.assertIn(named, warnings[0], f"{ACCOUNT}: the WARNING names {named}")
+        self.assertNotIn("secret detail", "\n".join(logged.output), f"{ACCOUNT}: no line carries Stripe's text")
+
+    def test_an_open_invoice_is_voided_as_today(self):
+        self.at_stripe["sub_A"].update(status="past_due", latest_invoice="in_A")
+        self.end()
+        self.read_invoice.assert_called_once_with("in_A")
+        self.assertEqual(self.calls, ["void in_A", "cancel sub_A"], f"{ACCOUNT}: an open invoice is voided, then the cancel")
 
 
 class PaidJoinTests(PaidJoinBase):
@@ -1067,3 +1111,47 @@ class ListUnadministeredTests(FixBillingBase):
                 with self.assertRaises(CommandError) as raised:
                     call_command("sync_stripe_billing", "--list-unadministered", option, stdout=io.StringIO())
                 self.assertEqual(str(raised.exception), self.REFUSED, f"{self.COMMAND}: {option} is refused")
+
+
+class ListSharedCustomersTests(FixBillingBase):
+    """F2: `sync_stripe_billing --list-shared-customers` lists Stripe customers that more than one workspace holds, from
+    the database alone, for F4's checklist."""
+
+    longMessage = False
+    COMMAND = "backend/drop_billing/management/commands/sync_stripe_billing.py"
+    REFUSED = "--list-shared-customers reads the database alone; run it without other options."
+
+    def run_list(self):
+        listed = self.patch_stripe("list", return_value=sub_list())
+        before = list(Workspace.objects.order_by("pk").values())
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"STRIPE_SECRET_KEY": ""}):
+            call_command("sync_stripe_billing", "--list-shared-customers", stdout=out)
+        listed.assert_not_called()
+        self.assertEqual(list(Workspace.objects.order_by("pk").values()), before, f"{self.COMMAND}: no row changes")
+        return out.getvalue().splitlines()
+
+    def test_a_shared_customer_is_listed_with_its_workspaces(self):
+        self.set_billing("team", customer="cus_A", sub_id="sub_A")
+        second = Workspace.objects.create(owner=self.user, name="a second workspace", stripe_customer_id="cus_A")
+        team_of("ada")
+        team_of("lin")
+        self.assertEqual(self.run_list(), [
+            f"customer cus_A: workspaces {self.ws.pk}, {second.pk}",
+            "1 Stripe customer(s) held by more than one workspace",
+        ], f"{self.COMMAND}: one shared customer, and workspaces with no customer id are not a shared customer")
+
+    def test_no_sharing_prints_only_the_zero_line(self):
+        self.set_billing("team", customer="cus_A", sub_id="sub_A")
+        team_of("ada")
+        self.assertEqual(self.run_list(), ["0 Stripe customer(s) held by more than one workspace"])
+
+    def test_the_list_refuses_other_options(self):
+        for option in ("--apply", "--reset-unbilled", "--list-orphans", "--allow-test-key", "--list-unadministered"):
+            with self.subTest(option=option):
+                with self.assertRaises(CommandError) as raised:
+                    call_command("sync_stripe_billing", "--list-shared-customers", option, stdout=io.StringIO())
+                self.assertEqual(str(raised.exception), self.REFUSED, f"{self.COMMAND}: {option} is refused")
+        with self.assertRaises(CommandError) as raised:
+            call_command("sync_stripe_billing", "--list-unadministered", "--list-shared-customers", stdout=io.StringIO())
+        self.assertIn("run it without other options", str(raised.exception), f"{self.COMMAND}: the two lists run one at a time")
