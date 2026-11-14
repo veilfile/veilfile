@@ -404,6 +404,9 @@ class PendingUpload(models.Model):
     # on_secret chosen at mint time ("flag" | "reject"). The PUT applies
     # the stricter of this and its own ?on_secret query parameter.
     on_secret = models.CharField(max_length=8, default="flag")
+    # The visibility the minting agent chose ("only_me" | "team"), or "" for none. The PUT passes it on, and the
+    # upload honors it only if the team's setting, read under the PUT's lock, lets each person decide.
+    visibility = models.CharField(max_length=8, blank=True, default="", db_default="")
     # Set when an OAuth token minted the URL (api_key is None then): the
     # PUT refuses once the owner has no live grant for this application.
     # Plain integer, not an FK: a deleted application must kill the URL.

@@ -38,6 +38,7 @@ Multipart upload. API key auth.
 | `file` | yes | The file bytes. Max **25 MiB**. |
 | `ttl_days` | no | Whole days until the link expires. Defaults to the plan's max TTL; a larger number is clamped down, `0` or a negative number up to 1. A non-integer (`0.5`, `1e3`, `abc`) returns `400` `invalid_request`. |
 | `on_secret` | no | `flag` (default) or `reject`, case-insensitive; any other value returns `400` `invalid_request`. Also accepted as a query parameter. |
+| `visibility` | no | For a team, `only_me` or `team`, case-insensitive: who on the team can see the file on their Files page. It is honored only when the administrator lets each person decide; otherwise the team's setting applies. The answer's `visibility` says which one the file got, and any other value returns `400` `invalid_request`. |
 
 **Allowed types:** `png`, `jpg`, `jpeg`, `webp`, `gif`, `txt`, `md`, `log`, `json`,
 `har`, `pdf`. Executables and archives are rejected. Content is verified, not
@@ -112,7 +113,8 @@ you can fix the problem and retry until it expires. Replays of a used URL
 minutes after minting, and stop working if the key (or OAuth grant) that
 minted them is revoked. The `on_secret` chosen when minting is enforced;
 `?on_secret=reject` on the PUT can tighten `flag` to `reject` but never loosen
-a minted `reject`.
+a minted `reject`. The `visibility` chosen when minting is applied by the PUT,
+under the team's setting at that moment.
 
 ```bash
 curl -s --upload-file screenshot.png "https://YOUR-DEPLOY/api/v1/uploads/<token>"
@@ -612,6 +614,7 @@ Every tool has a `title` and `annotations`. The titles are "Upload a file", "Cre
     "content_base64": {"type": "string",  "description": "This is the file's content as standard base64. Line breaks and a data:<mime>;base64, prefix are accepted. The decoded file can be up to 25 MiB."},
     "mime_type":      {"type": "string",  "description": "The server does not use this value; it takes the file's type from the extension in filename. If you send it, it must be a string."},
     "ttl_days":       {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team, 90 on Team Plus and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The result's expires_at is the applied expiry."},
+    "visibility":     {"type": "string",  "description": "Who on your team can see the file on their Files page: \"only_me\" or \"team\". It is honored only when your administrator lets each person decide; otherwise the team's setting applies, and the answer says which visibility the file got. The link works for anyone it is sent to either way."},
     "on_secret":      {"type": "string",  "description": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"flag\", a file with secret-shaped content is stored, and the result lists secret_flags and adds a warning and secret_flag_locations. With \"reject\", that file is not stored and the call returns the secret_detected error."}
   }
 }
@@ -629,6 +632,7 @@ Result (in `result.content[0].text` as JSON):
   "properties": {
     "filename": {"type": "string", "description": "This is the file name, including its extension, such as screenshot.png. The extension is checked when the URL is created, and the allowed extensions are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf."},
     "ttl_days": {"type": "integer", "description": "This is the number of days until the link expires, as a whole number of 1 or more. If you leave it out, the link expires at the plan's maximum, which is 7 days on Free, 90 on Team, 90 on Team Plus and 365 on Scale. A larger value is lowered to the plan's maximum, and the result then includes ttl_adjusted: true. A value of zero or less is rejected. The days count from the PUT, and the result's ttl_days is the applied value."},
+    "visibility": {"type": "string", "description": "Who on your team can see the file on their Files page: \"only_me\" or \"team\". It is honored only when your administrator lets each person decide; otherwise the team's setting applies, and the answer says which visibility the file got. The link works for anyone it is sent to either way."},
     "on_secret": {"type": "string", "description": "The value is either \"flag\" or \"reject\", and the default is \"flag\". With \"reject\", a PUT of a flagged file fails with the secret_detected error, the file is not stored and the URL stays usable until it expires. With \"flag\", a flagged file is stored and the result lists its secret_flags and adds a warning and secret_flag_locations."}
   }
 }
@@ -715,7 +719,7 @@ extension, and the allowed list.
 | HTTP | Code | Meaning |
 |---|---|---|
 | 400 | `secret_detected` | The scan found secret-shaped content and `on_secret` is `reject`, so nothing was stored. |
-| 400 | `invalid_request` | The request is malformed, for example bad JSON, a bad `ttl_days`, a bad `on_secret` or a bad cursor. |
+| 400 | `invalid_request` | The request is malformed, for example bad JSON, a bad `ttl_days`, a bad `on_secret`, a bad `visibility` or a bad cursor. |
 | 400 | `file_type_not_allowed` | The extension is not in the allowed list, or the content does not match it. |
 | 400 | `content_not_allowed` | The file's content is not allowed. Do not retry the same bytes. |
 | 400 | `file_missing` | The multipart body has no `file` part. |

@@ -8,6 +8,7 @@ import secrets as stdlib_secrets
 import unicodedata
 from datetime import timedelta
 
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
@@ -15,6 +16,7 @@ from django.utils import timezone
 from . import file_access
 from .models import (
     FILE_VISIBILITY_ALWAYS_TEAM,
+    FILE_VISIBILITY_MEMBERS_CHOOSE,
     VISIBILITY_ONLY_ME,
     VISIBILITY_TEAM,
     Artifact,
@@ -272,6 +274,7 @@ def mint_upload_url(
     on_secret="flag",
     oauth_application_id=None,
     member=None,
+    visibility=None,
 ):
     """Mint a one-time upload URL for ``workspace``.
 
@@ -286,6 +289,7 @@ def mint_upload_url(
     filename = sanitize_filename(filename or "upload.bin")
     _check_extension(filename)
     on_secret = normalize_on_secret(on_secret)
+    visibility = normalize_visibility(visibility)
     plan = PLANS[workspace.plan]
     ttl, adjusted = _clamp_ttl(plan, ttl_days)
     return PendingUpload.objects.create(
@@ -296,6 +300,7 @@ def mint_upload_url(
         ttl_days=ttl,
         ttl_adjusted=adjusted,
         on_secret=on_secret,
+        visibility=visibility or "",
         oauth_application_id=oauth_application_id,
         token=_new_upload_token(),
         expires_at=timezone.now() + UPLOAD_URL_TTL,
@@ -331,6 +336,30 @@ def member_storage_bytes(member):
     return total or 0
 
 
+def normalize_visibility(value):
+    """The visibility an upload asks for: None while the team seats switch is off or when none was sent, else
+    "only_me" or "team". Raises ``RejectedUpload`` for any other value while the switch is on."""
+    if not settings.TEAM_SEATS or value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if not text:
+            return None
+        if text in (VISIBILITY_ONLY_ME, VISIBILITY_TEAM):
+            return text
+    raise RejectedUpload("invalid_request", 'The visibility value is not valid. Send "only_me" or "team".')
+
+
+def visibility_for(file_visibility, chosen):
+    """The visibility a new file gets from the team's setting and the uploader's choice (None for none). The choice is
+    honored only when the setting lets each person decide."""
+    if file_visibility == FILE_VISIBILITY_ALWAYS_TEAM:
+        return VISIBILITY_TEAM
+    if file_visibility == FILE_VISIBILITY_MEMBERS_CHOOSE and chosen:
+        return chosen
+    return VISIBILITY_ONLY_ME
+
+
 def upload_artifact(
     workspace,
     api_key,
@@ -342,6 +371,7 @@ def upload_artifact(
     user_agent="",
     on_secret="flag",
     member=None,
+    visibility=None,
 ):
     """Validate, scan, store and record an artifact.
 
@@ -374,6 +404,7 @@ def upload_artifact(
     plan = PLANS[workspace.plan]
     # Fail closed on bad parameters before any work is done.
     on_secret = normalize_on_secret(on_secret)
+    visibility = normalize_visibility(visibility)
     ttl, ttl_adjusted = _clamp_ttl(plan, ttl_days)
     # Resolve the person now: creating the administrator row must not happen
     # under the workspace row lock taken below.
@@ -510,7 +541,7 @@ def upload_artifact(
             secret_flags=secret_flags,
             safety_status=safety_status,
             content_sha256=digest,
-            visibility=VISIBILITY_TEAM if locked.file_visibility == FILE_VISIBILITY_ALWAYS_TEAM else VISIBILITY_ONLY_ME,
+            visibility=visibility_for(locked.file_visibility, visibility),
         )
         artifact.save()
         if workspace_storage_bytes(workspace) > storage_cap_bytes:

@@ -203,6 +203,10 @@ def _artifact_response_body(artifact):
         "size_bytes": artifact.size_bytes,
         "secret_flags": artifact.secret_flags,
     }
+    # Additive only, and only while team seats are on: the visibility the file got, which is the agent's choice only
+    # when the team lets each person decide.
+    if settings.TEAM_SEATS:
+        body["visibility"] = artifact.visibility
     # Additive only: present (true) when the applied TTL differs from what
     # was requested (clamped down/up, or unparseable input fell back).
     # Agents must read expires_at, not the value they sent.
@@ -432,6 +436,7 @@ class ArtifactListCreateView(APIView):
             return _file_too_large_response()
         ttl_days = request.data.get("ttl_days")
         on_secret = request.data.get("on_secret") or request.query_params.get("on_secret")
+        visibility = request.data.get("visibility")
         data = upload.read()
         try:
             artifact = upload_artifact(
@@ -445,6 +450,7 @@ class ArtifactListCreateView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 on_secret=on_secret,
                 member=_request_member(request),
+                visibility=visibility,
             )
         except (ValueError, StorageError) as exc:
             return _upload_failure_response(exc, member=_request_member(request))
@@ -560,6 +566,7 @@ class PendingUploadView(APIView):
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 on_secret=on_secret,
                 member=pending.member,
+                visibility=pending.visibility or None,
             )
         except (ValueError, StorageError) as exc:
             if str(exc) not in ("content_not_allowed", "member_removed"):

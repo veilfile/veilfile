@@ -8,6 +8,7 @@ Wire-up: add 'drop_mcp' to INSTALLED_APPS and include drop_mcp.urls
 (e.g. ``path('', include('drop_mcp.urls'))``) in the project URLconf so the
 endpoint is served at POST /mcp.
 """
+import copy
 import base64
 import binascii
 import json
@@ -121,6 +122,18 @@ def _plan_ttl_text():
     free, team, team_plus, scale = (PLANS[key]['ttl_days'] for key in ('free', 'team', 'team_plus', 'scale'))
     return '%d days on Free, %d on Team, %d on Team Plus and %d on Scale' % (free, team, team_plus, scale)
 
+
+# The visibility property both upload tools list while team seats are on (tools_for_list). With the switch off, the
+# schemas are TOOLS as they were.
+VISIBILITY_PROPERTY = {
+    'type': 'string',
+    'description': (
+        'Who on your team can see the file on their Files page: "only_me" or "team". It is honored only when your '
+        "administrator lets each person decide; otherwise the team's setting applies, and the answer says which "
+        'visibility the file got. The link works for anyone it is sent to either way.'
+    ),
+}
+VISIBILITY_CHOICES = ('only_me', 'team')
 
 TOOLS = [
     {
@@ -243,6 +256,17 @@ TOOLS = [
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
+
+
+def tools_for_list():
+    """The tools tools/list answers: TOOLS, with the visibility property on both upload tools while team seats are on."""
+    if not settings.TEAM_SEATS:
+        return TOOLS
+    tools = copy.deepcopy(TOOLS)
+    for tool in tools:
+        if tool['name'] in ('upload_artifact', 'create_upload_url'):
+            tool['inputSchema']['properties']['visibility'] = dict(VISIBILITY_PROPERTY)
+    return tools
 
 def _rpc_result(request_id, result):
     return JsonResponse({'jsonrpc': '2.0', 'id': request_id, 'result': result})
@@ -711,6 +735,9 @@ def _tool_upload_artifact(key, args, request):
     on_secret = args.get('on_secret', 'flag')
     if on_secret not in ('flag', 'reject'):
         raise ValueError('Send on_secret as "flag" or "reject".')
+    visibility = args.get('visibility') if settings.TEAM_SEATS else None
+    if visibility is not None and visibility not in VISIBILITY_CHOICES:
+        raise ValueError('Send visibility as "only_me" or "team".')
 
     data = _decode_content(content_b64)
 
@@ -736,6 +763,7 @@ def _tool_upload_artifact(key, args, request):
             user_agent=request.META.get('HTTP_USER_AGENT', ''),
             on_secret=on_secret,
             member=key.acting_member,
+            visibility=visibility,
         )
     except (ValueError, StorageError) as exc:
         raise _service_failure(exc, member=key.acting_member) from exc
@@ -751,6 +779,7 @@ def _tool_upload_artifact(key, args, request):
         'size_bytes': artifact.size_bytes,
         'secret_flags': flags,
         **({'ttl_adjusted': True} if getattr(artifact, 'ttl_adjusted', False) else {}),
+        **({'visibility': artifact.visibility} if settings.TEAM_SEATS else {}),
     }
     # Advisory, never blocking: a flagged upload IS stored. Tell the
     # agent to involve the human before sharing the link.
@@ -787,6 +816,9 @@ def _tool_create_upload_url(key, args, request):
         raise ValueError('Send ttl_days as a whole number of days, 1 or more.')
     if on_secret not in ('flag', 'reject'):
         raise ValueError('Send on_secret as "flag" or "reject".')
+    visibility = args.get('visibility') if settings.TEAM_SEATS else None
+    if visibility is not None and visibility not in VISIBILITY_CHOICES:
+        raise ValueError('Send visibility as "only_me" or "team".')
 
     # OAuth-minted URLs remember the client application, so the PUT stops
     # working once the user's grants for it are revoked (API-key URLs
@@ -800,6 +832,7 @@ def _tool_create_upload_url(key, args, request):
             on_secret=on_secret,
             oauth_application_id=getattr(key, 'application_id', None),
             member=key.acting_member,
+            visibility=visibility,
         )
     except ValueError as exc:
         # RejectedUpload: a tool error carrying its code and detail.
@@ -1030,7 +1063,7 @@ def _dispatch(request, request_id, key, method, params):
     if method == 'ping':
         return _rpc_result(request_id, {})
     if method == 'tools/list':
-        return _rpc_result(request_id, {'tools': TOOLS})
+        return _rpc_result(request_id, {'tools': tools_for_list()})
     if method == 'tools/call':
         return _handle_tools_call(request, request_id, key, params)
     return _rpc_error(request_id, ERR_METHOD_NOT_FOUND, f'The method {method} is not supported; use initialize, ping, tools/list or tools/call.')
