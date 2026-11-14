@@ -163,7 +163,7 @@ def held_file_count(workspace):
 
 def held_files_at_stake(owned_workspace_ids, row_ids):
     """Whether any held file would go with an account: one in a workspace the account owns, or one uploaded by any of its
-    rows. A held file counts whether it is live or expired and not yet swept, because staff keep it as evidence until it is gone."""
+    rows. A held file counts whether it is live or expired and not yet swept, because staff keep it as evidence until they release it."""
     return Artifact.objects.filter(safety_status="held").filter(
         Q(workspace_id__in=list(owned_workspace_ids)) | Q(member_id__in=list(row_ids))
     ).exists()

@@ -242,6 +242,18 @@ class AdminActionTests(TestCase):
             self.act("release_selected_files")
         self.assertEqual(LogEntry.objects.filter(object_id=str(self.artifact.pk), change_message__contains="Released").count(), 0)
 
+    def test_releasing_an_expired_file_says_the_sweep_deletes_it(self):
+        Artifact.objects.filter(pk=self.artifact.pk).update(
+            safety_status="held", expires_at=timezone.now() - timedelta(days=1))
+        text = " ".join(str(message) for message in self.act("release_selected_files").context["messages"])
+        self.assertIn("1 file released. The keys that uploaded them stay stopped. 1 file was past its expiry and will be "
+                      "deleted by the next sweep.", text,
+                      "backend/drop_core/admin.py: the release message says which released files the next sweep deletes")
+        Artifact.objects.filter(pk=self.artifact.pk).update(
+            safety_status="held", expires_at=timezone.now() + timedelta(days=1))
+        text = " ".join(str(message) for message in self.act("release_selected_files").context["messages"])
+        self.assertNotIn("past its expiry", text, "backend/drop_core/admin.py: a live file's release says nothing of expiry")
+
     def test_a_failed_notice_warns_staff(self):
         with mock.patch.object(holds, "send_mail", side_effect=OSError):
             with self.assertLogs("drop_core.holds", level="ERROR"):
