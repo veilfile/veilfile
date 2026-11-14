@@ -102,7 +102,8 @@ class ArtifactAdmin(admin.ModelAdmin):
         for artifact in chosen:
             if artifact.pk in released_ids:
                 self.log_change(request, artifact, "Released.")
-        past = Artifact.objects.filter(pk__in=released_ids, expires_at__lte=timezone.now()).count()
+        now = timezone.now()
+        past = sum(1 for artifact in chosen if artifact.pk in released_ids and artifact.expires_at <= now)
         swept_next = (
             f" {past} {'file was' if past == 1 else 'files were'} past {'its' if past == 1 else 'their'} expiry and will "
             "be deleted by the next sweep."
