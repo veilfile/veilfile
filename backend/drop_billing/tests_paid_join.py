@@ -68,6 +68,9 @@ class PaidJoinBase(FixBillingBase):
         self.listed = self.patch_stripe("list", side_effect=self.listing)
         self.cancel = self.patch_stripe("cancel", side_effect=self.canceling)
         self.void = self.patch_stripe("void", side_effect=self.voiding)
+        # Each latest invoice is open unless a test says otherwise. Reads are not added to `calls`.
+        self.invoice_status = {}
+        self.read_invoice = self.patch_stripe("retrieve_invoice", side_effect=self.reading_invoice)
 
     def listing(self, *args, **kwargs):
         """What Stripe lists now, copied, so that a listing never changes after it is returned."""
@@ -77,6 +80,9 @@ class PaidJoinBase(FixBillingBase):
         self.calls.append(f"cancel {sub_id}")
         self.at_stripe[sub_id]["status"] = "canceled"
         return copy.deepcopy(self.at_stripe[sub_id])
+
+    def reading_invoice(self, invoice_id, **kwargs):
+        return {"id": invoice_id, "status": self.invoice_status.get(invoice_id, "open")}
 
     def voiding(self, invoice_id, **kwargs):
         self.calls.append(f"void {invoice_id}")
@@ -400,6 +406,44 @@ class EndingTests(PaidJoinBase):
         self.assertTrue(ending.done, f"{ACCOUNT}: the active plan ends")
         refund.assert_not_called()
         credit_note.assert_not_called()
+
+
+class AlreadyVoidTests(PaidJoinBase):
+    """F2: the ending reads the latest invoice before it voids, so a second press after a void that worked and a cancel
+    that failed does not meet Stripe's answer to a second void (D2 decision 15)."""
+
+    def end(self):
+        stripe_mod, _ = account._stripe_or_503()
+        return account._end_live_subscriptions(stripe_mod, self.ws)
+
+    def test_an_invoice_already_void_is_not_voided_again(self):
+        self.at_stripe["sub_A"].update(status="past_due", latest_invoice="in_A")
+        self.invoice_status["in_A"] = "void"
+        ending = self.end()
+        self.void.assert_not_called()
+        self.assertEqual(self.calls, ["cancel sub_A"], f"{ACCOUNT}: an invoice already void goes straight to the cancel")
+        self.assertEqual(ending, account.Ending(True, True, False), f"{ACCOUNT}: the ending is done and cut")
+        self.assertEqual(self.state(), ("free", ""), f"{ACCOUNT}: the read-back is applied")
+
+    def test_a_failed_read_sends_no_cancel(self):
+        self.at_stripe["sub_A"].update(status="unpaid", latest_invoice="in_A")
+        self.read_invoice.side_effect = stripe.APIConnectionError("secret detail")
+        with self.assertLogs("drop_billing", level="WARNING") as logged:
+            ending = self.end()
+        self.void.assert_not_called()
+        self.cancel.assert_not_called()
+        self.assertEqual(ending, account.Ending(False, False, True), f"{ACCOUNT}: a failed read leaves the plan live, so it is stuck")
+        warnings = messages(logged, logging.WARNING)
+        self.assertEqual(len(warnings), 1, f"{ACCOUNT}: the failed read logs one WARNING")
+        for named in ("in_A", "sub_A", str(self.ws.pk), "APIConnectionError"):
+            self.assertIn(named, warnings[0], f"{ACCOUNT}: the WARNING names {named}")
+        self.assertNotIn("secret detail", "\n".join(logged.output), f"{ACCOUNT}: no line carries Stripe's text")
+
+    def test_an_open_invoice_is_voided_as_today(self):
+        self.at_stripe["sub_A"].update(status="past_due", latest_invoice="in_A")
+        self.end()
+        self.read_invoice.assert_called_once_with("in_A")
+        self.assertEqual(self.calls, ["void in_A", "cancel sub_A"], f"{ACCOUNT}: an open invoice is voided, then the cancel")
 
 
 class PaidJoinTests(PaidJoinBase):
