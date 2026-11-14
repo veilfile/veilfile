@@ -2,6 +2,7 @@
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
+from drop_core.plans import REFUND_DAYS
 from pages.plan_cards import plan_cards
 from pages.tests_chapters import visible_text
 
@@ -36,3 +37,22 @@ class PlanSeatsTests(TestCase):
             text = plans_text()
             self.assertNotIn("invites people", text)
             self.assertNotIn("people", text)
+
+
+class RefundSentenceTests(TestCase):
+    def test_the_refund_sentence_names_a_join(self):
+        with self.settings(TEAM_SEATS=True):
+            self.assertIn(
+                f"If you cancel within {REFUND_DAYS} days of your first paid subscription, or join someone else’s team "
+                "in that time, the first payment is refunded in full, whether it was monthly or yearly. To ask, write "
+                "to support@veilfile.com.",
+                plans_text(),
+            )
+        with self.settings(TEAM_SEATS=False):
+            text = plans_text()
+            self.assertIn(
+                f"If you cancel within {REFUND_DAYS} days of your first paid subscription, the first payment is "
+                "refunded in full, whether it was monthly or yearly. To ask, write to support@veilfile.com.",
+                text,
+            )
+            self.assertNotIn("join someone else’s team", text)
