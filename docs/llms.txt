@@ -36,8 +36,10 @@ If the base URL above still reads YOUR-DEPLOY, replace it with the address of yo
    `VEILFILE_API_KEY`. `veilfile push FILE` prints the share URL on standard
    output. If the scan flagged the file, it also prints a warning, on
    standard error from the pip command and on standard output from the npm
-   command, so ask the user before sharing the link. The command cannot list
-   or revoke files, so use the API or MCP for those.
+   command, so ask the user before sharing the link. On a team, `push`
+   takes `--visibility only_me|team`, honored when the administrator lets
+   each person decide, and it says who can see the file. The command cannot
+   list or revoke files, so use the API or MCP for those.
 
 ## Endpoints
 

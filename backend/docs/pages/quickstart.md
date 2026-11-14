@@ -69,7 +69,7 @@ Replace `screenshot.png` with another file of an allowed type (see Limits below)
 
 The command prints the share URL. Anyone who has the URL can open it in a browser with no login: the token in the URL is the auth.
 
-The link expires when your plan's TTL runs out, which is seven days on Free. Pass `--ttl-days 1` to shorten it.
+The link expires when your plan's TTL runs out, which is seven days on Free. Pass `--ttl-days 1` to shorten it. On a team, pass `--visibility team` to let your teammates see the file on their Files page, which works when your administrator lets each person decide.
 
 Run `veilfile logout` when you are done with a machine. It revokes the key and deletes the credentials file, and the links you already made keep working until they expire.
 
