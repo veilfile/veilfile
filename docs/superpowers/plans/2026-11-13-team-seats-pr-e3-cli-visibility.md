@@ -107,6 +107,11 @@ Voice: complete sentences, semicolons only between independent clauses, no em da
 
 ## Changed during the build
 
+- The Python test class borrows the shared test class's setup and helpers instead of subclassing it, because a subclass would run the shared class's own tests a second time.
+- The Node suite ran here on Node 26 only. CI runs it on Node 20 and 22.
+- The test card was run end to end on a throwaway local server, with the switch on and then off.
+
 ## Carried to F
 
 - **F:** the owner requests the releases `npm-v0.5.0` and `pypi-v0.5.0` when the switch turns on, and the items carried by the C2, C3, D, D2, E1 and E2 plans, including the one rehearsal on Postgres for D2 and F.
+- **Later, from E3's review:** if a future server answers a `visibility` value other than `team` or `only_me`, both CLIs say the server did not apply the option, which would then be untrue. The Node help puts a capital letter after a colon in "--visibility: Who on your team". `docs/llms.txt` does not say which stream the new line goes to in each CLI.
