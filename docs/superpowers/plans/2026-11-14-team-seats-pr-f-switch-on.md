@@ -118,3 +118,22 @@ Voice: complete sentences, semicolons only between independent clauses, no em da
 ### Task 5: The test card
 
 - [ ] Write `~/dev/veilfile-test-cards/f2-local.md`: the Plans page with the switch off and on, both list commands against the E1 card's database, and the void rule covered by its tests, because it needs Stripe. Each step ends with a **Pass** line.
+
+## Changed during the build
+
+- The refund sentence uses the recommended wording, because the owner had not yet answered sentence 1 of `terms-joining-a-team.md`. It uses the curly apostrophe the page already uses. The other wording is a one-line change and one test string.
+- The invoice read keeps the library's retries, because a read is safe to repeat. The cancel keeps `max_network_retries=0`.
+- The tests' fake Stripe answers the invoice read in `PaidJoinBase` and adds nothing to the recorded calls, so every existing call-sequence test stands unchanged. The rehearsal kit's fake Stripe must answer `Invoice.retrieve` in F3.
+- Workspace ids are UUIDs, so the list command orders each customer's workspaces by when they were made.
+- The test card's tool gained `customer` and `uncustomer`, and the card was dry-run on a throwaway database.
+
+## Later, from F2's review
+
+- The component catalog shows seats when the switch is on, as the Plans page does. `plans.html` has two adjacent `{% if team_seats %}` blocks that could be one. An invoice that is neither void nor open, such as a draft, still goes to the void, and a refused void ends in `plan_not_ended`, as D2 allowed.
+
+## Owner decisions raised by F1
+
+- Whether F2 or a later slice deletes an invitation 30 days after it ends, so that the Privacy Policy can say so.
+- Whether members of a team on Free may sign in, as the code allows, or are refused, as the spec's decision 13 says.
+- Whether a held file must be preserved past its expiry.
+
