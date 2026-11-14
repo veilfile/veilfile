@@ -363,7 +363,7 @@ pip install veilfile        # or: npm install -g veilfile
 veilfile login    # browser approval flow; stores the API key locally
 veilfile logout   # revoke the key on the server; delete the local copy
 veilfile status   # confirm the stored key is valid (never prints it)
-veilfile push <file>   # upload; print the share URL
+veilfile push <file>   # upload; print the share URL (--ttl-days N, --visibility only_me|team)
 veilfile pull <url>    # download a shared file
 ```
 
