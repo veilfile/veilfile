@@ -21,7 +21,7 @@ python3 veilfile.py login
 veilfile login    # browser approval flow; stores the API key locally
 veilfile logout   # revoke the key on the server; delete the local copy
 veilfile status   # confirm the stored key is valid (never prints it)
-veilfile push FILE [--ttl-days N]  # upload a file; print its share URL
+veilfile push FILE [--ttl-days N] [--visibility only_me|team]  # upload a file; print its share URL
 veilfile pull URL [--out PATH] [--force]  # download an artifact
 ```
 
@@ -55,6 +55,14 @@ overwritten unless you pass `--force`.
 - **curl-to-shell: not recommended.** Piping remote code straight into a shell
   skips integrity verification entirely. For a security-conscious buyer that
   is the wrong default, so we do not publish a one-liner.
+
+## What's new in 0.5.0
+
+- **`push --visibility only_me|team`** chooses who on your team can see the
+  file on their Files page. It is honored only when your administrator lets
+  each person decide. After the upload, `push` says on stderr who can see the
+  file, or that the server did not apply the option. Stdout still holds only
+  the share URL.
 
 ## What's new in 0.4.0
 

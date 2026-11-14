@@ -36,7 +36,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 DEFAULT_BASE_URL = "https://veilfile.com"
 _DEVICE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
@@ -936,6 +936,9 @@ def cmd_push(args: argparse.Namespace) -> int:
     fields: Dict[str, str] = {}
     if args.ttl_days is not None:
         fields["ttl_days"] = str(args.ttl_days)
+    visibility = getattr(args, "visibility", None)
+    if visibility is not None:
+        fields["visibility"] = visibility
     body, content_type = _encode_multipart(fields, {"file": (filename, data, guessed)})
 
     try:
@@ -966,6 +969,14 @@ def cmd_push(args: argparse.Namespace) -> int:
                 "Ask before sharing the link."
             )
             sys.stderr.write(f"Warning: {warning}\n")
+        # stdout keeps the URL alone, so `url=$(veilfile push f)` still works.
+        given = payload.get("visibility")
+        if given == "team":
+            sys.stderr.write("Visible to: your team.\n")
+        elif given == "only_me":
+            sys.stderr.write("Visible to: only you.\n")
+        elif visibility is not None:
+            sys.stderr.write("The server did not apply --visibility.\n")
         return 0
     if status == 401:
         sys.stderr.write(
@@ -1261,6 +1272,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Days until the link expires (default: your plan's TTL).",
+    )
+    push.add_argument(
+        "--visibility",
+        choices=["only_me", "team"],
+        default=None,
+        help=(
+            "Who on your team can see the file on their Files page: only_me or team. "
+            "It is honored only when your administrator lets each person decide."
+        ),
     )
     push.set_defaults(func=cmd_push)
 
