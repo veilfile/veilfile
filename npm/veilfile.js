@@ -29,7 +29,7 @@ const os = require('node:os');
 const path = require('node:path');
 const util = require('node:util');
 
-const VERSION = '0.4.1';
+const VERSION = '0.5.0';
 const DEFAULT_BASE_URL = 'https://veilfile.com';
 const DEVICE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 const ENV_VAR = 'VEILFILE_API_KEY';
@@ -914,6 +914,7 @@ async function cmdPush(opts, fileArg) {
   const form = new FormData();
   form.append('file', new Blob([bytes], { type: mimeTypeFor(filename) }), filename);
   if (opts.ttlDays != null) form.append('ttl_days', String(opts.ttlDays));
+  if (opts.visibility != null) form.append('visibility', opts.visibility);
 
   const url = opts.baseUrl.replace(/\/+$/, '') + '/api/v1/artifacts';
   // Room for slow uplinks: a minute plus a second per 64 KiB.
@@ -949,6 +950,9 @@ async function cmdPush(opts, fileArg) {
   if (status === 201 && isJson && typeof body.url === 'string' && body.url) {
     console.log(printable(body.url, 2048));
     if (body.expires_at) console.log(`Expires: ${printable(body.expires_at)}`);
+    if (body.visibility === 'team') console.log('Visible to: your team.');
+    else if (body.visibility === 'only_me') console.log('Visible to: only you.');
+    else if (opts.visibility != null) console.log('The server did not apply --visibility.');
     if (body.ttl_adjusted) {
       console.log('Note: the server adjusted the expiry to fit your plan (see Expires).');
     }
@@ -1344,8 +1348,11 @@ Commands:
   login [--print-key]     Log in via the browser; store the API key.
   logout                  Revoke the stored key on the server; delete the local copy.
   status | whoami         Show account status for the key in use (never prints it).
-  push <file> [--ttl-days N]
+  push <file> [--ttl-days N] [--visibility only_me|team]
                           Upload a file (max 25 MiB); print its share URL.
+                          --visibility: Who on your team can see the file on
+                          their Files page: only_me or team. It is honored only
+                          when your administrator lets each person decide.
   pull <url> [--out PATH] [--force]
                           Download a shared file into the current directory
                           (or PATH). Never overwrites a file without --force.
@@ -1371,6 +1378,7 @@ const CLI_OPTIONS = {
   'allow-http': { type: 'boolean' },
   'print-key': { type: 'boolean' },
   'ttl-days': { type: 'string' },
+  visibility: { type: 'string' },
   out: { type: 'string', short: 'o' },
   force: { type: 'boolean', short: 'f' },
   help: { type: 'boolean', short: 'h' },
@@ -1383,7 +1391,7 @@ const COMMANDS = {
   logout: { args: [], options: [] },
   status: { args: [], options: [] },
   whoami: { args: [], options: [] },
-  push: { args: ['file'], options: ['ttl-days'] },
+  push: { args: ['file'], options: ['ttl-days', 'visibility'] },
   pull: { args: ['url'], options: ['out', 'force'] },
 };
 
@@ -1406,6 +1414,7 @@ function parseArgs(argv) {
     rest,
     printKey: Boolean(values['print-key']),
     ttlDays: null,
+    visibility: null,
     out: values.out != null ? values.out : null,
     force: Boolean(values.force),
     allowHttp: Boolean(values['allow-http']),
@@ -1420,7 +1429,7 @@ function parseArgs(argv) {
     throw new UsageError(`Unknown command: ${opts.command}`);
   }
   const spec = COMMANDS[opts.command];
-  for (const name of ['print-key', 'ttl-days', 'out', 'force']) {
+  for (const name of ['print-key', 'ttl-days', 'visibility', 'out', 'force']) {
     if (values[name] !== undefined && !spec.options.includes(name)) {
       throw new UsageError(`--${name} does not apply to ${opts.command}.`);
     }
@@ -1436,6 +1445,12 @@ function parseArgs(argv) {
       throw new UsageError(`--ttl-days must be a whole number of days (1 or more), not "${values['ttl-days']}".`);
     }
     opts.ttlDays = values['ttl-days'];
+  }
+  if (values.visibility !== undefined) {
+    if (!['only_me', 'team'].includes(values.visibility)) {
+      throw new UsageError('Send --visibility as only_me or team.');
+    }
+    opts.visibility = values.visibility;
   }
   if (opts.out === '') throw new UsageError('--out needs a path.');
   return opts;

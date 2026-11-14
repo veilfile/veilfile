@@ -30,6 +30,9 @@ Options:
 
 - `--ttl-days N` on push: days until the link expires, a whole number of
   1 or more. The server caps it at your plan's maximum and says so.
+- `--visibility only_me|team` on push: who on your team can see the file on
+  their Files page. It is honored only when your administrator lets each
+  person decide, and push says who can see the file.
 - `--out PATH` (`-o`) on pull: target file, or an existing directory to
   save into.
 - `--force` (`-f`) on pull: replace an existing file.
@@ -179,6 +182,13 @@ around credentials is the wrong call.
 - **curl-to-shell: not recommended.** Piping remote code straight into a
   shell skips integrity verification entirely. For a security-conscious
   buyer that is the wrong default, so we do not publish a one-liner.
+
+## What's new in 0.5.0
+
+- **`push --visibility only_me|team`** chooses who on your team can see the
+  file on their Files page. It is honored only when your administrator lets
+  each person decide. After the upload, `push` prints who can see the file,
+  or that the server did not apply the option.
 
 ## What's new in 0.4.0
 
