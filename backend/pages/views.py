@@ -1,4 +1,5 @@
 """Views for public pages on the new shell."""
+from django.conf import settings
 from django.http import Http404
 from django.shortcuts import render
 from django.template.loader import render_to_string
@@ -106,6 +107,7 @@ def plans(request):
     return render(request, "chapters/plans.html", {
         "plans": cards, "structured_data": [product],
         "refund_days": REFUND_DAYS, "max_file_mib": MAX_FILE_SIZE // (1024 * 1024),
+        "team_seats": settings.TEAM_SEATS,
     })
 
 

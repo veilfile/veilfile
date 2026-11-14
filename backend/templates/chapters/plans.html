@@ -7,7 +7,8 @@
 <p class="chapter__more">An upload counts once it succeeds, and deleting the file later does not give it back. The count starts again on the first of each month, in UTC. When the month’s uploads run out, new uploads are refused until the next month or until you upgrade, and the links you already made keep working until they expire.</p>
 <p class="chapter__more">On every plan, a file can be up to {{ max_file_mib }} MiB. Storage counts only files that have not expired or been deleted, and an upload that would go past it is refused.</p>
 <p class="chapter__more">Team, Team Plus and Scale can also be paid yearly at the price of ten months, so two months are free. The limits are the same either way.</p>
-<p class="chapter__more">If you cancel within {{ refund_days }} days of your first paid subscription, the first payment is refunded in full, whether it was monthly or yearly. To ask, write to support@veilfile.com.</p>
+{% if team_seats %}<p class="chapter__more">On Team, Team Plus and Scale, the administrator invites people by email. Everyone on a team shares its uploads, storage and keys, and the administrator can set how much each person may use.</p>
+{% endif %}<p class="chapter__more">If you cancel within {{ refund_days }} days of your first paid subscription, the first payment is refunded in full, whether it was monthly or yearly. To ask, write to support@veilfile.com.</p>
 <p class="chapter__more">If you already subscribe, switch between Team, Team Plus and Scale, or between monthly and yearly billing, in the billing section of <a href="/app/">your dashboard</a>. The change is prorated.</p>
 {# End of words. #}
 {% endblock %}
