@@ -130,6 +130,13 @@ def sweep_expired(limit=None, time_budget=None, stop_on_failure=False):
         purge_stale_device_codes()
     except Exception:
         logger.exception("sweep: purging stale device codes failed")
+    # Invitations 30 days after they end (the Privacy Policy); a failure here must not fail the sweep either.
+    try:
+        from .teams import purge_ended_invitations
+
+        purge_ended_invitations()
+    except Exception:
+        logger.exception("sweep: deleting ended invitations failed")
     return SweepResult(swept, freed, failed, complete)
 
 
