@@ -69,11 +69,14 @@ services:
       # reported as veilfile.W002.
       - key: VEILFILE_SAFETY_MODE
         sync: false
+      # Team seats: unset is off. Set it to "on" in the dashboard to turn
+      # team seats on; nothing in this file turns it on.
+      - key: VEILFILE_TEAM_SEATS
+        sync: false # on
       # Optional tuning (defaults in brackets; entrypoint.sh / settings.py):
       #   WEB_CONCURRENCY [1] gunicorn workers, GUNICORN_THREADS [4],
       #   GUNICORN_TIMEOUT [120], SKIP_MIGRATE [unset],
       #   DJANGO_CONN_MAX_AGE [60], EMAIL_TIMEOUT [10],
       #   DJANGO_SECURE_HSTS_SECONDS [31536000],
       #   DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS [False],
-      #   DJANGO_CSRF_TRUSTED_ORIGINS [derived from DJANGO_ALLOWED_HOSTS],
-      #   VEILFILE_TEAM_SEATS [unset, which is off; "on" turns on team seats].
+      #   DJANGO_CSRF_TRUSTED_ORIGINS [derived from DJANGO_ALLOWED_HOSTS].

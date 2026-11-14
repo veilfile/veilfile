@@ -1111,3 +1111,47 @@ class ListUnadministeredTests(FixBillingBase):
                 with self.assertRaises(CommandError) as raised:
                     call_command("sync_stripe_billing", "--list-unadministered", option, stdout=io.StringIO())
                 self.assertEqual(str(raised.exception), self.REFUSED, f"{self.COMMAND}: {option} is refused")
+
+
+class ListSharedCustomersTests(FixBillingBase):
+    """F2: `sync_stripe_billing --list-shared-customers` lists Stripe customers that more than one workspace holds, from
+    the database alone, for F4's checklist."""
+
+    longMessage = False
+    COMMAND = "backend/drop_billing/management/commands/sync_stripe_billing.py"
+    REFUSED = "--list-shared-customers reads the database alone; run it without other options."
+
+    def run_list(self):
+        listed = self.patch_stripe("list", return_value=sub_list())
+        before = list(Workspace.objects.order_by("pk").values())
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"STRIPE_SECRET_KEY": ""}):
+            call_command("sync_stripe_billing", "--list-shared-customers", stdout=out)
+        listed.assert_not_called()
+        self.assertEqual(list(Workspace.objects.order_by("pk").values()), before, f"{self.COMMAND}: no row changes")
+        return out.getvalue().splitlines()
+
+    def test_a_shared_customer_is_listed_with_its_workspaces(self):
+        self.set_billing("team", customer="cus_A", sub_id="sub_A")
+        second = Workspace.objects.create(owner=self.user, name="a second workspace", stripe_customer_id="cus_A")
+        team_of("ada")
+        team_of("lin")
+        self.assertEqual(self.run_list(), [
+            f"customer cus_A: workspaces {self.ws.pk}, {second.pk}",
+            "1 Stripe customer(s) held by more than one workspace",
+        ], f"{self.COMMAND}: one shared customer, and workspaces with no customer id are not a shared customer")
+
+    def test_no_sharing_prints_only_the_zero_line(self):
+        self.set_billing("team", customer="cus_A", sub_id="sub_A")
+        team_of("ada")
+        self.assertEqual(self.run_list(), ["0 Stripe customer(s) held by more than one workspace"])
+
+    def test_the_list_refuses_other_options(self):
+        for option in ("--apply", "--reset-unbilled", "--list-orphans", "--allow-test-key", "--list-unadministered"):
+            with self.subTest(option=option):
+                with self.assertRaises(CommandError) as raised:
+                    call_command("sync_stripe_billing", "--list-shared-customers", option, stdout=io.StringIO())
+                self.assertEqual(str(raised.exception), self.REFUSED, f"{self.COMMAND}: {option} is refused")
+        with self.assertRaises(CommandError) as raised:
+            call_command("sync_stripe_billing", "--list-unadministered", "--list-shared-customers", stdout=io.StringIO())
+        self.assertIn("run it without other options", str(raised.exception), f"{self.COMMAND}: the two lists run one at a time")

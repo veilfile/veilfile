@@ -10,7 +10,9 @@ listed, and only moved to free with --reset-unbilled. --list-orphans also
 lists live subscriptions whose customer is on no workspace (paying without
 a plan). --list-unadministered prints the workspaces with a paid plan or a
 subscription id that have no current administrator, from the database
-alone, and contacts nothing.
+alone, and contacts nothing. --list-shared-customers prints each Stripe
+customer id that more than one workspace holds, also from the database
+alone.
 
 --apply refuses to run with a test-mode key unless --allow-test-key is
 given: against the production database, a test key would report every live
@@ -21,7 +23,7 @@ import os
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q
 
 from drop_billing.views import (
     LIVE_STATUSES,
@@ -89,6 +91,37 @@ class Command(BaseCommand):
                 "no current administrator, from the database alone (read-only)."
             ),
         )
+        parser.add_argument(
+            "--list-shared-customers",
+            action="store_true",
+            help=(
+                "List Stripe customer ids that more than one workspace holds, "
+                "from the database alone (read-only)."
+            ),
+        )
+
+    def list_shared_customers(self):
+        """Print each Stripe customer id that more than one workspace holds,
+        with those workspaces' ids in the order they were made. Reads the
+        database alone."""
+        shared = (
+            Workspace.objects.exclude(stripe_customer_id="")
+            .values("stripe_customer_id")
+            .annotate(n=Count("pk"))
+            .filter(n__gt=1)
+            .order_by("stripe_customer_id")
+        )
+        count = 0
+        for row in shared:
+            count += 1
+            customer = row["stripe_customer_id"]
+            ids = (
+                Workspace.objects.filter(stripe_customer_id=customer)
+                .order_by("created_at", "pk")
+                .values_list("pk", flat=True)
+            )
+            self.stdout.write(f"customer {customer}: workspaces {', '.join(str(pk) for pk in ids)}")
+        self.stdout.write(f"{count} Stripe customer(s) held by more than one workspace")
 
     def list_unadministered(self):
         """Print each workspace with a paid plan or a subscription id and no
@@ -118,6 +151,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if options["list_shared_customers"]:
+            others = ("apply", "reset_unbilled", "list_orphans", "allow_test_key", "list_unadministered")
+            if any(options[name] for name in others):
+                raise CommandError(
+                    "--list-shared-customers reads the database alone; run it "
+                    "without other options."
+                )
+            self.list_shared_customers()
+            return
         if options["list_unadministered"]:
             others = ("apply", "reset_unbilled", "list_orphans", "allow_test_key")
             if any(options[name] for name in others):
