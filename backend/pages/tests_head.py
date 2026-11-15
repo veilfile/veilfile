@@ -49,6 +49,14 @@ class HeadFromRegistryTests(SimpleTestCase):
             with self.subTest(tag=tag):
                 self.assertIn(tag, html)
 
+    def test_home_and_how_titles(self):
+        """The SEO review of 2026-11-15: people search for files, not artifacts, and /how/ needs a title of
+        its own, apart from the Docs page "How it works | Veilfile docs"."""
+        for path, title in (("/", "Veilfile | Private, expiring file hosting for AI agents"),
+                            ("/how/", "The life of a file | Veilfile")):
+            with self.subTest(path=path):
+                self.assertIn(f"<title>{title}</title>", render_shell_as(path))
+
     def test_every_registry_page_says_who_it_belongs_to(self):
         items = [json.loads(block) for block in LD_JSON.findall(render_shell_as("/about/"))]
         self.assertEqual(items[0]["@type"], "Organization")

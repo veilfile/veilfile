@@ -37,7 +37,7 @@ class MenuLink:
 
 
 PAGES = (
-    Page("landing", "Veilfile | Private ephemeral artifact hosting for AI agents",
+    Page("landing", "Veilfile | Private, expiring file hosting for AI agents",
          "Veilfile hosts private files for AI agents. Upload files via REST or MCP. "
          "Links are unguessable and expire on schedule. Plans cost $0 to $12 a month.",
          layout="chapter"),
@@ -45,7 +45,7 @@ PAGES = (
          "Each file your agents make gets a private link that stops when its time is up. "
          "Nothing sits in a public repository, a bucket, or a paste that lives forever.",
          layout="chapter"),
-    Page("how", "How it works | Veilfile",
+    Page("how", "The life of a file | Veilfile",
          "An agent uploads a file and gets an unguessable link to share. "
          "When its days run out, the link stops working and the file is deleted soon after.",
          layout="chapter"),
