@@ -93,6 +93,12 @@ class AboutTests(TestCase):
         self.assertIn("A quiet place for what your agents make", text)
         self.assertLess(len(text.split()), 300)
 
+    def test_about_says_who_and_how_to_reach_them(self):
+        html = self.client.get(reverse("about")).content.decode()
+        self.assertIn("Veilfile is made by a small, independent team. To reach us, write to", visible_text(html),
+                      "backend/templates/chapters/about.html: About says who runs Veilfile and how to reach them")
+        self.assertIn('write to <a href="mailto:support@veilfile.com">support@veilfile.com</a>.</p>', html)
+
 
 class HowAndPromisesTests(TestCase):
     def test_how_it_works_tells_the_life_of_a_file(self):

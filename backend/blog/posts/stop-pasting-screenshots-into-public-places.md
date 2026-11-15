@@ -5,7 +5,7 @@ slug: stop-pasting-screenshots-into-public-places
 description: Learn how to share agent screenshots and logs through private, expiring links instead of public repos, gists, and chat scrollback.
 ---
 
-On September 29, 2026, Glow Labs disclosed the PixelLeak incident. AI coding agents had left more than 13,000 internal images in public GitHub repositories. The images were private screenshots, meant for one person or one team. They sat in the open because the tooling made public the path of least resistance. The agent needed a place to put a file, and the easy place was public.
+On September 29, 2026, Glow Labs [disclosed the PixelLeak incident](https://www.glow.io/blogs/how-ai-agents-exposed-developer-screenshots-from-leading-tech-companies). AI coding agents had left more than 13,000 internal images in public GitHub repositories. The images were private screenshots, meant for one person or one team. They sat in the open because the tooling made public the path of least resistance. The agent needed a place to put a file, and the easy place was public.
 
 That pattern repeats in smaller ways every day. An agent drops a screenshot into a public gist so a human can see it. The gist has no expiry, and search engines can index it. An agent commits a log bundle to a repo where the file does not belong. The commit stays in history even after the file is deleted from the working tree. An agent uploads a HAR file to a chat channel. The file lives in scrollback, and every person added to the channel later can scroll back to it. Each choice feels quick in the moment. Each one hands a private artifact to a place built to keep things and show them to more people over time.
 
