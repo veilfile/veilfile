@@ -330,3 +330,16 @@ class JournalTemplateRulesTests(SimpleTestCase):
                 self.assertNotIn("!", text, f"backend/templates/blog/{path.name}: no exclamation marks")
                 for word in BANNED:
                     self.assertNotIn(word, text.lower(), f"backend/templates/blog/{path.name}: do not write '{word.strip()}'")
+
+
+class PixelLeakSourceTests(TestCase):
+    """Both posts cite Glow Labs' PixelLeak disclosure; the claim links its source (SEO review, 2026-11-15)."""
+    longMessage = False
+    REPORT = "https://www.glow.io/blogs/how-ai-agents-exposed-developer-screenshots-from-leading-tech-companies"
+
+    def test_each_post_links_the_pixelleak_report(self):
+        for slug in ("introducing-veilfile", "stop-pasting-screenshots-into-public-places"):
+            with self.subTest(post=slug):
+                html = self.client.get(f"/blog/{slug}/").content.decode()
+                self.assertIn(f'<a href="{self.REPORT}">disclosed the PixelLeak incident</a>', html,
+                              f"backend/blog/posts/{slug}.md: link 'disclosed the PixelLeak incident' to Glow Labs' report")
