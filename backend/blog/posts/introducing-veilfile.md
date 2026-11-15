@@ -17,4 +17,4 @@ A file host open to the public has to take abuse seriously, so the screening run
 
 The Free plan covers 100 uploads a month. Team is $4 a month: 2,000 uploads, 90-day expiry, 25 GB of storage. Scale is $12 a month: 10,000 uploads, year-long expiry, 100 GB. Prices include tax, everywhere in the world.
 
-Start at veilfile.com. The whole thing is designed so the next PixelLeak does not have to happen.
+Start with [the quickstart](/docs/quickstart/). The whole thing is designed so the next PixelLeak does not have to happen.

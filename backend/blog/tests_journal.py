@@ -343,3 +343,30 @@ class PixelLeakSourceTests(TestCase):
                 html = self.client.get(f"/blog/{slug}/").content.decode()
                 self.assertIn(f'<a href="{self.REPORT}">disclosed the PixelLeak incident</a>', html,
                               f"backend/blog/posts/{slug}.md: link 'disclosed the PixelLeak incident' to Glow Labs' report")
+
+
+class QuickstartLinkTests(TestCase):
+    """Both posts end by pointing to the quickstart (SEO review, 2026-11-15), and the feed carries the link absolute."""
+    longMessage = False
+    SLUGS = ("introducing-veilfile", "stop-pasting-screenshots-into-public-places")
+
+    def test_each_post_links_the_quickstart(self):
+        for slug in self.SLUGS:
+            with self.subTest(post=slug):
+                html = self.client.get(f"/blog/{slug}/").content.decode()
+                self.assertIn('<a href="/docs/quickstart/">the quickstart</a>', html,
+                              f"backend/blog/posts/{slug}.md: link 'the quickstart' to /docs/quickstart/")
+
+    def test_the_feed_carries_each_quickstart_link_absolute(self):
+        from xml.etree import ElementTree
+
+        from pages import registry
+
+        channel = ElementTree.fromstring(self.client.get("/blog/feed.xml").content).find("channel")
+        items = [item for item in channel.findall("item") if item.findtext("link").rstrip("/").rsplit("/", 1)[-1] in self.SLUGS]
+        self.assertEqual(len(items), len(self.SLUGS), "the feed must carry both posts")
+        for item in items:
+            with self.subTest(post=item.findtext("title")):
+                body = item.findtext("{http://purl.org/rss/1.0/modules/content/}encoded")
+                self.assertIn(f'<a href="{registry.SITE_ORIGIN}/docs/quickstart/">the quickstart</a>', body,
+                              "backend/blog/feeds.py: absolute_links must make the quickstart link absolute")
