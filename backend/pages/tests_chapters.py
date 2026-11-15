@@ -142,6 +142,13 @@ class PlansTests(TestCase):
     def test_says_the_price_includes_tax(self):
         self.assertIn("Prices include tax. The price you see is the price you pay.", self.text)
 
+    def test_plans_links_the_limits_in_the_docs(self):
+        """The SEO review of 2026-11-15: Plans did not link the limits table in the Docs."""
+        self.assertIn("The full limits for each plan are in the Docs: plans and limits", self.text)
+        self.assertIn('the Docs: <a href="/docs/how-it-works/#plans-and-limits">plans and limits</a>.</p>', self.html)
+        docs = self.client.get(reverse("docs-page", args=["how-it-works"])).content.decode()
+        self.assertIn('id="plans-and-limits"', docs)
+
     def product(self):
         """The Product block of Plans' JSON-LD."""
         blocks = [json.loads(block) for block in re.findall(
@@ -191,6 +198,7 @@ class PlansTests(TestCase):
             "keep working until they expire.",
             f"On every plan, a file can be up to {file_mib} MiB. Storage counts only files that have not expired "
             "or been deleted, and an upload that would go past it is refused.",
+            "The full limits for each plan are in the Docs: plans and limits.",
             "Team, Team Plus and Scale can also be paid yearly at the price of ten months, so two months are free. "
             "The limits are the same either way.",
             f"If you cancel within {REFUND_DAYS} days of your first paid subscription, the first payment is refunded "
