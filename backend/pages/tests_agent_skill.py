@@ -44,3 +44,16 @@ class AgentSkillTests(TestCase):
     def test_a_missing_skill_file_is_a_404(self):
         with mock.patch("pages.views.VEILFILE_SKILL", SKILL.parent / "missing.md"):
             self.assertEqual(self.client.get(reverse("veilfile-skill")).status_code, 404)
+
+
+class PiAndOmpDocsTests(TestCase):
+    def test_agent_setup_has_a_pi_and_omp_section(self):
+        from pages import registry
+
+        html = self.client.get("/docs/agent/").content.decode()
+        self.assertIn('id="pi-and-omp"', html)
+        self.assertIn('href="#pi-and-omp"', html)
+        self.assertIn(f'curl -fsSL {registry.SITE_ORIGIN}{reverse("veilfile-skill")} -o ~/.agents/skills/veilfile/SKILL.md', html)
+        self.assertIn('<a href="/plans/">Plans</a>', html)
+        self.assertIn('<meta name="description" content="Connect Claude, Codex, Cursor, pi, omp and other agents to Veilfile, '
+                      'with setup for each one and what to do when a secret is flagged."', html)
