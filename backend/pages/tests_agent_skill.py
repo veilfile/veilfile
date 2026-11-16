@@ -41,6 +41,10 @@ class AgentSkillTests(TestCase):
         self.assertIn("`Warning: secret scan flagged ", (root / "npm" / "veilfile.js").read_text(encoding="utf-8"))
         self.assertIn('f"Warning: {warning}', (root / "cli" / "veilfile.py").read_text(encoding="utf-8"))
 
+    def test_the_skill_says_the_warning_can_come_on_stderr(self):
+        """The PyPI CLI prints the flag warning on stderr, so an agent that reads only stdout would miss it."""
+        self.assertIn("If a line of output, on stdout or stderr, begins with `Warning:`", SKILL.read_text(encoding="utf-8"))
+
     def test_a_missing_skill_file_is_a_404(self):
         with mock.patch("pages.views.VEILFILE_SKILL", SKILL.parent / "missing.md"):
             self.assertEqual(self.client.get(reverse("veilfile-skill")).status_code, 404)
