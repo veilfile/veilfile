@@ -98,6 +98,7 @@ urlpatterns = [
     # before routing; see config.health).
     path('healthz', health.healthz, name='healthz'),
     path('llms.txt', core_views.llms_txt, name='llms-txt'),
+    path('skills/veilfile/SKILL.md', pages_views.veilfile_skill, name='veilfile-skill'),
     # Public MCP directory manifest (mcpub.dev probes this unauthenticated).
     # Verbatim copy of the packet CMO filed; no secrets, no auth, JSON.
     path(

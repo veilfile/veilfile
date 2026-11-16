@@ -2,7 +2,7 @@
 title: Agent setup
 slug: agent
 seo_title: Agent setup | Veilfile docs
-description: Connect Claude and other MCP clients to Veilfile, with setup for each client and what to do when a secret is flagged.
+description: Connect Claude, Codex, Cursor, pi, omp and other agents to Veilfile, with setup for each one and what to do when a secret is flagged.
 order: 3
 ---
 
@@ -133,6 +133,22 @@ Refresh from the Cascade panel after saving.
 ### Other clients
 
 Point any MCP client at `https://veilfile.com/mcp` over Streamable HTTP. The client must send `Authorization: Bearer <key>` on every request, with the key read from the `VEILFILE_API_KEY` environment variable or your secret manager. Header configuration differs per client. Check its docs.
+
+## pi and omp
+
+pi and omp can use Veilfile through the `veilfile` command-line tool and a skill, with no MCP setup.
+
+1. Install the CLI with `npm install -g veilfile` or `pip install veilfile`, and install only one of the two. Then run `veilfile login` once in your own terminal.
+2. Install the skill:
+
+```bash
+mkdir -p ~/.agents/skills/veilfile
+curl -fsSL https://veilfile.com/skills/veilfile/SKILL.md -o ~/.agents/skills/veilfile/SKILL.md
+```
+
+Both pi and omp load skills from `~/.agents/skills/`. Start a new session and ask the agent to share a file it made. It runs `veilfile push` and gives you the link. The key stays in the CLI's credentials file, and the agent never sees it.
+
+See [Plans](/plans/) for how many uploads each plan allows and how long its links last.
 
 ## Claude apps
 

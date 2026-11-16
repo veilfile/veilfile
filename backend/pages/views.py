@@ -1,6 +1,8 @@
 """Views for public pages on the new shell."""
+from pathlib import Path
+
 from django.conf import settings
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.urls import reverse
@@ -16,6 +18,19 @@ from pages import catalog, registry
 from pages.install import INSTALL_TABS
 from pages.plan_cards import plan_cards
 from pages.snippets import BEGIN_SNIPPETS
+
+
+VEILFILE_SKILL = Path(__file__).resolve().parent / "skills" / "veilfile" / "SKILL.md"
+
+
+def veilfile_skill(request):
+    """The command-line share skill for agents such as pi and omp, served as the repo's copy, so that
+    `curl -o ~/.agents/skills/veilfile/SKILL.md` installs exactly the reviewed file."""
+    try:
+        content = VEILFILE_SKILL.read_bytes()
+    except OSError:
+        raise Http404("The skill is not available.")
+    return HttpResponse(content, content_type="text/markdown; charset=utf-8")
 
 
 def sitemap(request):
