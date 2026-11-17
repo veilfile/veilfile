@@ -482,7 +482,10 @@ def _unauthenticated_mcp_allowed(request):
     Cache-backed fixed window, following drop_core.throttle's pattern:
     ``throttle_ip`` for the key (an IPv6 client counts as its /64) and
     ``cache.add`` plus ``cache.incr``, which the production cache backend
-    keeps inside the window. A cache outage fails open with a warning,
+    keeps inside the window. When the window expires between add's check
+    and incr's read, incr raises ValueError; that starts a fresh window
+    at 1 (as drop_core.throttle._hit does) rather than letting the
+    request through uncounted. A cache outage fails open with a warning,
     as the account throttles do, rather than locking everyone out.
     """
     network = throttle_ip(client_ip(request))
@@ -492,7 +495,12 @@ def _unauthenticated_mcp_allowed(request):
     try:
         if cache.add(key, 1, timeout=UNAUTHENTICATED_MCP_WINDOW_SECONDS):
             return True
-        return cache.incr(key) <= UNAUTHENTICATED_MCP_MAX_PER_IP
+        try:
+            return cache.incr(key) <= UNAUTHENTICATED_MCP_MAX_PER_IP
+        except ValueError:
+            # Expired between add() and incr(): start a fresh window.
+            cache.set(key, 1, timeout=UNAUTHENTICATED_MCP_WINDOW_SECONDS)
+            return True
     except Exception:
         logger.warning('mcp unauthenticated throttle cache failed; failing open', exc_info=True)
         return True
