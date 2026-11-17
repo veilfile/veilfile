@@ -563,6 +563,57 @@ class McpPublicMethodsTests(McpFixTestBase):
         )
         self.assertEqual(response.status_code, 200)
 
+    def test_unauthenticated_throttle_reinitialises_after_window_expiry(self):
+        """W16: a window expiring between cache.add and cache.incr must
+        re-initialise the count at 1, not let the request through uncounted.
+
+        The production incident was three tracebacks in 0.5 s (2026-11-14
+        05:23 UTC): add() saw the old row, then incr() found it expired
+        and raised ValueError, which the broad except swallowed as a cache
+        outage. A test that only asserted "returns True" would pass on the
+        old fail-open code; this one proves the request was counted, by
+        showing the fresh window still throttles at 60.
+        """
+        # Drive the key to 59 of the 60-per-minute budget the ordinary way.
+        for rpc_id in range(1, 60):
+            response = self.post(
+                self.rpc_payload('initialize', {'protocolVersion': '2025-06-18'}, rpc_id=rpc_id),
+                raw_key=None,
+            )
+            self.assertEqual(response.status_code, 200, rpc_id)
+        # The next request straddles the window boundary: add() sees the
+        # old row, then incr() finds it expired.
+        real_incr = cache.incr
+        state = {'raised': False}
+
+        def flaky_incr(key, delta=1, version=None):
+            if not state['raised']:
+                state['raised'] = True
+                raise ValueError("Key '%s' not found" % key)
+            return real_incr(key, delta=delta, version=version)
+
+        with mock.patch.object(cache, 'incr', side_effect=flaky_incr):
+            response = self.post(
+                self.rpc_payload('initialize', {'protocolVersion': '2025-06-18'}, rpc_id=60),
+                raw_key=None,
+            )
+            self.assertEqual(response.status_code, 200)
+        self.assertTrue(state['raised'])
+        # The request was counted at 1 in a fresh window: 59 more are
+        # allowed, the 60th is throttled.
+        for rpc_id in range(61, 120):
+            response = self.post(
+                self.rpc_payload('initialize', {'protocolVersion': '2025-06-18'}, rpc_id=rpc_id),
+                raw_key=None,
+            )
+            self.assertEqual(response.status_code, 200, rpc_id)
+        response = self.post(
+            self.rpc_payload('initialize', {'protocolVersion': '2025-06-18'}, rpc_id=120),
+            raw_key=None,
+        )
+        data = self.assertJsonRpc(response, status=429)
+        self.assertEqual(data['error']['code'], -32000)
+
 
 class McpToolDescriptionTests(McpFixTestBase):
     """mcp-9: the upload tool says what the secret scan does and what each on_secret value returns."""
