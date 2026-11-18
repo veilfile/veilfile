@@ -9247,7 +9247,7 @@ FORM_STATES = (
     FormState("server-error", "server_error", how="baked", status=500, bare=True),
     FormState("csrf-failure", "/accounts/login/", how="csrf", status=403),
     FormState("verify-email", "/accounts/verify-email/", who="staff", expect="blank", enter="main input[name=password]"),   # the staff login: no record
-    FormState("device-approve-unverified", "/device?user_code={device[consent]}", who="staff", how="approve", status=403),
+    FormState("device-approve-unverified", "/device?user_code={device[refuse]}", who="staff", how="approve", status=403),   # its own code: the unverified approve records the refusal on it, and the consent code must stay pending for the states below
     FormState("oauth-unverified", "{oauth[authorize]}", who="staff", status=403),
     FormState("oauth-barred", "{oauth[authorize]}", who="barred_member", status=403),   # a member of a team on Free: no Authorize
     FormState("forbidden", "/admin/auth/user/", who="staff", status=403),
