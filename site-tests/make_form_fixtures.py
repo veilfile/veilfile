@@ -160,7 +160,8 @@ fixtures = {
     "accounts": {"verified": {"username": verified.username, "password": PASSWORD}},
     "device": {"consent": make_code("veilfile-cli/0.4.0 (site checks)"), "long": make_code("U" * 256),
                "expired": make_code("veilfile-cli/0.4.0 (site checks)", lasts=timedelta(seconds=-30)), "unknown": "ZZZZ-2222",
-               "approve": make_code("veilfile-cli/0.4.0 (site checks)"), "deny": make_code("veilfile-cli/0.4.0 (site checks)")},   # these two are used up by being approved and denied
+               "approve": make_code("veilfile-cli/0.4.0 (site checks)"), "deny": make_code("veilfile-cli/0.4.0 (site checks)"),
+               "refuse": make_code("veilfile-cli/0.4.0 (site checks)")},   # these three are used up by being approved, denied and refused (an unverified approve records the refusal on the code, so the refused one must not be the consent code the later states open)
     "oauth": {"app": APP, "authorize": authorize_url(APP), "long": authorize_url(LONG_APP),
               "unknown": "/o/authorize/?response_type=code&client_id=site-checks-no-such-client&redirect_uri=" + CALLBACK},
     "reset": {"link": reverse("password_reset_confirm", args=[urlsafe_base64_encode(force_bytes(reset.pk)), default_token_generator.make_token(reset)])},

@@ -215,7 +215,63 @@ class CliTestCase(unittest.TestCase):
         )
         code, _, err = self.run_cli(["login"], http)
         self.assertEqual(code, 1)
-        self.assertIn("denied", err)
+        self.assertEqual(err, "Login was denied in the browser. Nothing was stored.\n")
+        self.assertIsNone(self.stored_key())
+
+    def test_login_unverified_refusal_prints_verify_first_message(self):
+        description = (
+            "Your email isn't verified yet. Check your inbox for the "
+            "verification link, then run `veilfile login` again."
+        )
+        http = ScriptedHttp(
+            [
+                device_code_response(),
+                (400, {"error": "access_denied", "error_description": description}),
+            ]
+        )
+        code, _, err = self.run_cli(["login"], http)
+        self.assertEqual(code, 1)
+        self.assertEqual(err, description + "\n")
+        self.assertNotIn("Login was denied", err)
+        self.assertIsNone(self.stored_key())
+        # One poll only: the refusal ends the login before the deadline.
+        polls = [r for r in http.requests if r[1].endswith("/api/v1/device/token")]
+        self.assertEqual(len(polls), 1)
+
+    def test_login_described_refusal_keeps_wrapped_message(self):
+        description = (
+            "Your workspace has reached its plan's API key limit. Run "
+            "veilfile login again."
+        )
+        http = ScriptedHttp(
+            [
+                device_code_response(),
+                (400, {"error": "access_denied", "error_description": description}),
+            ]
+        )
+        code, _, err = self.run_cli(["login"], http)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            err, f"Login was denied: {description} Nothing was stored.\n"
+        )
+        self.assertIsNone(self.stored_key())
+
+    def test_login_barred_refusal_prints_wrapped_team_on_free_line(self):
+        description = (
+            "Your team is on the Free plan, so no key was made. Ask your "
+            "administrator to choose a paid plan under Billing."
+        )
+        http = ScriptedHttp(
+            [
+                device_code_response(),
+                (400, {"error": "access_denied", "error_description": description}),
+            ]
+        )
+        code, _, err = self.run_cli(["login"], http)
+        self.assertEqual(code, 1)
+        self.assertEqual(
+            err, f"Login was denied: {description} Nothing was stored.\n"
+        )
         self.assertIsNone(self.stored_key())
 
     def test_login_stops_after_expiry_deadline(self):

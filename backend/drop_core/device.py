@@ -429,6 +429,31 @@ def _token_error(error, description=None):
     return Response(body, status=status.HTTP_400_BAD_REQUEST)
 
 
+# Sentinel contract: the email_not_verified description starts with this
+# prefix, and both CLIs branch on it (see cli/veilfile.py and
+# npm/veilfile.js). No other device-flow error_description may start with
+# these words; any change to the prefix updates both CLIs in the same PR.
+EMAIL_NOT_VERIFIED_DESCRIPTION = (
+    "Your email isn't verified yet. Check your inbox for the verification "
+    "link, then run `veilfile login` again."
+)
+
+
+def _denial_description(device_code):
+    """Map a server-recorded refusal to the terminal's error_description.
+
+    Empty/unknown reason returns None (bare access_denied, exactly as an
+    explicit Deny or a _redeem refusal that delivered its description on
+    the redeeming poll itself).
+    """
+    reason = device_code.denial_reason
+    if reason == DeviceCode.DENIAL_EMAIL_NOT_VERIFIED:
+        return EMAIL_NOT_VERIFIED_DESCRIPTION
+    if reason == DeviceCode.DENIAL_TEAM_ON_FREE:
+        return KEY_NOT_ALLOWED_WORDS["team_on_free"]
+    return None
+
+
 # What a poll that lost the redemption race reports, by the grant's status.
 _LOST_RACE_ERRORS = {
     DeviceCode.STATUS_DENIED: "access_denied",
@@ -582,7 +607,7 @@ class DeviceTokenView(APIView):
         if device_code.status == DeviceCode.STATUS_CONSUMED:
             return _token_error("invalid_grant")
         if device_code.status == DeviceCode.STATUS_DENIED:
-            return _token_error("access_denied")
+            return _token_error("access_denied", _denial_description(device_code))
         if device_code.status == DeviceCode.STATUS_EXPIRED:
             return _token_error("expired_token")
 
@@ -665,6 +690,16 @@ def device_approve(request):
     # NON-NEGOTIABLE: email verification gates key issuance. A logged-in
     # session alone is not enough — the email is the abuse-response path.
     if not is_email_verified(request.user):
+        # Record the refusal so the terminal's next poll ends at once
+        # instead of waiting out the 10-minute deadline. Only if still
+        # PENDING: 0 rows claimed means a racing request already decided
+        # the code, and the earlier decision stands.
+        DeviceCode.objects.filter(
+            pk=device_code.pk, status=DeviceCode.STATUS_PENDING
+        ).update(
+            status=DeviceCode.STATUS_DENIED,
+            denial_reason=DeviceCode.DENIAL_EMAIL_NOT_VERIFIED,
+        )
         return _error_page(
             request,
             "Verify your email first",
@@ -678,6 +713,15 @@ def device_approve(request):
     workspace = member.workspace
     if is_barred(member, workspace):
         # Before anything is written; the page says so in place of its form.
+        # Record the refusal the same way, so the terminal's next poll ends
+        # at once. The verification check above runs first, so an
+        # unverified AND barred member gets the unverified refusal.
+        DeviceCode.objects.filter(
+            pk=device_code.pk, status=DeviceCode.STATUS_PENDING
+        ).update(
+            status=DeviceCode.STATUS_DENIED,
+            denial_reason=DeviceCode.DENIAL_TEAM_ON_FREE,
+        )
         return _render_consent(request, device_code, http_status=403)
     raw_replace = (request.POST.get("replace_key") or "").strip()
     # Anti-phishing: approval from a link someone sent you must not be a

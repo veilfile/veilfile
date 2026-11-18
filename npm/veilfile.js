@@ -567,6 +567,11 @@ async function pollForKey(baseUrl, deviceCode, intervalSecs, expiresInSecs, sign
     if (error === 'expired_token') throw failure(EXPIRED_MESSAGE);
     if (error === 'access_denied') {
       // A denied grant never minted a key (a redeemed one stays consumed).
+      if (description.startsWith("Your email isn't verified yet")) {
+        // The verify-first refusal reads better unwrapped: print the
+        // server's fixed string verbatim and exit at once.
+        throw new LoginError(description);
+      }
       throw new LoginError(
         `Login was denied${description ? `: ${description}` : ' in the browser.'} Nothing was stored.`
       );

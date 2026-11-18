@@ -194,6 +194,8 @@ class DeviceFlowEarlyVerifyNoticeTests(TestCase):
 
     def test_approval_still_refused_for_unverified_user(self):
         # The notice is earlier, but the backend gate itself is unchanged.
+        # The refusal is now recorded on the row, so the terminal's next
+        # poll ends at once instead of waiting out the 10-minute deadline.
         grant = self._start_grant()
         self.client.force_login(self.user)
         response = self.client.post(
@@ -202,9 +204,10 @@ class DeviceFlowEarlyVerifyNoticeTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
         self.assertIn("Verify your email first", response.content.decode())
+        row = DeviceCode.objects.get(
+            user_code=grant["user_code"].replace("-", "")
+        )
+        self.assertEqual(row.status, DeviceCode.STATUS_DENIED)
         self.assertEqual(
-            DeviceCode.objects.get(
-                user_code=grant["user_code"].replace("-", "")
-            ).status,
-            DeviceCode.STATUS_PENDING,
+            row.denial_reason, DeviceCode.DENIAL_EMAIL_NOT_VERIFIED
         )
