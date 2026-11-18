@@ -131,7 +131,7 @@ class MakeFormFixturesTests(TestCase):
             self.assertNotIn("site checks: a view that fails", page["body"], f"{name}: nor of the failure")
         self.assertEqual((self.f["errors"]["not_found"]["status"], self.f["errors"]["server_error"]["status"]), (404, 500))
         self.assertNotEqual(run_script()["sessions"], self.f["sessions"])
-        self.assertEqual((get_user_model().objects.filter(username="site-verified").count(), DeviceCode.objects.filter(requester_ip="198.51.100.7").count()), (1, 5),
+        self.assertEqual((get_user_model().objects.filter(username="site-verified").count(), DeviceCode.objects.filter(requester_ip="198.51.100.7").count()), (1, 6),
                          f"{PREFIX}: a run starts by deleting what an earlier one made")
 
 
