@@ -25,6 +25,7 @@ from .models import (
     APIKey,
     Artifact,
     DeviceCode,
+    EmailVerification,
     MemberUsageCounter,
     Membership,
     UsageCounter,
@@ -321,8 +322,52 @@ class DeviceTests(_DeviceTestBase):
             self.assertNotContains(page, ">Approve</button>")
             response = self._approve(grant, browser=self.graces)
             self.assertContains(response, DEVICE_SENTENCE, status_code=403)
-            self.assertEqual(self._row(grant).status, DeviceCode.STATUS_PENDING)
+            row = self._row(grant)
+            self.assertEqual(row.status, DeviceCode.STATUS_DENIED)
+            self.assertEqual(row.denial_reason, DeviceCode.DENIAL_TEAM_ON_FREE)
             self.assertEqual(APIKey.objects.count(), 0)
+
+    def test_poll_of_a_barred_refusal_returns_the_terminal_error(self):
+        with override_settings(TEAM_SEATS=True):
+            grant = self._start()
+            drop(self.workspace)
+            self.assertContains(
+                self._approve(grant, browser=self.graces),
+                DEVICE_SENTENCE,
+                status_code=403,
+            )
+            response = self._poll(grant)
+            self.assertEqual(response.status_code, 400)
+            self.assertEqual(response.json()["error"], "access_denied")
+            self.assertEqual(response.json()["error_description"], KEY_SENTENCE)
+            self.assertEqual(APIKey.objects.count(), 0)
+
+    def test_denied_code_is_not_overwritten_by_barred_approve(self):
+        with override_settings(TEAM_SEATS=True):
+            grant = self._start()
+            drop(self.workspace)
+            denied = self.graces.post(
+                "/device/deny", {"user_code": grant["user_code"]}
+            )
+            self.assertEqual(denied.status_code, 200)
+            response = self._approve(grant, browser=self.graces)
+            self.assertEqual(response.status_code, 400)
+            row = self._row(grant)
+            self.assertEqual(row.status, DeviceCode.STATUS_DENIED)
+            self.assertEqual(row.denial_reason, "")
+
+    def test_unverified_and_barred_member_gets_the_unverified_refusal(self):
+        with override_settings(TEAM_SEATS=True):
+            grant = self._start()
+            drop(self.workspace)
+            EmailVerification.objects.filter(user=self.grace.user).delete()
+            response = self._approve(grant, browser=self.graces)
+            self.assertEqual(response.status_code, 403)
+            row = self._row(grant)
+            self.assertEqual(row.status, DeviceCode.STATUS_DENIED)
+            self.assertEqual(
+                row.denial_reason, DeviceCode.DENIAL_EMAIL_NOT_VERIFIED
+            )
 
     def test_a_poll_of_a_code_approved_before_the_drop_is_denied(self):
         with override_settings(TEAM_SEATS=True):

@@ -168,7 +168,10 @@ class DeviceCase(TestCase):
         pages["expired"] = self.browser.get("/device", {"user_code": expired["user_code"]})
         pages["unverified"] = self.unverified_browser().post(
             "/device/approve", {"user_code": grant["user_code"], "confirm": "yes"})
-        pages["success"] = self.browser.post("/device/approve", {"user_code": grant["user_code"], "confirm": "yes"})
+        # The unverified refusal records DENIED on the grant above, and a
+        # refused code can never be re-approved; success needs a fresh grant.
+        success = self.start()
+        pages["success"] = self.browser.post("/device/approve", {"user_code": success["user_code"], "confirm": "yes"})
         pages["denied"] = self.browser.post("/device/deny", {"user_code": self.start()["user_code"]})
         for _ in range(12):  # ten misses a window are allowed; the next lookup is refused
             response = self.browser.get("/device", {"user_code": "NOPE-NOPE"})
@@ -758,8 +761,9 @@ class DeviceResultPageTests(DeviceCase):
                          rf'href="{re.escape(reverse("email-verification"))}">Re-send the verification email</a></p>',
                          "device_error.html shows the resend link, a secondary action (a.label.interactive in a "
                          "p.form-links), when show_resend is set")
-        self.assertEqual(DeviceCode.objects.get(user_code=grant["user_code"].replace("-", "")).status,
-                         DeviceCode.STATUS_PENDING, "the refusal grants nothing")
+        row = DeviceCode.objects.get(user_code=grant["user_code"].replace("-", ""))
+        self.assertEqual(row.status, DeviceCode.STATUS_DENIED, "the refusal grants nothing")
+        self.assertEqual(row.denial_reason, DeviceCode.DENIAL_EMAIL_NOT_VERIFIED)
 
     def test_the_throttled_page_is_the_error_page_and_holds_no_form(self):
         response = self.every_page()["too many"]

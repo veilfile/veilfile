@@ -25,7 +25,11 @@ from drop_core.models import (
     UsageCounter,
     get_or_create_workspace,
 )
-from drop_core.device import _DEVICE_GRANT_TYPE, _issue_device_code
+from drop_core.device import (
+    EMAIL_NOT_VERIFIED_DESCRIPTION,
+    _DEVICE_GRANT_TYPE,
+    _issue_device_code,
+)
 from drop_core.plans import PLANS
 from drop_core.services import MAX_FILE_SIZE, revoke_artifact, upload_artifact
 from drop_core.storage import get_storage
@@ -2232,14 +2236,19 @@ class DeviceFlowTests(TestCase):
         self.assertIn("/accounts/login/", response["Location"])
 
     def test_approve_by_unverified_user_403_no_key(self):
-        # No EmailVerification row: login alone must not mint keys.
+        # No EmailVerification row: login alone must not mint keys. The
+        # refusal is recorded on the row so the terminal's next poll ends
+        # at once instead of waiting out the 10-minute deadline.
         _, _, formatted = _issue_device_code()
         response = self._approve(formatted)
         self.assertEqual(response.status_code, 403)
         self.assertContains(response, "Verify your email first", status_code=403)
         self.assertEqual(APIKey.objects.count(), 0)
         device_code = DeviceCode.objects.get(user_code=formatted.replace("-", ""))
-        self.assertEqual(device_code.status, DeviceCode.STATUS_PENDING)
+        self.assertEqual(device_code.status, DeviceCode.STATUS_DENIED)
+        self.assertEqual(
+            device_code.denial_reason, DeviceCode.DENIAL_EMAIL_NOT_VERIFIED
+        )
 
     def test_approve_by_verified_user_mints_device_key(self):
         self._verify()
@@ -2308,7 +2317,67 @@ class DeviceFlowTests(TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()["error"], "access_denied")
+        self.assertNotIn("error_description", response.json())
         self.assertEqual(APIKey.objects.count(), 0)
+
+    def test_unverified_approve_records_refusal_and_poll_ends_at_once(self):
+        # No _verify(): this user is unverified.
+        _, raw_device_code, formatted = _issue_device_code()
+        self.client.force_login(self.user)
+        response = self.client.post(
+            "/device/approve", {"user_code": formatted, "confirm": "yes"}
+        )
+        self.assertEqual(response.status_code, 403)
+        device_code = DeviceCode.objects.get(user_code=formatted.replace("-", ""))
+        self.assertEqual(device_code.status, DeviceCode.STATUS_DENIED)
+        self.assertEqual(
+            device_code.denial_reason, DeviceCode.DENIAL_EMAIL_NOT_VERIFIED
+        )
+        self.assertEqual(APIKey.objects.count(), 0)
+        response = self.client.post(
+            "/api/v1/device/token", self._token_body(raw_device_code), format="json"
+        )
+        self.assertEqual(response.status_code, 400)
+        body = response.json()
+        self.assertEqual(body["error"], "access_denied")
+        self.assertEqual(body["error_description"], EMAIL_NOT_VERIFIED_DESCRIPTION)
+        self.assertTrue(
+            body["error_description"].startswith("Your email isn't verified yet")
+        )
+
+    def test_refused_code_cannot_be_reapproved(self):
+        _, _, formatted = _issue_device_code()
+        self.client.force_login(self.user)
+        response = self.client.post(
+            "/device/approve", {"user_code": formatted, "confirm": "yes"}
+        )
+        self.assertEqual(response.status_code, 403)
+        # Verified now, but the code is no longer pending.
+        self._verify()
+        response = self.client.post(
+            "/device/approve", {"user_code": formatted, "confirm": "yes"}
+        )
+        self.assertEqual(response.status_code, 400)
+        device_code = DeviceCode.objects.get(user_code=formatted.replace("-", ""))
+        self.assertEqual(device_code.status, DeviceCode.STATUS_DENIED)
+        self.assertEqual(APIKey.objects.count(), 0)
+
+    def test_approved_code_is_not_overwritten_by_unverified_approve(self):
+        self._verify()
+        _, _, formatted = _issue_device_code()
+        self.assertEqual(self._approve(formatted).status_code, 200)
+        # A second, unverified browser session posts approve for the same
+        # code. _find_pending only returns PENDING rows, so the earlier
+        # approval stands and no refusal is recorded over it.
+        other = User.objects.create_user(username="other", password="x")
+        self.client.force_login(other)
+        response = self.client.post(
+            "/device/approve", {"user_code": formatted, "confirm": "yes"}
+        )
+        self.assertEqual(response.status_code, 400)
+        device_code = DeviceCode.objects.get(user_code=formatted.replace("-", ""))
+        self.assertEqual(device_code.status, DeviceCode.STATUS_APPROVED)
+        self.assertEqual(device_code.denial_reason, "")
 
     # -- expiry ------------------------------------------------------------
 

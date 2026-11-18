@@ -429,6 +429,11 @@ def _poll_for_key(
             # The server explains refusals it makes itself (e.g. the plan's
             # key cap was reached after approval); the browser's deny button
             # sends no description.
+            if description.startswith("Your email isn't verified yet"):
+                # The verify-first refusal reads better unwrapped: print
+                # the server's fixed string verbatim and exit at once.
+                sys.stderr.write(f"{description}\n")
+                raise SystemExit(1)
             reason = f": {description}" if description else " in the browser."
             sys.stderr.write(f"Login was denied{reason} Nothing was stored.\n")
             raise SystemExit(1)

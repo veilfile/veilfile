@@ -634,6 +634,22 @@ class DeviceCode(models.Model):
     status = models.CharField(
         max_length=16, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True
     )
+    # Why a poll that ends in access_denied got no key. Empty unless the
+    # server itself refused the grant at approve time (an explicit Deny
+    # leaves this blank); the token endpoint maps the code to its
+    # description. Sentinel contract: the email_not_verified description
+    # starts with "Your email isn't verified yet" and both CLIs branch on
+    # that prefix, so the prefix must stay verbatim.
+    DENIAL_EMAIL_NOT_VERIFIED = "email_not_verified"
+    DENIAL_TEAM_ON_FREE = "team_on_free"
+    DENIAL_REASON_CHOICES = [
+        (DENIAL_EMAIL_NOT_VERIFIED, "Email not verified"),
+        (DENIAL_TEAM_ON_FREE, "Team on Free plan"),
+    ]
+    denial_reason = models.CharField(
+        max_length=32, choices=DENIAL_REASON_CHOICES,
+        blank=True, default="", db_default="",
+    )
     # Set at approval time — the device is unauthenticated at initiation.
     workspace = models.ForeignKey(
         Workspace,

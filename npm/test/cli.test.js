@@ -189,12 +189,15 @@ test('login: --print-key prints the key when explicitly asked', async () => {
   assert.ok(cap.out.join('\n').includes('vlf_printme'));
 });
 
-test('login: access_denied stores nothing', async () => {
+test('login: unverified refusal prints the verify-first message', async () => {
+  const description = "Your email isn't verified yet. Check your inbox for the verification link, then run `veilfile login` again.";
+  let polls = 0;
   mockFetch(async (url) => {
     if (url.endsWith('/api/v1/device/code')) {
       return jsonResponse(200, { device_code: 'dc', interval: 0, expires_in: 600 });
     }
-    return jsonResponse(400, { error: 'access_denied' });
+    polls += 1;
+    return jsonResponse(400, { error: 'access_denied', error_description: description });
   });
   const cap = captureOutput();
   let code;
@@ -209,7 +212,55 @@ test('login: access_denied stores nothing', async () => {
   }
   assert.equal(code, 1);
   assert.equal(cli.readStoredKey().source, 'none');
-  assert.ok(cap.err.join('').includes('denied'));
+  assert.equal(cap.err.join(''), `${description}\n`);
+  assert.ok(!cap.err.join('').includes('Login was denied'));
+  assert.equal(polls, 1);
+});
+
+test('login: described refusal keeps the wrapped message', async () => {
+  const description = "Your workspace has reached its plan's API key limit. Run veilfile login again.";
+  mockFetch(async (url) => {
+    if (url.endsWith('/api/v1/device/code')) {
+      return jsonResponse(200, { device_code: 'dc', interval: 0, expires_in: 600 });
+    }
+    return jsonResponse(400, { error: 'access_denied', error_description: description });
+  });
+  const cap = captureOutput();
+  let code;
+  const origExit = process.exit;
+  process.exit = (c) => { throw new Error(`process.exit(${c}) called`); };
+  try {
+    code = await cli.cmdLogin({ baseUrl: 'https://veilfile.com', printKey: false });
+  } finally {
+    process.exit = origExit;
+    cap.restore();
+  }
+  assert.equal(code, 1);
+  assert.equal(cli.readStoredKey().source, 'none');
+  assert.equal(cap.err.join(''), `Login was denied: ${description} Nothing was stored.\n`);
+});
+
+test('login: barred refusal prints the wrapped team-on-free line', async () => {
+  const description = 'Your team is on the Free plan, so no key was made. Ask your administrator to choose a paid plan under Billing.';
+  mockFetch(async (url) => {
+    if (url.endsWith('/api/v1/device/code')) {
+      return jsonResponse(200, { device_code: 'dc', interval: 0, expires_in: 600 });
+    }
+    return jsonResponse(400, { error: 'access_denied', error_description: description });
+  });
+  const cap = captureOutput();
+  let code;
+  const origExit = process.exit;
+  process.exit = (c) => { throw new Error(`process.exit(${c}) called`); };
+  try {
+    code = await cli.cmdLogin({ baseUrl: 'https://veilfile.com', printKey: false });
+  } finally {
+    process.exit = origExit;
+    cap.restore();
+  }
+  assert.equal(code, 1);
+  assert.equal(cli.readStoredKey().source, 'none');
+  assert.equal(cap.err.join(''), `Login was denied: ${description} Nothing was stored.\n`);
 });
 
 // ---------------------------------------------------------------------------
