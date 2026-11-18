@@ -45,9 +45,9 @@ If the base URL above still reads YOUR-DEPLOY, replace it with the address of yo
 
 - `POST /api/v1/artifacts`: upload a file as multipart form data (`file`, optional `ttl_days`, `on_secret` and, for a team, `visibility` of `only_me` or `team`). The maximum size is 25 MiB. The allowed types are png, jpg, jpeg, webp, gif, txt, md, log, json, har and pdf. The stored type comes from the extension; filenames are sanitized.
 - `PUT /api/v1/uploads/<token>`: complete a one-time upload minted by `create_upload_url`. It needs no auth header, because the token authorizes the request.
-- `GET /a/<token>`: download a file. It is public and needs no auth, because the 256-bit token authorizes the request. Images, PDF and `.txt`/`.log`/`.md` files display inline, and everything else (JSON, HAR) downloads as an attachment. An expired or revoked file returns 404, and a storage outage returns 503 with `Retry-After`. The response carries `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, which ask caches not to store the bytes and crawlers not to index them.
+- `GET /a/<token>`: download a file. It is public and needs no auth, because the 256-bit token authorizes the request. Images, PDF and `.txt`/`.log`/`.md` files display inline, and everything else (JSON, HAR) downloads as an attachment. An expired, revoked, or held file returns 404, and a storage outage returns 503 with `Retry-After`. The response carries `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow`, which ask caches not to store the bytes and crawlers not to index them.
 - `GET /api/v1/artifacts`: list own artifacts, newest first, as a bare JSON array (key auth). It accepts an optional `limit` (1 to 200) and `cursor`. The `X-Next-Cursor` and `Link: rel="next"` headers point to the next page.
-- `DELETE /api/v1/artifacts/<id>`: revoke early (key auth). It returns 204 on success.
+- `DELETE /api/v1/artifacts/<id>`: revoke early (key auth). It returns 204 on success. Revoking a held file returns `403` `file_held`, and the file stays until we release it.
 - `GET /api/v1/usage`: return the plan, the monthly upload count, and the key and storage meters (key or session auth).
 - `POST /mcp`: accept MCP requests (key auth, except `initialize`, `notifications/initialized`, `ping` and `tools/list`, which need no credential). The methods are `initialize`, `notifications/initialized`, `ping`, `tools/list` and `tools/call`.
 - `/api/v1/keys` and `/api/v1/billing/*` need dashboard session auth. An API key may list keys and revoke itself.
@@ -62,6 +62,8 @@ Monthly upload caps: Free 100/mo, Team $4 2,000/mo, Team Plus $6 4,000/mo, Scale
 Yearly prices: Team $40/yr, Team Plus $60/yr, Scale $120/yr
 Yearly billing costs ten months' price, so two months are free, and a yearly plan has the same caps as the monthly one.
 Hard storage caps: Free 1 GB, Team 25 GB, Team Plus 40 GB, Scale 100 GB
+Team seats: Free 1 seat, Team 5 seats, Team Plus 10 seats, Scale unlimited seats. Seats match the plan key cap.
+Refunds: cancel within 14 days of your first paid subscription and the first payment is refunded in full, whether monthly or yearly. Just ask. After that, fees are non-refundable; you can cancel anytime and keep the plan until the end of the billing period.
 Only successful uploads count toward the monthly cap, and rejected 4xx uploads never consume quota. Paid prices are tax-inclusive in every country. An upload over the storage cap fails with `402` `storage_cap_reached`, and an upload over the monthly cap fails with `429` `monthly_cap_reached`. Retrying fixes neither, so tell the user to revoke files or upgrade for storage, or to wait for next month or upgrade for the monthly cap. A member of a team cannot change the plan, so tell them to ask their administrator instead. A `401` whose sentence says the team is on the Free plan means the key or app is paused, not wrong: do not ask for a new key, and tell the user to ask their administrator to choose a paid plan.
 
 Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every failure including auth and throttling (`unauthorized`, `forbidden`, `not_found`, `rate_limited`, `file_type_not_allowed`, `file_too_large`, `storage_cap_reached`, `monthly_cap_reached`, …); branch on `code`. HTTP statuses are standard. A `429` carries `Retry-After` only when its code is `rate_limited`: wait that many seconds, then try again. Over MCP, tool failures are results with `isError: true` and the same JSON in the text content, and `rate_limited` gives the wait as `retry_after`.
@@ -70,7 +72,7 @@ Errors are JSON `{"error": "<message>", "code": "<stable code>"}` for every fail
 
 - Omitting `ttl_days` gives the plan maximum, not something shorter.
 - Plan TTL maxima: Free 7 days, Team 90 days, Team Plus 90 days, Scale 365 days
-- A plan change never shortens a file's expiry. A file uploaded on Scale keeps its Scale expiry after a downgrade to Free. TTL maxima apply to new uploads. Deletion runs on a daily sweep: expect removal within 24 hours of expiry, 48 at most after a restart. Always read `expires_at` in the response.
+- A plan change never shortens a file's expiry. A file uploaded on Scale keeps its Scale expiry after a downgrade to Free. TTL maxima apply to new uploads. Deletion runs on a daily sweep: expect removal within 24 hours of expiry, 48 at most after a restart. A held file is the exception: it is not deleted when its TTL expires, and it is deleted on the next daily sweep after we release it. Always read `expires_at` in the response.
 - A whole-number `ttl_days` above the plan maximum is clamped down, never rejected. The 201 response then includes `"ttl_adjusted": true`. Over REST, 0 or a negative number is raised to 1, and over MCP it is rejected, so send 1 or more. A non-integer value (`0.5`, `abc`) is rejected with `400` `invalid_request`. Always read `expires_at` in the response; never trust the value you sent.
 
 ## secret_flags are advisory, not blocking
