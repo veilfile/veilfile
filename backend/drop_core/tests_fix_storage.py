@@ -313,6 +313,8 @@ class CascadeDeleteTests(_Base):
         self.assertFalse(self._stored(artifact))
 
     def test_storage_failure_is_logged_with_id_and_key_and_delete_completes(self):
+        from hashlib import sha256
+
         artifact = self._upload()
         with use_storage(FailingDeleteStorage()):
             with self.assertLogs("drop_core.signals", "ERROR") as logs:
@@ -320,7 +322,11 @@ class CascadeDeleteTests(_Base):
                     self.ws.delete()
         output = "\n".join(logs.output)
         self.assertIn(f"id={artifact.id}", output)
-        self.assertIn(f"key={artifact.token}", output)
+        # Founder ruling 2026-11-11: only a truncated hash of the dead
+        # token is logged, never the token itself.
+        fingerprint = sha256(artifact.token.encode("utf-8")).hexdigest()[:16]
+        self.assertIn(f"key_sha256={fingerprint}", output)
+        self.assertNotIn(artifact.token, output)
         self.assertFalse(Artifact.objects.exists())
 
     def test_already_missing_object_is_not_an_error(self):
