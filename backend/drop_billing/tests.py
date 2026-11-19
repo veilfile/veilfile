@@ -536,13 +536,39 @@ class BillingApiTests(TestCase):
             stripe_mock.Webhook.construct_event.side_effect = (
                 real_stripe.SignatureVerificationError("bad sig", "sig")
             )
-            resp = self.client.post(
-                "/api/v1/billing/webhook",
-                data="{}",
-                content_type="application/json",
-                HTTP_STRIPE_SIGNATURE="t=1,v1=bogus",
-            )
+            with self.assertLogs("drop_billing", level="WARNING") as logs:
+                resp = self.client.post(
+                    "/api/v1/billing/webhook",
+                    data="{}",
+                    content_type="application/json",
+                    HTTP_STRIPE_SIGNATURE="t=1,v1=bogus",
+                )
         self.assertEqual(resp.status_code, 400)
+        output = "\n".join(logs.output)
+        self.assertIn("SignatureVerificationError", output)
+        self.assertNotIn("bad sig", output)
+
+    def test_webhook_stripe_error_while_handling_answers_500_and_logs_only_the_type(self):
+        import stripe as real_stripe
+
+        event = {"id": "evt_1", "type": "invoice.paid", "data": {"object": {}}}
+        with mock.patch("drop_billing.views.stripe") as stripe_mock, mock.patch(
+            "drop_billing.views._handle_event",
+            side_effect=real_stripe.StripeError("customer lookup failed"),
+        ):
+            stripe_mock.Webhook.construct_event.return_value = event
+            stripe_mock.error.StripeError = real_stripe.StripeError
+            with self.assertLogs("drop_billing", level="ERROR") as logs:
+                resp = self.client.post(
+                    "/api/v1/billing/webhook",
+                    data=json.dumps({"id": "evt_1"}),
+                    content_type="application/json",
+                    HTTP_STRIPE_SIGNATURE="t=1,v1=abc",
+                )
+        self.assertEqual(resp.status_code, 500)
+        output = "\n".join(logs.output)
+        self.assertIn("StripeError", output)
+        self.assertNotIn("customer lookup failed", output)
 
 
 # ---------------------------------------------------------------------------

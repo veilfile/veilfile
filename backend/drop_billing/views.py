@@ -400,7 +400,7 @@ def webhook(request):
     try:
         event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
     except Exception as exc:  # signature mismatch, bad payload
-        logger.warning("billing webhook: unverified event (%s)", exc)
+        logger.warning("billing webhook: unverified event (%s)", type(exc).__name__)
         return HttpResponseBadRequest("invalid signature")
 
     event_id = event.get("id") or ""
@@ -426,7 +426,7 @@ def webhook(request):
             "500 so Stripe retries",
             event_type,
             event_id,
-            exc,
+            type(exc).__name__,
         )
         return HttpResponse(status=500)
     except CustomerNotVisible:
