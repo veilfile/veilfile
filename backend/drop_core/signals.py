@@ -12,10 +12,12 @@ callback, which removes their objects in batched storage calls (1000 keys
 per S3 DeleteObjects call) instead of one round-trip per artifact.
 
 A failure here cannot be retried from the database (the row is gone), so
-it is logged at ERROR with the storage key; ``manage.py reconcile_storage``
+it is logged at ERROR with a truncated SHA-256 of the storage key (never
+the key itself, founder ruling 2026-11-11); ``manage.py reconcile_storage``
 finds and removes such orphans.
 """
 
+import hashlib
 import logging
 
 from django.db import transaction
@@ -32,6 +34,18 @@ _BYTES_HANDLED = "_veilfile_bytes_handled"
 # summed up in one line, so an outage during a large cascade cannot flood
 # the logs.
 _MAX_FAILURE_LOGS = 50
+
+
+# Hex characters of the SHA-256 digest logged in place of a dead token:
+# enough to identify the token in storage-side debugging, too short to
+# reconstruct or reuse it. Founder ruling 2026-11-11: log a truncated
+# hash of the token, never the token itself.
+_TOKEN_FINGERPRINT_LEN = 16
+
+
+def token_fingerprint(token):
+    """Truncated SHA-256 of a storage key, for log lines only."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()[:_TOKEN_FINGERPRINT_LEN]
 
 
 def mark_bytes_handled(artifact):
@@ -119,15 +133,19 @@ def _delete_bytes(items):
         failed += 1
         if failed > _MAX_FAILURE_LOGS:
             continue
-        # The row is already gone, so the key no longer serves anything and
-        # is safe to log; an operator needs it to remove the object.
+        # The row is already gone, so the key no longer serves anything —
+        # but the key itself is still token material, so only a truncated
+        # hash of it is logged (founder ruling 2026-11-11); an operator
+        # can match the hash against storage-side keys to remove the
+        # object. Storage errors embed the object URL, so the error text
+        # is scrubbed of the raw token the same way before logging.
         logger.error(
             "storage delete failed for deleted artifact id=%s workspace=%s "
-            "key=%s (%s); object orphaned, run reconcile_storage",
+            "key_sha256=%s (%s); object orphaned, run reconcile_storage",
             artifact_id,
             workspace_id,
-            token,
-            error,
+            token_fingerprint(token),
+            error.replace(token, token_fingerprint(token)),
         )
     if failed > _MAX_FAILURE_LOGS:
         logger.error(
