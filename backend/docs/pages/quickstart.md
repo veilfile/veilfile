@@ -77,11 +77,7 @@ Next: [connect an agent via MCP](/docs/agent/), or read [how it works](/docs/how
 
 ## Manual fallback
 
-When an agent needs its key in `VEILFILE_API_KEY`, print the stored key on the machine that already ran `veilfile login`:
-
-```bash
-export VEILFILE_API_KEY=$(veilfile key)
-```
+When an agent needs its key in `VEILFILE_API_KEY`, print the stored key on the machine that already ran `veilfile login` and export it: `export VEILFILE_API_KEY=$(veilfile key)`.
 
 That is the same key the CLI uses. Nothing is revoked or re-created, and it works on Free, where the CLI key and the agent key are one key. A key saved by `veilfile login` stays in the credentials file, and the key-based MCP setups in the agent docs read `VEILFILE_API_KEY` instead.
 
