@@ -766,6 +766,57 @@ class LogoutTests(FixTestCase):
         self.assertIn("left in place", err)
         self.assertEqual(self.stored_key(), OLD_KEY)
 
+    def test_logout_with_env_key_equal_to_file_key_does_not_revoke(self):
+        veilfile.write_stored_key(OLD_KEY)
+        os.environ["VEILFILE_API_KEY"] = OLD_KEY
+        http = Scripted([])
+        code, out, err = self.run_cli(["logout"], http)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(http.requests, [])
+        self.assertIn(
+            "The stored key is also the value of VEILFILE_API_KEY, so logout did not revoke it on the server. "
+            "Deleted the local copy only. Unset the variable and revoke the key in the dashboard if you mean to.",
+            out,
+        )
+        self.assertIsNone(self.stored_key())
+
+    def test_logout_with_different_env_key_revokes_only_the_file_key(self):
+        veilfile.write_stored_key(OLD_KEY)
+        os.environ["VEILFILE_API_KEY"] = NEW_KEY
+        http = Scripted([key_list(OLD_KEY), (204, b"")])
+        code, out, err = self.run_cli(["logout"], http)
+        self.assertEqual(code, 0, err)
+        deletes = http.calls("DELETE", "/api/v1/keys/3")
+        self.assertEqual(len(deletes), 1)
+        self.assertEqual(deletes[0][2].get("Authorization"), f"Bearer {OLD_KEY}")
+        self.assertNotIn(NEW_KEY, out + err)
+        self.assertIn(
+            "Note: logout only revokes the key stored by `veilfile login`; VEILFILE_API_KEY is left alone. "
+            "Unset it to stop using it here, or revoke it in the dashboard.",
+            out,
+        )
+        self.assertIsNone(self.stored_key())
+
+    def test_logout_with_env_key_and_no_file_key_makes_no_server_call(self):
+        os.environ["VEILFILE_API_KEY"] = NEW_KEY
+        http = Scripted([])
+        code, out, err = self.run_cli(["logout"], http)
+        self.assertEqual(code, 0, err)
+        self.assertEqual(http.requests, [])
+        self.assertIn("No key stored by `veilfile login` for https://veilfile.com.", out)
+
+    def test_logout_with_env_key_and_no_file_key_names_the_base_url(self):
+        os.environ["VEILFILE_API_KEY"] = NEW_KEY
+        http = Scripted([])
+        code, out, err = self.run_cli(
+            ["--base-url", "http://localhost:8000", "logout"], http
+        )
+        self.assertEqual(code, 0, err)
+        self.assertEqual(http.requests, [])
+        self.assertIn(
+            "No key stored by `veilfile login` for http://localhost:8000.", out
+        )
+
 
 # ---------------------------------------------------------------------------
 # credentials file (pycli-6)

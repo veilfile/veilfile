@@ -264,6 +264,130 @@ test('login: barred refusal prints the wrapped team-on-free line', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// key
+// ---------------------------------------------------------------------------
+
+test('parseArgs: key takes no options', () => {
+  const opts = cli.parseArgs(['key']);
+  assert.equal(opts.command, 'key');
+  assert.equal(opts.baseUrl, 'https://veilfile.com');
+  assert.throws(
+    () => cli.parseArgs(['key', '--print-key']),
+    cli.__test.UsageError,
+    '--print-key does not apply to key'
+  );
+  assert.throws(() => cli.parseArgs(['key', '--validate']), cli.__test.UsageError);
+});
+
+test('key: prints the stored key and nothing else, with no HTTP calls', async () => {
+  cli.writeStoredKey('vlf_keytest123456');
+  let fetched = 0;
+  mockFetch(async () => { fetched += 1; throw new Error('unexpected fetch'); });
+  const cap = captureOutput();
+  let code;
+  try {
+    code = await cli.cmdKey({ baseUrl: 'https://veilfile.com' });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(code, 0);
+  assert.deepEqual(cap.out, ['vlf_keytest123456']);
+  assert.equal(cap.err.join(''), '');
+  assert.equal(fetched, 0);
+});
+
+test('key: no stored key exits 1 with Not logged in on stderr', async () => {
+  mockFetch(async () => { throw new Error('unexpected fetch'); });
+  const cap = captureOutput();
+  let code;
+  try {
+    code = await cli.cmdKey({ baseUrl: 'https://veilfile.com' });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(code, 1);
+  assert.deepEqual(cap.out, []);
+  assert.equal(cap.err.join(''), 'Not logged in. Run `veilfile login`.\n');
+});
+
+test('key: env key equal to the file key notes it on stderr', async () => {
+  cli.writeStoredKey('vlf_keytest123456');
+  process.env.VEILFILE_API_KEY = 'vlf_keytest123456';
+  mockFetch(async () => { throw new Error('unexpected fetch'); });
+  const cap = captureOutput();
+  let code;
+  try {
+    code = await cli.cmdKey({ baseUrl: 'https://veilfile.com' });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(code, 0);
+  assert.deepEqual(cap.out, ['vlf_keytest123456']);
+  assert.match(cap.err.join(''), /VEILFILE_API_KEY is set in this shell to the same key/);
+  assert.ok(!cap.err.join('').includes('vlf_keytest123456'), 'key never on stderr');
+});
+
+test('key: a different env key is never printed, and the file key still is', async () => {
+  cli.writeStoredKey('vlf_keytest123456');
+  process.env.VEILFILE_API_KEY = 'vlf_envkey987654';
+  mockFetch(async () => { throw new Error('unexpected fetch'); });
+  const cap = captureOutput();
+  let code;
+  try {
+    code = await cli.cmdKey({ baseUrl: 'https://veilfile.com' });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(code, 0);
+  assert.deepEqual(cap.out, ['vlf_keytest123456']);
+  assert.match(cap.err.join(''), /takes precedence over the stored key/);
+  assert.ok(!cap.err.join('').includes('vlf_envkey987654'), 'env value never printed');
+  assert.ok(!cap.err.join('').includes('vlf_keytest123456'), 'key never on stderr');
+});
+
+test('key: an env key for another server is not warned about as in use', async () => {
+  cli.writeStoredKey('vlf_keytest123456');
+  process.env.VEILFILE_API_KEY = 'vlf_envkey987654';
+  process.env.VEILFILE_BASE_URL = 'http://localhost:8000';
+  mockFetch(async () => { throw new Error('unexpected fetch'); });
+  const cap = captureOutput();
+  let code;
+  try {
+    code = await cli.cmdKey({ baseUrl: 'https://veilfile.com' });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(code, 0);
+  assert.deepEqual(cap.out, ['vlf_keytest123456']);
+  assert.match(cap.err.join(''), /was not used for https:\/\/veilfile\.com/);
+  assert.ok(!cap.err.join('').includes('vlf_envkey987654'), 'env value never printed');
+});
+
+test('key: a key stored for another server is refused', async () => {
+  cli.writeStoredKey('vlf_otherkey12345', 'http://localhost:8000');
+  mockFetch(async () => { throw new Error('unexpected fetch'); });
+  const cap = captureOutput();
+  let code;
+  try {
+    code = await cli.cmdKey({ baseUrl: 'https://veilfile.com' });
+  } finally {
+    cap.restore();
+  }
+  assert.equal(code, 1);
+  assert.deepEqual(cap.out, []);
+  assert.equal(cap.err.join(''), 'Not logged in. Run `veilfile login`.\n');
+  // The same key prints when asked for its own server.
+  const cap2 = captureOutput();
+  try {
+    code = await cli.cmdKey({ baseUrl: 'http://localhost:8000' });
+  } finally {
+    cap2.restore();
+  }
+  assert.equal(code, 0);
+  assert.deepEqual(cap2.out, ['vlf_otherkey12345']);
+});
+
+// ---------------------------------------------------------------------------
 // logout
 // ---------------------------------------------------------------------------
 

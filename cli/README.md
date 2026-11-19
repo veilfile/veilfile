@@ -20,6 +20,7 @@ python3 veilfile.py login
 ```sh
 veilfile login    # browser approval flow; stores the API key locally
 veilfile logout   # revoke the key on the server; delete the local copy
+veilfile key      # print the stored API key
 veilfile status   # confirm the stored key is valid (never prints it)
 veilfile push FILE [--ttl-days N] [--visibility only_me|team]  # upload a file; print its share URL
 veilfile pull URL [--out PATH] [--force]  # download an artifact
@@ -28,11 +29,22 @@ veilfile pull URL [--out PATH] [--force]  # download an artifact
 `veilfile login` prints a code and opens the verification page in your browser.
 Approve it there and the terminal picks up the API key — you never paste a
 secret. `veilfile login --print-key` prints the raw key too, for the rare case
-you explicitly need it (it is never printed otherwise). Logging in again
+you explicitly need it at login time (it is never printed otherwise). To print
+the stored key later, run `veilfile key`. It prints the key and nothing else,
+so `export VEILFILE_API_KEY=$(veilfile key)` works as written, and it does not
+confirm the key is still valid; run `veilfile status` for that. Logging in again
 replaces the stored key and revokes the old one on the server that issued it
 (the old key is only ever sent there). If you also copied that old key into
 `VEILFILE_API_KEY` (a shell profile or MCP config), login warns you, because
 that copy stops working too.
+
+`veilfile logout` revokes and deletes only the key `veilfile login` stored.
+It never revokes `VEILFILE_API_KEY`, which is usually shared with an MCP
+client or CI; revoke that one in the dashboard if you mean to. If the stored
+key is the same key as `VEILFILE_API_KEY` (for example after you exported what
+`veilfile key` printed), logout only deletes the local copy. If revoking fails
+(a network error, or an error status other than 401, which means the key is
+already invalid), the local copy is kept and logout exits 1.
 
 The key is stored in a `0600` credentials file (`~/.config/veilfile` on
 macOS/Linux; on Windows, `%APPDATA%\veilfile`, protected by that folder's

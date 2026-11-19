@@ -50,7 +50,7 @@ If the browser does not open, open the printed address on any device and approve
 
 A login creates one API key, and keys made this way count toward your plan's key limit, the same as keys you create in the dashboard. Free allows one key, Team allows five keys, Team Plus allows ten keys, and Scale allows unlimited keys. At the limit, the approval page asks you to choose a key to replace, and anything still using that key stops working.
 
-The CLI saves the key in a credentials file that only you can read. By default that file is `~/.config/veilfile/credentials` on macOS and Linux, and `%APPDATA%\veilfile\credentials` on Windows. The CLI does not print the key unless you run `veilfile login --print-key`.
+The CLI saves the key in a credentials file that only you can read. By default that file is `~/.config/veilfile/credentials` on macOS and Linux, and `%APPDATA%\veilfile\credentials` on Windows. To print the stored key, run `veilfile key`. It prints the key and nothing else, so `export VEILFILE_API_KEY=$(veilfile key)` works as written. It does not confirm the key is still valid; run `veilfile status` for that.
 
 ## 3. Push
 
@@ -71,13 +71,21 @@ The command prints the share URL. Anyone who has the URL can open it in a browse
 
 The link expires when your plan's TTL runs out, which is seven days on Free. Pass `--ttl-days 1` to shorten it. On a team, pass `--visibility team` to let your teammates see the file on their Files page, which works when your administrator lets each person decide.
 
-Run `veilfile logout` when you are done with a machine. It revokes the key and deletes the credentials file, and the links you already made keep working until they expire.
+Run `veilfile logout` when you are done with a machine. It revokes the key and deletes the credentials file, and the links you already made keep working until they expire. If that key is also exported as `VEILFILE_API_KEY`, logout leaves it unrevoked on the server and deletes the local copy only.
 
 Next: [connect an agent via MCP](/docs/agent/), or read [how it works](/docs/how-it-works/).
 
 ## Manual fallback
 
-Use this route on a machine that runs unattended, such as a CI runner, or when an agent needs its key in `VEILFILE_API_KEY`. A key saved by `veilfile login` stays in the credentials file, and the key-based MCP setups in the agent docs read `VEILFILE_API_KEY` instead.
+When an agent needs its key in `VEILFILE_API_KEY`, print the stored key on the machine that already ran `veilfile login`:
+
+```bash
+export VEILFILE_API_KEY=$(veilfile key)
+```
+
+That is the same key the CLI uses. Nothing is revoked or re-created, and it works on Free, where the CLI key and the agent key are one key. A key saved by `veilfile login` stays in the credentials file, and the key-based MCP setups in the agent docs read `VEILFILE_API_KEY` instead.
+
+Use the dashboard route below only on a machine without the CLI, or one that runs unattended, such as a CI runner.
 
 ### Create an API key
 
