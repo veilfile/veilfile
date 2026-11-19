@@ -750,7 +750,7 @@ def switch(user, plan, interval="month"):
             plan,
             interval,
             workspace.pk,
-            exc,
+            type(exc).__name__,
         )
         return _stripe_error(exc)
 
@@ -1219,7 +1219,7 @@ def portal(user):
         logger.error(
             "billing: portal session failed for workspace %s: %s",
             workspace.pk,
-            exc,
+            type(exc).__name__,
         )
         return _stripe_error(exc)
     if not _is_open_administrator(workspace.pk, user):

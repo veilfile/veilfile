@@ -428,8 +428,11 @@ class SwitchTests(AccountCase):
             [subscription(pending=True, invoice="in_pending")],
             Invoice__void_invoice=mock.Mock(side_effect=FakeStripeError("void failed")),
         )
-        with self.assertLogs("drop_billing", "ERROR"):
+        with self.assertLogs("drop_billing", "ERROR") as logs:
             answer = self.call(account.switch, self.user, "team", mocked=failing)
+        output = "\n".join(logs.output)
+        self.assertIn("FakeStripeError", output)
+        self.assertNotIn("void failed", output)
         self.assertEqual(answer, Answer(502, {"error": "Stripe: void failed", "code": "stripe_error"}), ACCOUNT)
         self.assertEqual(self.reload().plan, "free", f"{WHERE}: a switch is one transaction; a Stripe error rolls it back")
 
@@ -462,8 +465,11 @@ class PortalTests(AccountCase):
     def test_a_stripe_error_is_a_502(self):
         self.subscribe()
         failing = stripe_mock(billing_portal__Session__create=mock.Mock(side_effect=FakeStripeError("configuration missing")))
-        with self.assertLogs("drop_billing", "ERROR"):
+        with self.assertLogs("drop_billing", "ERROR") as logs:
             answer = self.call(account.portal, self.user, mocked=failing)
+        output = "\n".join(logs.output)
+        self.assertIn("FakeStripeError", output)
+        self.assertNotIn("configuration missing", output)
         self.assertEqual(answer, Answer(502, {"error": "Stripe: configuration missing", "code": "stripe_error"}), ACCOUNT)
         self.assertEqual(self.reload().stripe_customer_id, "cus_S", ACCOUNT)
 
