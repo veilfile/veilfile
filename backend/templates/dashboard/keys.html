@@ -14,13 +14,13 @@
 {% if barred %}<p class="notice" role="status">Your team is on the Free plan, so you cannot make keys for now. You can still revoke the ones you have.</p>
 {% endif %}{% if active_key_count == 0 and not barred %}<section aria-labelledby="keys-get-connected">
 <h2 id="keys-get-connected">Get connected</h2>
-<p>The recommended way to connect is the CLI. Install it with pip install veilfile, run veilfile login, open the page it prints, and enter the code there. The key is stored in a credentials file only you can read. The CLI prints it only if you pass --print-key, and it does not write it to your shell history. Then run veilfile push screenshot.png. Your upload appears under Files.</p>
+<p>The recommended way to connect is the CLI. Install it with pip install veilfile, run veilfile login, open the page it prints, and enter the code there. The key is stored in a credentials file only you can read. Run <code>veilfile key</code> to print the stored key when you need it, and the key never lands in your shell history. Then run veilfile push screenshot.png. Your upload appears under Files.</p>
 {% include "components/code_block.html" with id="onboarding-pip" label="Copy the pip install command" code="pip install veilfile" only %}
 {% include "components/code_block.html" with id="onboarding-login" label="Copy the veilfile login command" code="veilfile login" only %}
 {% include "components/code_block.html" with id="onboarding-push" label="Copy the veilfile push example" code="veilfile push screenshot.png" only %}
 <p class="notice">The code expires after ten minutes. Approving a login needs a verified email. If yours is not verified yet, verify it, then run veilfile login again.</p>
 <p>Headless machine, or a restricted shell where the browser flow cannot run? Create a key in the form below, copy the one-time value, and export it where your agent runs. Keep this path for headless machines and restricted shells only. A key you copy by hand can end up in shell history, which is why the recommended login above is the guide to follow.</p>
-<p class="notice">Each login mints one API key, and device-issued keys count toward your plan's key cap (one key on Free). The full three-step walkthrough is in the <a href="{% url 'docs-page' 'quickstart' %}">quickstart</a>.</p>
+<p class="notice">Each login mints one API key, and device-issued keys count toward your plan's key cap (one key on Free). On Free that one key is shared between the CLI and your agent: run <code>veilfile key</code> to print it, or sign the agent in with OAuth, which never counts toward the cap. Agent setup is in <a href="{% url 'docs-page' 'agent' %}">/docs/agent</a>, and the full three-step walkthrough is in the <a href="{% url 'docs-page' 'quickstart' %}">quickstart</a>.</p>
 </section>
 {% endif %}
 {% if not barred %}{% focus_field form "name" as focus %}

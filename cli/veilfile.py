@@ -6,6 +6,7 @@ so `veilfile login` never asks you to paste a secret into the terminal.
 
     veilfile login        start the browser approval flow, store the API key
     veilfile logout       revoke the key server-side, delete the local copy
+    veilfile key          print the stored API key
     veilfile status       confirm the stored key is valid (never prints it)
     veilfile push FILE    upload a file, print its share URL
     veilfile pull URL     download an artifact to the current directory
@@ -680,7 +681,7 @@ def cmd_login(args: argparse.Namespace) -> int:
         )
     existing_env = (os.environ.get(_ENV_VAR) or "").strip()
     if existing_env and existing_env == previous_key and revoked is not None:
-        # Typically `login --print-key` output copied into a shell profile
+        # Typically `veilfile key` output copied into a shell profile
         # or MCP config: it takes precedence, and it no longer works.
         sys.stderr.write(
             f"Warning: {_ENV_VAR} is set in this shell to the previously "
@@ -696,19 +697,94 @@ def cmd_login(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# key
+# ---------------------------------------------------------------------------
+
+
+def _origin_text(origin: Optional[Tuple[str, str, Optional[int]]]) -> str:
+    """An origin tuple back as text, e.g. https://veilfile.com."""
+    if origin is None:
+        return DEFAULT_BASE_URL
+    scheme, host, port = origin
+    default_port = {"http": 80, "https": 443}.get(scheme)
+    return f"{scheme}://{host}" + (
+        f":{port}" if port not in (None, default_port) else ""
+    )
+
+
+def cmd_key(args: argparse.Namespace) -> int:
+    """Print the stored file key, nothing else, on stdout.
+
+    A read-only local read: no server call, no minting, no revoking, the
+    credentials file untouched. Errors and notes go to stderr so
+    `export VEILFILE_API_KEY=$(veilfile key)` captures the key alone.
+    """
+    key, stored_base_url = _read_file_entry()
+    if not key:
+        sys.stderr.write("Not logged in. Run `veilfile login`.\n")
+        return 1
+    issuer = _origin(stored_base_url or DEFAULT_BASE_URL)
+    requested = _origin(args.base_url)
+    if issuer is not None and requested is not None and issuer != requested:
+        issuer_text = _origin_text(issuer)
+        sys.stderr.write("Not logged in. Run `veilfile login`.\n")
+        sys.stderr.write(
+            f"The stored key belongs to {issuer_text}. "
+            f"Run `veilfile key --base-url {issuer_text}` to print it.\n"
+        )
+        return 1
+    print(key)
+    env_key = (os.environ.get(_ENV_VAR) or "").strip()
+    if env_key:
+        if env_key == key:
+            sys.stderr.write(
+                f"Note: {_ENV_VAR} is set in this shell to the same key.\n"
+            )
+        else:
+            sys.stderr.write(
+                f"Note: {_ENV_VAR} is set in this shell and takes precedence "
+                "over the stored key.\n"
+            )
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # logout
 # ---------------------------------------------------------------------------
 
 
 def cmd_logout(args: argparse.Namespace) -> int:
-    key, source = read_stored_key()
-    if not key:
-        print("Not logged in.")
+    # logout only ever revokes the key `veilfile login` stored. An
+    # environment key is usually shared (MCP config, CI), so it is left alone.
+    file_key = _read_file_key()
+    env_key = (os.environ.get(_ENV_VAR) or "").strip()
+    env_set = bool(env_key)
+    if file_key and file_key == env_key:
+        # The stored key was exported (say after `veilfile key`): revoking
+        # it would also cut off whatever reads the variable.
+        delete_stored_key()
+        print(
+            f"The stored key is also the value of {_ENV_VAR}, so logout did not revoke it on the server. "
+            "Deleted the local copy only. Unset the variable and revoke the key in the dashboard if you mean to."
+        )
+        return 0
+    if env_set:
+        print(
+            f"Note: logout only revokes the key stored by `veilfile login`; {_ENV_VAR} is left alone. "
+            "Unset it to stop using it here, or revoke it in the dashboard."
+        )
+    if not file_key:
+        origin = _origin(args.base_url)
+        print(
+            f"No key stored by `veilfile login` for {_origin_text(origin)}."
+            if env_set
+            else "Not logged in."
+        )
         return 0
 
     revoked = False
     try:
-        status, keys = _api(args.base_url, "GET", "/api/v1/keys", key=key)
+        status, keys = _api(args.base_url, "GET", "/api/v1/keys", key=file_key)
     except ApiError as exc:
         sys.stderr.write(f"{exc}\n (The local copy was left in place.)\n")
         return 1
@@ -716,11 +792,11 @@ def cmd_logout(args: argparse.Namespace) -> int:
     if status == 401:
         print("The stored key is already invalid on the server.")
     elif status == 200 and isinstance(keys, list):
-        match = _matching_key_entry(keys, key)
+        match = _matching_key_entry(keys, file_key)
         if match is not None:
             try:
                 del_status, _ = _api(
-                    args.base_url, "DELETE", f"/api/v1/keys/{match['id']}", key=key
+                    args.base_url, "DELETE", f"/api/v1/keys/{match['id']}", key=file_key
                 )
             except ApiError as exc:
                 sys.stderr.write(f"{exc}\n (The local copy was left in place.)\n")
@@ -742,11 +818,7 @@ def cmd_logout(args: argparse.Namespace) -> int:
         )
         return 1
 
-    if source == "file":
-        delete_stored_key()
-    elif source == "environment":
-        print(f"Note: {_ENV_VAR} is still set in this shell; unset it to finish.")
-
+    delete_stored_key()
     print("Logged out." if revoked else "Logged out (local copy removed).")
     return 0
 
@@ -1260,6 +1332,11 @@ def build_parser() -> argparse.ArgumentParser:
         "logout", help="Revoke the key on the server; delete the local copy."
     )
     logout.set_defaults(func=cmd_logout)
+
+    key = sub.add_parser(
+        "key", help="Print the stored API key (never validates it)."
+    )
+    key.set_defaults(func=cmd_key)
 
     status = sub.add_parser(
         "status", help="Show account status for the stored key (never prints it)."

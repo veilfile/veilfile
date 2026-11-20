@@ -419,15 +419,115 @@ class CliTestCase(unittest.TestCase):
         self.assertNotIn("Could not reach", err)
         self.assertTrue((self.config_dir / "credentials").exists())
 
-    def test_logout_with_env_key_revokes_but_warns(self):
+    def test_logout_with_only_env_key_makes_no_server_call(self):
+        # Parity with npm: logout revokes only the key `veilfile login`
+        # stored. With no file key and the var set, there is nothing to
+        # revoke and no server call to make.
         os.environ["VEILFILE_API_KEY"] = TEST_KEY
-        keys = [{"id": 7, "key_prefix": TEST_KEY[:12], "is_active": True}]
-        http = ScriptedHttp([(200, keys), (204, {})])
+        http = ScriptedHttp([])
         code, out, _ = self.run_cli(["logout"], http)
         self.assertEqual(code, 0)
         self.assertIn("VEILFILE_API_KEY", out)
-        method, url, _, _ = http.requests[1]
-        self.assertEqual(method, "DELETE")
+        self.assertIn("No key stored by `veilfile login` for https://veilfile.com.", out)
+        self.assertEqual(http.requests, [])
+
+    # -- key -------------------------------------------------------------
+
+    def test_key_prints_stored_key_and_nothing_else(self):
+        self._write_key_file()
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(["key"], http)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, TEST_KEY + "\n")
+        self.assertEqual(err, "")
+        self.assertEqual(http.requests, [])
+
+    def test_key_with_no_stored_key_exits_1(self):
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(["key"], http)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "Not logged in. Run `veilfile login`.\n")
+        self.assertEqual(http.requests, [])
+
+    def test_key_with_env_key_equal_to_file_key_notes_it(self):
+        self._write_key_file()
+        os.environ["VEILFILE_API_KEY"] = TEST_KEY
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(["key"], http)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, TEST_KEY + "\n")
+        self.assertIn("VEILFILE_API_KEY is set in this shell to the same key", err)
+        self.assertNotIn(TEST_KEY, err)
+
+    def test_key_with_different_env_key_prints_file_key_and_warns(self):
+        self._write_key_file()
+        os.environ["VEILFILE_API_KEY"] = OTHER_KEY
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(["key"], http)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, TEST_KEY + "\n")
+        self.assertIn("takes precedence over the stored key", err)
+        self.assertNotIn(OTHER_KEY, out + err)
+        self.assertNotIn(TEST_KEY, err)
+
+    def test_key_refuses_a_key_from_another_server(self):
+        veilfile.write_stored_key(TEST_KEY, "http://localhost:8000")
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(["key"], http)
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("Not logged in. Run `veilfile login`.", err)
+        self.assertIn("http://localhost:8000", err)
+        self.assertNotIn(TEST_KEY, out + err)
+        self.assertEqual(http.requests, [])
+
+    def test_key_accepts_the_issuing_server(self):
+        veilfile.write_stored_key(TEST_KEY, "http://localhost:8000")
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(
+            ["--base-url", "http://localhost:8000", "key"], http
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(out, TEST_KEY + "\n")
+        self.assertEqual(err, "")
+
+    def test_key_accepts_trailing_slash_variants_of_the_same_origin(self):
+        path = self.config_dir / "credentials"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"api_key": TEST_KEY, "base_url": "https://veilfile.com/"}),
+            encoding="utf-8",
+        )
+        http = ScriptedHttp([])
+        code, out, _ = self.run_cli(["key"], http)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, TEST_KEY + "\n")
+
+    def test_key_treats_a_legacy_file_as_the_default_server(self):
+        # A file with no recorded base_url holds a key for the default server.
+        self._write_key_file()
+        http = ScriptedHttp([])
+        code, out, _ = self.run_cli(["key"], http)
+        self.assertEqual(code, 0)
+        self.assertEqual(out, TEST_KEY + "\n")
+        code, out, err = self.run_cli(
+            ["--base-url", "http://localhost:8000", "key"], http
+        )
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("https://veilfile.com", err)
+
+    def test_key_rejects_print_key_and_validate_flags(self):
+        self._write_key_file()
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(["key", "--print-key"], http)
+        self.assertEqual(code, 2)
+        self.assertEqual(out, "")
+        self.assertIn("--print-key", err)
+        code, _, err = self.run_cli(["key", "--validate"], http)
+        self.assertEqual(code, 2)
+        self.assertIn("--validate", err)
 
     # -- status ----------------------------------------------------------
 

@@ -8,6 +8,7 @@
  *
  *   veilfile login        start the browser approval flow, store the API key
  *   veilfile logout       revoke the stored key server-side, delete the local copy
+ *   veilfile key          print the stored API key
  *   veilfile status       confirm the key is valid (never prints it)
  *   veilfile push <file>  upload a file, print its share URL
  *   veilfile pull <url>   download a shared file (--out <path>, --force)
@@ -773,7 +774,7 @@ async function cmdLogout(opts) {
   const envSet = Boolean(envKey);
   const { key } = readFileKey(opts.baseUrl);
   if (key && key === envKey) {
-    // The stored key was exported (say after `login --print-key`): revoking
+    // The stored key was exported (say after `veilfile key`): revoking
     // it would also cut off whatever reads the variable.
     deleteStoredKey(opts.baseUrl);
     console.log(
@@ -803,6 +804,42 @@ async function cmdLogout(opts) {
   if (revoked.state === 'missing') console.log('No matching active key found on the server.');
   deleteStoredKey(opts.baseUrl);
   console.log('Logged out.');
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
+// key
+// ---------------------------------------------------------------------------
+
+function cmdKey(opts) {
+  // A read-only local read: no server call, no minting, no revoking, the
+  // credentials file untouched. readFileKey already refuses a key stored
+  // for another server. Errors and notes go to stderr so
+  // `export VEILFILE_API_KEY=$(veilfile key)` captures the key alone.
+  const { key } = readFileKey(opts.baseUrl);
+  if (!key) {
+    process.stderr.write('Not logged in. Run `veilfile login`.\n');
+    return 1;
+  }
+  console.log(key);
+  const envKey = (process.env[ENV_VAR] || '').trim();
+  if (envKey) {
+    const envOrigin = safeOrigin(envBaseUrl());
+    if (envOrigin === originOf(opts.baseUrl)) {
+      if (envKey === key) {
+        process.stderr.write(`Note: ${ENV_VAR} is set in this shell to the same key.\n`);
+      } else {
+        process.stderr.write(
+          `Note: ${ENV_VAR} is set in this shell and takes precedence over the stored key.\n`
+        );
+      }
+    } else {
+      // The env key belongs to another server: say so, in the same words
+      // readStoredKey uses, and never print the env value.
+      const { note } = readStoredKey(opts.baseUrl);
+      if (note) process.stderr.write(`Note: ${note}\n`);
+    }
+  }
   return 0;
 }
 
@@ -1341,7 +1378,7 @@ async function cmdPull(opts, urlArg) {
 // CLI
 // ---------------------------------------------------------------------------
 
-const USAGE = 'Usage: veilfile <login|logout|status|push <file>|pull <url>> [options]\n' +
+const USAGE = 'Usage: veilfile <login|logout|key|status|push <file>|pull <url>> [options]\n' +
   'Run `veilfile --help` for details.';
 
 function helpText() {
@@ -1352,6 +1389,7 @@ Usage: veilfile <command> [options]
 Commands:
   login [--print-key]     Log in via the browser; store the API key.
   logout                  Revoke the stored key on the server; delete the local copy.
+  key                     Print the stored API key (never validates it).
   status | whoami         Show account status for the key in use (never prints it).
   push <file> [--ttl-days N] [--visibility only_me|team]
                           Upload a file (max 25 MiB); print its share URL.
@@ -1394,6 +1432,7 @@ const CLI_OPTIONS = {
 const COMMANDS = {
   login: { args: [], options: ['print-key'] },
   logout: { args: [], options: [] },
+  key: { args: [], options: [] },
   status: { args: [], options: [] },
   whoami: { args: [], options: [] },
   push: { args: ['file'], options: ['ttl-days', 'visibility'] },
@@ -1483,6 +1522,8 @@ async function main(argv = process.argv.slice(2)) {
       return await cmdLogin(opts);
     case 'logout':
       return await cmdLogout(opts);
+    case 'key':
+      return cmdKey(opts);
     case 'status':
     case 'whoami':
       return await cmdStatus(opts);
@@ -1518,6 +1559,7 @@ module.exports = {
   formatBytes,
   cmdLogin,
   cmdLogout,
+  cmdKey,
   cmdStatus,
   cmdPush,
   cmdPull,

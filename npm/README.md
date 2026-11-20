@@ -21,6 +21,7 @@ node veilfile.js login
 ```sh
 veilfile login             # browser approval flow; stores the API key locally
 veilfile logout            # revoke the stored key on the server; delete the local copy
+veilfile key               # print the stored API key
 veilfile status            # confirm the key in use is valid (never prints it)
 veilfile push <file>       # upload a file; print its share URL
 veilfile pull <url>        # download a shared file into the current directory
@@ -37,7 +38,11 @@ Options:
   save into.
 - `--force` (`-f`) on pull: replace an existing file.
 - `--print-key` on login: also print the raw key. Use it only when you
-  explicitly need the key; it is never printed otherwise.
+  explicitly need the key at login time; it is never printed otherwise.
+  To print the stored key later, run `veilfile key`, which prints the key
+  and nothing else, so `export VEILFILE_API_KEY=$(veilfile key)` works as
+  written. It does not confirm the key is still valid; run `veilfile
+  status` for that.
 - `--base-url URL` (or `VEILFILE_BASE_URL`): the server to talk to, for
   example a local dev server. Default `https://veilfile.com`.
 - `--allow-http`: allow an API key to travel over plain `http` to a host
@@ -80,7 +85,7 @@ key — you never paste a secret.
   leave old keys active. Ctrl-C at that point still finishes the
   revocation first; a second Ctrl-C skips it and names the key to revoke
   in the dashboard. This includes a stored key you also exported as
-  `VEILFILE_API_KEY` (say after `login --print-key`): the CLI warns that
+  `VEILFILE_API_KEY` (say after you exported what `veilfile key` printed): the CLI warns that
   the variable no longer works, so update it wherever you set it.
 - Keys made by `veilfile login` count toward your plan's API-key limit. If
   you are at the limit, the approval page lets you choose an existing key
@@ -109,7 +114,7 @@ redirect cannot carry the key elsewhere.
 for that server. It never revokes `VEILFILE_API_KEY`, which is usually
 shared with an MCP client or CI; revoke that one in the dashboard if you
 mean to. If the stored key is the same key as `VEILFILE_API_KEY` (for
-example after `login --print-key`), logout only deletes the local copy.
+example after you exported what `veilfile key` printed), logout only deletes the local copy.
 If revoking fails (a network error, or an error status other than 401,
 which means the key is already invalid), the local copy is kept and
 logout exits 1.
