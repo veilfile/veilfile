@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: 2026-11-19
+Last updated: 2026-11-20
 
 ## 1. What we collect
 
