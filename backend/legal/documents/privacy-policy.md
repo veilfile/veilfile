@@ -1,17 +1,20 @@
 # Privacy Policy
 
-Last updated: 2026-11-17
+Last updated: 2026-11-20
 
 ## 1. What we collect
 
 - **Account email:** when you sign up, to identify your account and contact you about the service.
+- **Team members:** when you add someone to your workspace, we record the link between their account and your workspace: their role in the workspace and when they joined. Members use their own accounts, so we collect nothing from a member that we do not already collect from any account holder, as listed above.
+- **File visibility:** each file is either private to the member who uploaded it or visible to everyone in the workspace. The uploader chooses. Team-visible files can be seen by every member of that workspace and by no one else.
+- **Invitations:** when an administrator invites someone to a workspace, we record the email address the invitation was sent to, who sent it, and when it was sent, accepted, declined, or revoked. We store only a hash of the invitation link, never the link itself. An invitation expires after 7 days. When an invitation ends, for any reason, we keep the record for 30 days and then delete it on the next daily sweep. If the invitee declines, the same address cannot be invited again during those 30 days. The invitation email carries the inviter's verified address, the link, and when it expires.
 - **Uploaded files:** the file content you upload, stored until its TTL expires.
 - **Metadata:** filenames, file sizes, upload times, and expiry timestamps.
 - **API usage and logs:** server request logs (method, path, status, response size, user agent, and the IP address of our hosting provider's proxy). Download links and other secret tokens in paths, query strings and referrers are redacted before they are written. We use logs for billing, abuse prevention and debugging.
 - **IP address and user agent:** we record these for terminal sign-in requests (`veilfile login`), and show them to you on the approval page; those records are deleted 1 hour after the 10-minute code expires if no key was issued, and 1 day after if one was. We record the IP address of requests that send a signup or verification email, to limit abuse, and delete it after 90 days.
 - **Cookies:** `sessionid` and `csrftoken` keep you signed in and protect forms; the session lasts up to 14 days, and both are Secure over HTTPS. `vf_funnel` is a first-party analytics cookie on the landing and signup pages. It holds a random ID, is HttpOnly, lasts only for the browser session, is never shared, and contains no IP address or user agent. We use it only to count landing visits and signup starts once per browser, and keep those counts for 365 days. We don't count bots, link previews or scripted clients, and we don't use advertising cookies.
 
-We don't run ads and don't profile you. Files are private to your account. Unguessable links are the only access path, and we never publish or index them.
+We don't run ads and don't profile you. Files are private to your workspace. A file is visible only to the member who uploaded it unless that member marks it visible to the team, in which case every member of the workspace can see it. Unguessable links are the only access path for anyone outside the workspace, and we never publish or index them.
 
 ## 2. Why we collect it
 
