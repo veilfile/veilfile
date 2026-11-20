@@ -17,8 +17,11 @@ without a row. Run the dry run, check the counts and the ``db=`` and
 ``--delete`` unattended.
 
 Prints ``objects=N orphans=N deleted=N failed=N db=... storage=...`` and
-exits non-zero when any delete failed. Orphan keys are printed: with no row
-behind them they no longer serve anything.
+exits non-zero when any delete failed. Orphan keys are printed only as
+truncated SHA-256 fingerprints (``key_sha256=``, first 16 hex chars, the
+same pattern as ``drop_core.signals.token_fingerprint``): with no row
+behind them they no longer serve anything, but the key itself is still
+token material, so a full key is never printed from this command.
 """
 
 import datetime
@@ -29,6 +32,7 @@ from django.db import connection
 from django.utils import timezone
 
 from drop_core.models import Artifact
+from drop_core.signals import token_fingerprint
 
 # Artifact tokens are secrets.token_urlsafe(32): 43 URL-safe characters.
 _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{32,64}$")
@@ -113,17 +117,21 @@ class Command(BaseCommand):
 
         deleted = failed = 0
         for key in orphans:
+            fingerprint = token_fingerprint(key)
             if not options["delete"]:
-                self.stdout.write(f"orphan {key}")
+                self.stdout.write(f"orphan key_sha256={fingerprint}")
                 continue
             try:
                 storage.delete(key)
             except Exception as exc:
                 failed += 1
-                self.stderr.write(f"delete failed {key}: {type(exc).__name__}: {exc}")
+                # Storage errors embed the object URL, so the error text
+                # is scrubbed of the raw key the same way before printing.
+                error = f"{type(exc).__name__}: {exc}".replace(key, fingerprint)
+                self.stderr.write(f"delete failed key_sha256={fingerprint}: {error}")
                 continue
             deleted += 1
-            self.stdout.write(f"deleted {key}")
+            self.stdout.write(f"deleted key_sha256={fingerprint}")
 
         summary = (
             f"objects={total} orphans={len(orphans)} deleted={deleted} "

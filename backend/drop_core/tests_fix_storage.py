@@ -33,6 +33,7 @@ from drop_core.models import (
     get_or_create_workspace,
 )
 from drop_core.services import revoke_artifact, upload_artifact, workspace_storage_bytes
+from drop_core.signals import token_fingerprint
 from drop_core.storage import LocalStorage
 
 User = get_user_model()
@@ -842,7 +843,8 @@ class ReconcileStorageTests(_Base):
         out = io.StringIO()
         call_command("reconcile_storage", stdout=out)
         self.assertIn("objects=8 orphans=1 deleted=0 failed=0", out.getvalue())
-        self.assertIn(f"orphan {self.ORPHAN}", out.getvalue())
+        self.assertIn(f"orphan key_sha256={token_fingerprint(self.ORPHAN)}", out.getvalue())
+        self.assertNotIn(self.ORPHAN, out.getvalue())
         self.assertTrue(self._stored(self.ORPHAN))
 
     def test_summary_names_database_and_storage(self):
@@ -899,8 +901,21 @@ class ReconcileStorageTests(_Base):
             with self.assertRaisesMessage(CommandError, "could not be deleted"):
                 call_command("reconcile_storage", "--delete", stdout=out, stderr=err)
         self.assertIn("orphans=1 deleted=0 failed=1", out.getvalue())
-        self.assertIn(f"delete failed {self.ORPHAN}", err.getvalue())
+        self.assertIn(f"delete failed key_sha256={token_fingerprint(self.ORPHAN)}", err.getvalue())
+        self.assertNotIn(self.ORPHAN, out.getvalue())
+        self.assertNotIn(self.ORPHAN, err.getvalue())
         self.assertTrue(self._stored(self.ORPHAN))
+
+    def test_no_full_key_is_ever_printed(self):
+        # Dry run, delete, and delete-failure output must carry only the
+        # truncated fingerprint, never the full orphan key.
+        out = io.StringIO()
+        call_command("reconcile_storage", stdout=out)
+        self.assertNotIn(self.ORPHAN, out.getvalue())
+        out = io.StringIO()
+        call_command("reconcile_storage", "--delete", stdout=out)
+        self.assertIn(f"deleted key_sha256={token_fingerprint(self.ORPHAN)}", out.getvalue())
+        self.assertNotIn(self.ORPHAN, out.getvalue())
 
     def test_grace_period_has_a_floor(self):
         with self.assertRaisesMessage(CommandError, "at least 1"):
