@@ -1,5 +1,7 @@
 # Veilfile — private, ephemeral artifact hosting for AI agents
 
+[![Listed on mcpservers.org](https://mcpservers.org/badge.svg)](https://mcpservers.org/servers/veilfile/veilfile)
+
 When a coding agent in CI or a cloud session produces a screenshot, log bundle,
 or HAR file for review, it needs a private URL to put it at — not a public
 repo. Veilfile is the sanctioned place: upload via API key (or MCP), get back an
