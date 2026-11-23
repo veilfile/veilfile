@@ -1067,17 +1067,19 @@ def cmd_push(args: argparse.Namespace) -> int:
 
     if status == 201 and payload.get("url"):
         print(payload["url"])
+        # Human notes go to stderr: stdout keeps the URL alone, so
+        # `url=$(veilfile push f)` still works (see below).
         expiry = _format_expiry(payload.get("expires_at"))
         if expiry:
-            print(f"Expires {expiry}.")
+            sys.stderr.write(f"Expires {expiry}.\n")
         if payload.get("ttl_adjusted"):
-            print(
+            sys.stderr.write(
                 "Note: the lifetime was adjusted to fit your plan, "
-                "so this expiry is the one that applies."
+                "so this expiry is the one that applies.\n"
             )
-        print(
+        sys.stderr.write(
             "Manage or delete this file under Files: "
-            f"{args.base_url.rstrip('/')}/app/files/"
+            f"{args.base_url.rstrip('/')}/app/files/\n"
         )
         flags = payload.get("secret_flags") or []
         if flags:

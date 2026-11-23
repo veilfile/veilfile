@@ -616,16 +616,18 @@ class CliTestCase(unittest.TestCase):
                 )
             ]
         )
-        code, out, _ = self.run_cli(["push", str(target)], http)
+        code, out, err = self.run_cli(["push", str(target)], http)
         self.assertEqual(code, 0)
         self.assertIn("https://veilfile.com/a/abc123", out)
-        self.assertIn("Expires November 11, 2026 at 6:30 PM UTC.", out)
+        self.assertIn("Expires November 11, 2026 at 6:30 PM UTC.", err)
         self.assertIn(
             "Manage or delete this file under Files: "
             "https://veilfile.com/app/files/",
-            out,
+            err,
         )
-        self.assertNotIn("adjusted", out)
+        self.assertNotIn("adjusted", err)
+        self.assertNotIn("Expires", out)
+        self.assertNotIn("Manage or delete", out)
 
     def test_push_success_notes_ttl_adjusted(self):
         self._write_key_file()
@@ -643,10 +645,11 @@ class CliTestCase(unittest.TestCase):
                 )
             ]
         )
-        code, out, _ = self.run_cli(["push", str(target)], http)
+        code, out, err = self.run_cli(["push", str(target)], http)
         self.assertEqual(code, 0)
-        self.assertIn("Expires November 11, 2026 at 6:30 PM UTC.", out)
-        self.assertIn("lifetime was adjusted to fit your plan", out)
+        self.assertIn("Expires November 11, 2026 at 6:30 PM UTC.", err)
+        self.assertIn("lifetime was adjusted to fit your plan", err)
+        self.assertNotIn("Expires", out)
 
     def test_push_success_without_expiry_still_prints_pointer(self):
         self._write_key_file()
@@ -654,14 +657,16 @@ class CliTestCase(unittest.TestCase):
         http = ScriptedHttp(
             [(201, {"url": "https://veilfile.com/a/abc123", "secret_flags": []})]
         )
-        code, out, _ = self.run_cli(["push", str(target)], http)
+        code, out, err = self.run_cli(["push", str(target)], http)
         self.assertEqual(code, 0)
         self.assertNotIn("Expires", out)
+        self.assertNotIn("Expires", err)
         self.assertIn(
             "Manage or delete this file under Files: "
             "https://veilfile.com/app/files/",
-            out,
+            err,
         )
+        self.assertNotIn("Manage or delete", out)
 
     def test_push_success_ignores_unparseable_expiry(self):
         self._write_key_file()
