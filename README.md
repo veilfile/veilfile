@@ -87,6 +87,7 @@ Stripe sandbox/test key only on a local or staging copy.
 | `DROP_LOCAL_DIR` | no | `backend/media/artifacts` | Local storage root |
 | `AWS_S3_ENDPOINT_URL` | prod (s3) | — | R2 endpoint, e.g. `https://<acct>.r2.cloudflarestorage.com` |
 | `AWS_S3_BUCKET` | prod (s3) | — | R2 bucket name |
+| `AWS_S3_BACKUP_BUCKET` | no | `deadrop-artifacts-backup` | Second R2 bucket for the daily export (`manage.py export_to_backup`); unset means the default |
 | `AWS_ACCESS_KEY_ID` | prod (s3) | — | R2 API token (access key) |
 | `AWS_SECRET_ACCESS_KEY` | prod (s3) | — | R2 API token (secret) |
 | `STRIPE_SECRET_KEY` | billing | — | Live secret key (`sk_live_…`) in production |
