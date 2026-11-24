@@ -961,10 +961,19 @@ def signup(request):
             if paid:
                 return redirect(_paid_signup_checkout(user, plan, interval))
             return redirect(safe_next_url(request) or "/app/")
+        else:
+            # Submitted but invalid: field names only, never values (a
+            # value may contain the email address). The funnel event
+            # answers "submitted but invalid" as a count; the attempt row
+            # plus this event reconcile against signup_completed.
+            logger.info(
+                "signup: validation failed fields=%s", sorted(form.errors)
+            )
+            funnel.record(request, funnel.SIGNUP_VALIDATION_FAILED)
     else:
         form = SignupForm()
         funnel.record(request, funnel.SIGNUP_STARTED, once_per_session=True)
-    return render(
+    response = render(
         request,
         "registration/signup.html",
         {
@@ -974,6 +983,27 @@ def signup(request):
             "next": safe_next_url(request),
         },
     )
+    if request.method == "GET":
+        # After render() returns, not before: a template failure must not
+        # count as rendered. POST-invalid re-renders pass through this
+        # tail too and must not count as fresh renders.
+        funnel.record(
+            request, funnel.SIGNUP_FORM_RENDERED, once_per_session=True
+        )
+    return response
+
+
+@funnel.sets_funnel_cookie
+def signup_rendered(request):
+    """1x1 beacon the signup form page fires on render.
+
+    Records the client-render signal for the funnel: a real browser
+    fetches this image when it renders the form; a bare-GET prober
+    never does. Analytics only, no content: 204, no CSRF. GET only.
+    """
+    if request.method == "GET":
+        funnel.record(request, funnel.SIGNUP_RENDERED, once_per_session=True)
+    return HttpResponse(status=204)
 
 
 @login_required

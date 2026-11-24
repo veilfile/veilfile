@@ -17,4 +17,6 @@
 <button class="action interactive" type="submit">Create account</button>
 </form>
 <p class="form-links">Do you already have an account? <a class="label interactive" href="{% url 'login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Log in</a></p>
+{# Render beacon: a browser fetching this 1x1 image proves the form rendered; a bare-GET prober never fetches it. #}
+<img src="{% url 'signup-rendered' %}" alt="" aria-hidden="true" width="1" height="1">
 {% endblock %}

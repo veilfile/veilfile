@@ -294,6 +294,9 @@ def record_signup_attempt(ip):
 
 def signup_throttled_response(request):
     """The 429 for a signup from an address (or IPv6 network) that has tried too often in the last hour."""
+    # A throttled POST otherwise leaves no row and no log line, so a
+    # throttled human is invisible in the funnel; this line closes it.
+    logger.info("signup: throttled")
     return throttled_response(
         request,
         "Too many signup attempts",
