@@ -31,7 +31,12 @@ class PushVisibilityTests(unittest.TestCase):
     def test_without_the_option_the_request_is_todays(self):
         code, out, err, http = self.push([], {"url": URL, "secret_flags": []})
         self.assertNotIn(b'name="visibility"', http.requests[0][3])
-        self.assertEqual((code, out, err), (0, URL + "\n", ""))
+        self.assertEqual((code, out), (0, URL + "\n"))
+        # stderr carries the Files pointer (push-expiry line); no visibility
+        # sentence appears without the option.
+        self.assertEqual(
+            err, "Manage or delete this file under Files: https://veilfile.com/app/files/\n"
+        )
 
     def test_a_bad_value_is_refused_before_any_request(self):
         code, _, _, http = self.push(["--visibility", "public"], {"url": URL, "secret_flags": []})
@@ -50,7 +55,11 @@ class PushVisibilityTests(unittest.TestCase):
         self.assertEqual((code, out), (0, URL + "\n"))
         self.assertIn("The server did not apply --visibility.", err)
         _, _, err, _ = self.push([], {"url": URL, "secret_flags": []})
-        self.assertEqual(err, "", "without the option, nothing new is printed")
+        # Without the option, stderr holds only the Files pointer line.
+        self.assertEqual(
+            err, "Manage or delete this file under Files: https://veilfile.com/app/files/\n",
+            "without the option, no visibility note is printed",
+        )
 
 
 if __name__ == "__main__":
