@@ -757,9 +757,24 @@ def cmd_key(args: argparse.Namespace) -> int:
 def cmd_logout(args: argparse.Namespace) -> int:
     # logout only ever revokes the key `veilfile login` stored. An
     # environment key is usually shared (MCP config, CI), so it is left alone.
-    file_key = _read_file_key()
+    file_key, stored_base_url = _read_file_entry()
     env_key = (os.environ.get(_ENV_VAR) or "").strip()
     env_set = bool(env_key)
+    if file_key:
+        # The stored key belongs to the server that issued it. Refuse to
+        # send it to another server, mirroring `key` and the npm CLI: the
+        # credentials file records the issuing server for exactly this.
+        issuer = _origin(stored_base_url or DEFAULT_BASE_URL)
+        requested = _origin(args.base_url)
+        if issuer is not None and requested is not None and issuer != requested:
+            issuer_text = _origin_text(issuer)
+            sys.stderr.write(
+                f"The stored key belongs to {issuer_text}, not "
+                f"{_origin_text(requested)}. "
+                f"Run `veilfile logout --base-url {issuer_text}` to revoke it.\n"
+                "The local copy was left in place.\n"
+            )
+            return 1
     if file_key and file_key == env_key:
         # The stored key was exported (say after `veilfile key`): revoking
         # it would also cut off whatever reads the variable.
@@ -1359,9 +1374,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("VEILFILE_BASE_URL", DEFAULT_BASE_URL),
         help="API base URL (default: %(default)s).",
     )
+    # --base-url is a global option: accept it after the subcommand too,
+    # as the npm CLI does. The subparser copy has no default of its own,
+    # so a top-level --base-url still stands when it is not repeated.
+    base_url_parent = argparse.ArgumentParser(add_help=False)
+    base_url_parent.add_argument(
+        "--base-url",
+        default=argparse.SUPPRESS,
+        help="API base URL.",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    login = sub.add_parser("login", help="Log in via the browser; store the API key.")
+    login = sub.add_parser(
+        "login",
+        parents=[base_url_parent],
+        help="Log in via the browser; store the API key.",
+    )
     login.add_argument(
         "--print-key",
         action="store_true",
@@ -1371,24 +1399,32 @@ def build_parser() -> argparse.ArgumentParser:
     login.set_defaults(func=cmd_login)
 
     logout = sub.add_parser(
-        "logout", help="Revoke the key on the server; delete the local copy."
+        "logout",
+        parents=[base_url_parent],
+        help="Revoke the key on the server; delete the local copy.",
     )
     logout.set_defaults(func=cmd_logout)
 
     key = sub.add_parser(
-        "key", help="Print the stored API key (never validates it)."
+        "key",
+        parents=[base_url_parent],
+        help="Print the stored API key (never validates it).",
     )
     key.set_defaults(func=cmd_key)
 
     status = sub.add_parser(
-        "status", help="Show account status for the stored key (never prints it)."
+        "status",
+        parents=[base_url_parent],
+        help="Show account status for the stored key (never prints it).",
     )
     status.set_defaults(func=cmd_status)
-    whoami = sub.add_parser("whoami", help="Alias for status.")
+    whoami = sub.add_parser(
+        "whoami", parents=[base_url_parent], help="Alias for status."
+    )
     whoami.set_defaults(func=cmd_status)
 
     push = sub.add_parser(
-        "push", help="Upload a file; print its share URL."
+        "push", parents=[base_url_parent], help="Upload a file; print its share URL."
     )
     push.add_argument("file", help="Local file to upload (max 25 MiB).")
     push.add_argument(
@@ -1409,7 +1445,9 @@ def build_parser() -> argparse.ArgumentParser:
     push.set_defaults(func=cmd_push)
 
     pull = sub.add_parser(
-        "pull", help="Download an artifact to the current directory."
+        "pull",
+        parents=[base_url_parent],
+        help="Download an artifact to the current directory.",
     )
     pull.add_argument("url", help="The artifact's share URL.")
     pull.add_argument(

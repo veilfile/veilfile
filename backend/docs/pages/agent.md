@@ -14,7 +14,7 @@ Veilfile hosts a Streamable HTTP MCP server at `POST https://veilfile.com/mcp`. 
 Authorization: Bearer <key>
 ```
 
-Most setups below read the key from `VEILFILE_API_KEY`. A key saved by `veilfile login` stays in its credentials file and does not set that variable. To set it, run `veilfile key` and export the key it prints. On Free, which allows one key, the approval page asks you to replace a key you already have, and the CLI and your agent then share the new one. Running `veilfile login` again can revoke that shared key, and your agent then needs a new one. `veilfile logout` never revokes a key also exported as `VEILFILE_API_KEY`; it deletes the local copy only. `veilfile key` prints the stored key but does not confirm it is still valid; run `veilfile status` for that.
+Most setups below read the key from `VEILFILE_API_KEY`. A key saved by `veilfile login` stays in its credentials file and does not set that variable. To set it, run `veilfile key` and export the key it prints. On Free, which allows one key, the approval page asks you to replace a key you already have, and the CLI and your agent then share the new one. Running `veilfile login` again can revoke that shared key, and your agent then needs a new one. `veilfile logout` leaves the key alone only when it is also the value of `VEILFILE_API_KEY` in the shell where logout runs; then it deletes the local copy only. A key that lives only in an MCP config file is still revoked, because logout cannot see it there. `veilfile key` prints the stored key but does not confirm it is still valid; run `veilfile status` for that.
 
 Keys start with `vlf_`. The server exposes four tools: `upload_artifact`, `create_upload_url`, `list_artifacts`, and `revoke_artifact`.
 

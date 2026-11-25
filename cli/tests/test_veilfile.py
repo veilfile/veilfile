@@ -492,6 +492,16 @@ class CliTestCase(unittest.TestCase):
         self.assertEqual(out, TEST_KEY + "\n")
         self.assertEqual(err, "")
 
+    def test_key_accepts_base_url_after_the_subcommand(self):
+        veilfile.write_stored_key(TEST_KEY, "http://localhost:8000")
+        http = ScriptedHttp([])
+        code, out, err = self.run_cli(
+            ["key", "--base-url", "http://localhost:8000"], http
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(out, TEST_KEY + "\n")
+        self.assertEqual(err, "")
+
     def test_key_accepts_trailing_slash_variants_of_the_same_origin(self):
         path = self.config_dir / "credentials"
         path.parent.mkdir(parents=True, exist_ok=True)

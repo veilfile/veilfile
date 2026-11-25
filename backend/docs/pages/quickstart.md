@@ -71,7 +71,7 @@ The command prints the share URL. Anyone who has the URL can open it in a browse
 
 The link expires when your plan's TTL runs out, which is seven days on Free. Pass `--ttl-days 1` to shorten it. On a team, pass `--visibility team` to let your teammates see the file on their Files page, which works when your administrator lets each person decide.
 
-Run `veilfile logout` when you are done with a machine. It revokes the key and deletes the credentials file, and the links you already made keep working until they expire. If that key is also exported as `VEILFILE_API_KEY`, logout leaves it unrevoked on the server and deletes the local copy only.
+Run `veilfile logout` when you are done with a machine. It revokes the key and deletes the credentials file, and the links you already made keep working until they expire. If that key is also the value of `VEILFILE_API_KEY` in the shell where you run logout, logout leaves it unrevoked on the server and deletes the local copy only. A key that lives only in an MCP config file is still revoked, because logout cannot see it there.
 
 Next: [connect an agent via MCP](/docs/agent/), or read [how it works](/docs/how-it-works/).
 
