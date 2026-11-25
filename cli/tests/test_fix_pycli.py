@@ -817,6 +817,29 @@ class LogoutTests(FixTestCase):
             "No key stored by `veilfile login` for http://localhost:8000.", out
         )
 
+    def test_logout_refuses_a_key_stored_for_another_server(self):
+        veilfile.write_stored_key(OLD_KEY, "http://localhost:8000")
+        http = Scripted([])
+        code, out, err = self.run_cli(["logout"], http)
+        self.assertEqual(code, 1)
+        self.assertEqual(http.requests, [])
+        self.assertIn("http://localhost:8000", err)
+        self.assertIn("left in place", err)
+        self.assertNotIn(OLD_KEY, out + err)
+        self.assertEqual(self.stored_key(), OLD_KEY)
+
+    def test_logout_accepts_the_issuing_server(self):
+        veilfile.write_stored_key(OLD_KEY, "http://localhost:8000")
+        http = Scripted([key_list(OLD_KEY), (204, b"")])
+        code, out, err = self.run_cli(
+            ["--base-url", "http://localhost:8000", "logout"], http
+        )
+        self.assertEqual(code, 0, err)
+        deletes = http.calls("DELETE", "/api/v1/keys/3")
+        self.assertEqual(len(deletes), 1)
+        self.assertEqual(deletes[0][2].get("Authorization"), f"Bearer {OLD_KEY}")
+        self.assertIsNone(self.stored_key())
+
 
 # ---------------------------------------------------------------------------
 # credentials file (pycli-6)
