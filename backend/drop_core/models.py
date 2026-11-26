@@ -552,6 +552,9 @@ class FunnelEvent(models.Model):
     STAGE_CHOICES = [
         ("landing_visit", "Landing visit"),
         ("signup_started", "Signup started"),
+        ("signup_form_rendered", "Signup form rendered"),
+        ("signup_rendered", "Signup rendered"),
+        ("signup_validation_failed", "Signup validation failed"),
         ("signup_completed", "Signup completed"),
         ("key_issued", "API key issued"),
         ("upload_completed", "Upload completed"),

@@ -1473,6 +1473,105 @@ class FunnelTests(TestCase):
         c.get("/accounts/signup/")
         self.assertEqual(FunnelEvent.objects.filter(stage="signup_started").count(), 1)
 
+    def test_signup_form_rendered_recorded_once_per_session(self):
+        from django.test import Client
+
+        c = Client(HTTP_USER_AGENT=self.BROWSER_UA)
+        self.assertEqual(c.get("/accounts/signup/").status_code, 200)
+        c.get("/accounts/signup/")
+        started = FunnelEvent.objects.get(stage="signup_started")
+        rendered = FunnelEvent.objects.get(stage="signup_form_rendered")
+        self.assertEqual(rendered.anonymous_id, started.anonymous_id)
+        self.assertEqual(FunnelEvent.objects.filter(stage="signup_started").count(), 1)
+        self.assertEqual(
+            FunnelEvent.objects.filter(stage="signup_form_rendered").count(), 1
+        )
+
+    def test_signup_page_contains_render_beacon(self):
+        from django.test import Client
+
+        response = Client(HTTP_USER_AGENT=self.BROWSER_UA).get("/accounts/signup/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "/accounts/signup/rendered/")
+
+    def test_signup_rendered_beacon_records_once_per_session(self):
+        from django.test import Client
+
+        c = Client(HTTP_USER_AGENT=self.BROWSER_UA)
+        response = c.get("/accounts/signup/rendered/")
+        self.assertEqual(response.status_code, 204)
+        c.get("/accounts/signup/rendered/")
+        self.assertEqual(FunnelEvent.objects.filter(stage="signup_rendered").count(), 1)
+        event = FunnelEvent.objects.get(stage="signup_rendered")
+        self.assertRegex(event.anonymous_id, r"^[0-9a-f]{32}$")
+
+    def test_signup_rendered_beacon_ignores_bots(self):
+        from django.test import Client
+
+        response = Client(
+            HTTP_USER_AGENT="Mozilla/5.0 (compatible; Googlebot/2.1)"
+        ).get("/accounts/signup/rendered/")
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            FunnelEvent.objects.filter(stage="signup_rendered").exists()
+        )
+
+    def test_signup_bot_records_neither_started_nor_rendered(self):
+        from django.test import Client
+
+        response = Client(
+            HTTP_USER_AGENT="Mozilla/5.0 (compatible; Googlebot/2.1)"
+        ).get("/accounts/signup/")
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(FunnelEvent.objects.filter(stage="signup_started").exists())
+        self.assertFalse(
+            FunnelEvent.objects.filter(stage="signup_form_rendered").exists()
+        )
+
+    def test_signup_validation_failed_recorded_on_invalid_post(self):
+        from django.test import Client
+
+        c = Client(HTTP_USER_AGENT=self.BROWSER_UA)
+        c.get("/accounts/signup/")
+        response = c.post(
+            "/accounts/signup/",
+            {
+                "username": "newdev",
+                "password1": "pw12345678",
+                "password2": "different-password",
+                "email": "newdev@example.com",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        failed = FunnelEvent.objects.get(stage="signup_validation_failed")
+        started = FunnelEvent.objects.get(stage="signup_started")
+        self.assertEqual(failed.anonymous_id, started.anonymous_id)
+        self.assertFalse(FunnelEvent.objects.filter(stage="signup_completed").exists())
+        # The re-render after a failed POST is not a fresh form render.
+        self.assertEqual(
+            FunnelEvent.objects.filter(stage="signup_form_rendered").count(), 1
+        )
+
+    def test_signup_valid_post_records_no_validation_failed(self):
+        from django.test import Client
+
+        c = Client(HTTP_USER_AGENT=self.BROWSER_UA)
+        c.get("/accounts/signup/")
+        response = c.post(
+            "/accounts/signup/",
+            {
+                "username": "newdev",
+                "password1": "pw12345678",
+                "password2": "pw12345678",
+                "email": "newdev@example.com",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(FunnelEvent.objects.filter(stage="signup_completed").exists())
+        self.assertFalse(
+            FunnelEvent.objects.filter(stage="signup_validation_failed").exists()
+        )
+
     def test_signup_completed_records_workspace_event(self):
         from django.test import Client
 
@@ -1560,6 +1659,7 @@ class FunnelTests(TestCase):
             [
                 "landing_visit",
                 "signup_started",
+                "signup_form_rendered",
                 "signup_completed",
                 "key_issued",
                 "first_upload",

@@ -160,6 +160,8 @@ class FunnelSessionlessTests(TestCase):
         self.assertEqual(Session.objects.count(), sessions)
         c.get("/accounts/signup/")
         started = FunnelEvent.objects.get(stage=funnel.SIGNUP_STARTED)
+        rendered = FunnelEvent.objects.get(stage=funnel.SIGNUP_FORM_RENDERED)
+        self.assertEqual(rendered.anonymous_id, started.anonymous_id)
         landing = FunnelEvent.objects.get(stage=funnel.LANDING_VISIT)
         self.assertEqual(started.anonymous_id, landing.anonymous_id)
         response = c.post(
@@ -180,6 +182,9 @@ class FunnelSessionlessTests(TestCase):
         response = Client(HTTP_USER_AGENT=BOT_UAS[1]).get("/accounts/signup/")
         self.assertEqual(response.status_code, 200)
         self.assertFalse(FunnelEvent.objects.filter(stage=funnel.SIGNUP_STARTED).exists())
+        self.assertFalse(
+            FunnelEvent.objects.filter(stage=funnel.SIGNUP_FORM_RENDERED).exists()
+        )
 
     def test_api_key_upload_touches_no_session(self):
         client = APIClient()

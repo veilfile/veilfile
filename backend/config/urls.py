@@ -78,6 +78,11 @@ urlpatterns = [
     ),
     path('accounts/', include('django.contrib.auth.urls')),
     path('accounts/signup/', core_views.signup, name='signup'),
+    path(
+        "accounts/signup/rendered/",
+        core_views.signup_rendered,
+        name="signup-rendered",
+    ),
     # Hand-typed shortcut: /signup lands on the real signup page.
     path(
         "signup",

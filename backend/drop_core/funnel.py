@@ -33,6 +33,9 @@ logger = logging.getLogger(__name__)
 
 LANDING_VISIT = "landing_visit"
 SIGNUP_STARTED = "signup_started"
+SIGNUP_FORM_RENDERED = "signup_form_rendered"
+SIGNUP_RENDERED = "signup_rendered"
+SIGNUP_VALIDATION_FAILED = "signup_validation_failed"
 SIGNUP_COMPLETED = "signup_completed"
 KEY_ISSUED = "key_issued"
 UPLOAD_COMPLETED = "upload_completed"
@@ -42,6 +45,7 @@ UPLOAD_COMPLETED = "upload_completed"
 FUNNEL_ORDER = [
     LANDING_VISIT,
     SIGNUP_STARTED,
+    SIGNUP_FORM_RENDERED,
     SIGNUP_COMPLETED,
     KEY_ISSUED,
     "first_upload",
@@ -50,7 +54,18 @@ FUNNEL_ORDER = [
 
 # Pre-signup stages: counted per browser, never for bots or HEAD requests.
 # The single-letter codes record "already counted" in the cookie.
-_ANONYMOUS_STAGE_CODES = {LANDING_VISIT: "l", SIGNUP_STARTED: "s"}
+# signup_form_rendered is the server-side signal (the view rendered the
+# form); signup_rendered is the client-side beacon (a browser fetched the
+# 1x1 image, so the form actually rendered in a client); the beacon is
+# diagnostic, not a funnel step, so it stays out of FUNNEL_ORDER, as does
+# signup_validation_failed (a side-branch off the submit step).
+_ANONYMOUS_STAGE_CODES = {
+    LANDING_VISIT: "l",
+    SIGNUP_STARTED: "s",
+    SIGNUP_FORM_RENDERED: "r",
+    SIGNUP_RENDERED: "b",
+    SIGNUP_VALIDATION_FAILED: "f",
+}
 
 COOKIE_NAME = "vf_funnel"
 _ANON_ID_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -92,6 +107,21 @@ def _read_cookie(request):
     return anon, set(seen) & set(_ANONYMOUS_STAGE_CODES.values())
 
 
+def _read_cookie_including_pending(request):
+    """Like _read_cookie, but a value recorded earlier in this same request
+    wins: record() stores the pending cookie on the request until the
+    decorator attaches it to the response, so a second record() in one
+    request must reuse the same anonymous id and seen set instead of
+    minting a fresh id (the signup GET records started, then rendered)."""
+    anon, seen = _read_cookie(request)
+    pending = getattr(request, _PENDING_COOKIE_ATTR, "")
+    p_anon, _sep, p_seen = pending.partition(".")
+    if _ANON_ID_RE.match(p_anon):
+        anon = p_anon
+        seen = set(p_seen) & set(_ANONYMOUS_STAGE_CODES.values())
+    return anon, seen
+
+
 def record(request, stage, workspace=None, upload_number=None,
            once_per_session=False, once_per_workspace=False):
     """Record one funnel event. Returns the event, or None when deduped,
@@ -107,7 +137,7 @@ def record(request, stage, workspace=None, upload_number=None,
         if request is not None and stage in _ANONYMOUS_STAGE_CODES:
             if request.method == "HEAD" or is_bot(request):
                 return None
-            anonymous_id, seen = _read_cookie(request)
+            anonymous_id, seen = _read_cookie_including_pending(request)
             code = _ANONYMOUS_STAGE_CODES[stage]
             if once_per_session and code in seen:
                 return None
@@ -121,7 +151,7 @@ def record(request, stage, workspace=None, upload_number=None,
         elif request is not None and not _is_credential_request(request):
             # Link post-signup stages to the browser's earlier anonymous
             # stages when the cookie is there; never mint one here.
-            anonymous_id, _seen = _read_cookie(request)
+            anonymous_id, _seen = _read_cookie_including_pending(request)
         if once_per_workspace and workspace is not None:
             if FunnelEvent.objects.filter(
                 workspace=workspace, stage=stage
@@ -234,6 +264,10 @@ def funnel_summary():
         .distinct()
         .count(),
         SIGNUP_STARTED: FunnelEvent.objects.filter(stage=SIGNUP_STARTED)
+        .values("anonymous_id")
+        .distinct()
+        .count(),
+        SIGNUP_FORM_RENDERED: FunnelEvent.objects.filter(stage=SIGNUP_FORM_RENDERED)
         .values("anonymous_id")
         .distinct()
         .count(),
