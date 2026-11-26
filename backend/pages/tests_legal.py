@@ -19,7 +19,7 @@ from blog.render import render_markdown, render_reading
 from legal import views
 from pages import registry
 
-DOCUMENTS = tuple(views.DOCUMENTS)  # terms, privacy, report-abuse
+DOCUMENTS = tuple(views.DOCUMENTS)  # terms, privacy, report-abuse, security
 LD_JSON = re.compile(r'<script type="application/ld\+json" data-page-meta>(.*?)</script>', re.DOTALL)
 NAV = re.compile(r"<nav\b.*?</nav>", re.DOTALL)
 

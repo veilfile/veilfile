@@ -17,6 +17,7 @@ DOCUMENTS = {
     "terms": ("terms-of-service.md", "Terms of Service"),
     "privacy": ("privacy-policy.md", "Privacy Policy"),
     "report-abuse": ("report-abuse.md", "Report abuse"),
+    "security": ("security.md", "Security"),
 }
 
 
@@ -56,3 +57,7 @@ def privacy(request):
 
 def report_abuse(request):
     return legal_document(request, "report-abuse")
+
+
+def security(request):
+    return legal_document(request, "security")
