@@ -35,6 +35,12 @@ services:
         sync: false
       - key: AWS_S3_BUCKET
         sync: false
+      # Second R2 bucket for the Option B daily export
+      # (manage.py export_to_backup, entrypoint.sh loop). Created by the
+      # founder in the Cloudflare dashboard, EU jurisdiction; the command
+      # defaults to it when this is unset.
+      - key: AWS_S3_BACKUP_BUCKET
+        sync: false
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY

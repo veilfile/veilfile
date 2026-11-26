@@ -1052,6 +1052,39 @@ class S3StorageTests(TestCase):
         with self.assertRaises(ClientError):
             self.storage.exists("c")
 
+    def test_head_returns_size_and_none(self):
+        from botocore.exceptions import ClientError
+
+        self.stub.add_response(
+            "head_object",
+            {"ContentLength": 42, "ETag": '"abc"'},
+            {"Bucket": "veilfile-test", "Key": "a"},
+        )
+        self._client_error("head_object", "404", 404)
+        self._client_error("head_object", "403", 403)
+        self.assertEqual(self.storage.head("a"), {"size": 42, "etag": '"abc"'})
+        self.assertIsNone(self.storage.head("b"))
+        with self.assertRaises(ClientError):
+            self.storage.head("c")
+
+    def test_copy_from_preserves_key(self):
+        self.stub.add_response(
+            "copy_object",
+            {},
+            {
+                "Bucket": "veilfile-test",
+                "Key": "tok",
+                "CopySource": {"Bucket": "other-bucket", "Key": "tok"},
+            },
+        )
+        self.storage.copy_from("other-bucket", "tok")
+        self.stub.assert_no_pending_responses()
+
+    def test_explicit_bucket_overrides_env(self):
+        from drop_core.storage import S3Storage
+
+        self.assertEqual(S3Storage(bucket="backup-bucket").bucket, "backup-bucket")
+
     def test_list_objects_follows_pagination(self):
         when = datetime.datetime(2026, 1, 1, tzinfo=datetime.timezone.utc)
         self.stub.add_response(
@@ -1246,6 +1279,168 @@ class S3StorageTests(TestCase):
             out.getvalue(),
         )
         self.assertNotIn("pg-secret", out.getvalue())
+
+
+# ---------------------------------------------------------------------------
+# export_to_backup (R2 Option B daily export)
+# ---------------------------------------------------------------------------
+
+
+class ExportToBackupTests(_Base):
+    BACKUP_BUCKET = "deadrop-artifacts-backup"
+    TOKEN_A = "a" * 43
+    TOKEN_B = "b" * 43
+    TOKEN_C = "c" * 43
+
+    def setUp(self):
+        super().setUp()
+        import boto3
+        from botocore.stub import Stubber
+
+        from drop_core import storage as storage_module
+
+        env = mock.patch.dict(os.environ, S3_ENV)
+        env.start()
+        self.addCleanup(env.stop)
+        self.addCleanup(storage_module._s3_storages.clear)
+        storage_module._s3_storages.clear()
+        # One fake client for every S3Storage the command builds (source
+        # and backup share the account); the Stubber tells them apart by
+        # the Bucket in each call's params.
+        self.client = boto3.client(
+            "s3",
+            endpoint_url=S3_ENV["AWS_S3_ENDPOINT_URL"],
+            region_name="auto",
+            aws_access_key_id="test-key-id",
+            aws_secret_access_key="test-secret",
+        )
+        self.stub = Stubber(self.client)
+        self.stub.activate()
+        self.addCleanup(self.stub.deactivate)
+        client_patch = mock.patch("boto3.client", return_value=self.client)
+        client_patch.start()
+        self.addCleanup(client_patch.stop)
+
+    def _live(self, token, size=5, expired=False):
+        return Artifact.objects.create(
+            workspace=self.ws,
+            filename=f"{token[:8]}.txt",
+            size_bytes=size,
+            token=token,
+            expires_at=timezone.now()
+            + timedelta(days=-1 if expired else 7),
+        )
+
+    def _head_missing(self):
+        self.stub.add_client_error(
+            "head_object", service_error_code="404", http_status_code=404
+        )
+
+    def _head_size(self, token, size):
+        self.stub.add_response(
+            "head_object",
+            {"ContentLength": size, "ETag": '"abc"'},
+            {"Bucket": self.BACKUP_BUCKET, "Key": token},
+        )
+
+    def _copy(self, token):
+        self.stub.add_response(
+            "copy_object",
+            {},
+            {
+                "Bucket": self.BACKUP_BUCKET,
+                "Key": token,
+                "CopySource": {"Bucket": S3_ENV["AWS_S3_BUCKET"], "Key": token},
+            },
+        )
+
+    def test_copies_missing_and_skips_current(self):
+        self._live(self.TOKEN_A)
+        self._live(self.TOKEN_B)
+        self._head_missing()
+        self._copy(self.TOKEN_A)
+        self._head_size(self.TOKEN_A, 5)
+        self._head_size(self.TOKEN_B, 5)
+        out = io.StringIO()
+        call_command("export_to_backup", stdout=out)
+        self.stub.assert_no_pending_responses()
+        self.assertIn(
+            "objects=2 copied=1 skipped=1 failed=0 "
+            "source=s3:veilfile-test backup=s3:deadrop-artifacts-backup",
+            out.getvalue(),
+        )
+        self.assertNotIn(self.TOKEN_A, out.getvalue())
+        self.assertNotIn(self.TOKEN_B, out.getvalue())
+
+    def test_dry_run_copies_nothing(self):
+        self._live(self.TOKEN_A)
+        self._head_missing()
+        out = io.StringIO()
+        call_command("export_to_backup", "--dry-run", stdout=out)
+        self.stub.assert_no_pending_responses()
+        self.assertIn(
+            "objects=1 copied=0 skipped=0 failed=0 "
+            "source=s3:veilfile-test backup=s3:deadrop-artifacts-backup "
+            "would_copy=1 (dry run; nothing copied)",
+            out.getvalue(),
+        )
+
+    def test_expired_rows_are_not_copied(self):
+        self._live(self.TOKEN_A)
+        self._live(self.TOKEN_B, expired=True)
+        self._head_missing()
+        self._copy(self.TOKEN_A)
+        self._head_size(self.TOKEN_A, 5)
+        out = io.StringIO()
+        call_command("export_to_backup", stdout=out)
+        self.stub.assert_no_pending_responses()
+        self.assertIn("objects=1 copied=1 skipped=0 failed=0", out.getvalue())
+
+    def test_re_copies_when_backup_size_differs(self):
+        self._live(self.TOKEN_A)
+        self._head_size(self.TOKEN_A, 99)
+        self._copy(self.TOKEN_A)
+        self._head_size(self.TOKEN_A, 5)
+        out = io.StringIO()
+        call_command("export_to_backup", stdout=out)
+        self.stub.assert_no_pending_responses()
+        self.assertIn("objects=1 copied=1 skipped=0 failed=0", out.getvalue())
+
+    def test_copy_failure_exits_nonzero_and_names_fingerprint_only(self):
+        self._live(self.TOKEN_A)
+        self._head_missing()
+        self.stub.add_client_error(
+            "copy_object", service_error_code="InternalError", http_status_code=500
+        )
+        out, err = io.StringIO(), io.StringIO()
+        with self.assertRaisesMessage(CommandError, "could not be exported"):
+            call_command("export_to_backup", stdout=out, stderr=err)
+        self.stub.assert_no_pending_responses()
+        self.assertIn("objects=1 copied=0 skipped=0 failed=1", out.getvalue())
+        self.assertIn(
+            f"copy failed key_sha256={token_fingerprint(self.TOKEN_A)}", err.getvalue()
+        )
+        self.assertNotIn(self.TOKEN_A, out.getvalue())
+        self.assertNotIn(self.TOKEN_A, err.getvalue())
+
+    def test_refuses_when_backup_bucket_is_the_live_bucket(self):
+        self._live(self.TOKEN_A)
+        with self.assertRaisesMessage(CommandError, "is the live bucket"):
+            call_command(
+                "export_to_backup",
+                "--backup-bucket",
+                S3_ENV["AWS_S3_BUCKET"],
+                stdout=io.StringIO(),
+            )
+        self.stub.assert_no_pending_responses()
+
+    def test_skips_gracefully_on_local_storage(self):
+        self._live(self.TOKEN_A)
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, {"DROP_STORAGE": "local"}):
+            call_command("export_to_backup", stdout=out)
+        self.assertIn("skipping: storage is not S3/R2", out.getvalue())
+        self.stub.assert_no_pending_responses()
 
 
 # ---------------------------------------------------------------------------

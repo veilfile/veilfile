@@ -107,16 +107,17 @@ _DELETE_BATCH = 1000
 class S3Storage:
     """S3-compatible backend (Cloudflare R2 in prod). Requires
     AWS_S3_ENDPOINT_URL, AWS_S3_BUCKET, AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY."""
+    AWS_SECRET_ACCESS_KEY. Pass ``bucket`` to point one instance at a
+    different bucket on the same account (the backup export)."""
 
-    def __init__(self):
+    def __init__(self, bucket=None):
         import boto3
         from botocore.config import Config
 
         endpoint = os.environ.get("AWS_S3_ENDPOINT_URL")
         if not endpoint:
             raise RuntimeError("AWS_S3_ENDPOINT_URL is required for DROP_STORAGE=s3")
-        self.bucket = os.environ.get("AWS_S3_BUCKET")
+        self.bucket = bucket or os.environ.get("AWS_S3_BUCKET")
         if not self.bucket:
             raise RuntimeError("AWS_S3_BUCKET is required for DROP_STORAGE=s3")
         # Bucket name and endpoint host are not secrets; log them at startup
@@ -225,6 +226,31 @@ class S3Storage:
             # Auth/outage errors must not read as "object is gone".
             raise
         return True
+
+    def head(self, token):
+        """Return ``{"size": int, "etag": str}`` for a stored object, or
+        ``None`` when it does not exist. Other errors raise: an auth or
+        outage error must not read as "object is gone"."""
+        from botocore.exceptions import ClientError
+
+        try:
+            response = self.client.head_object(Bucket=self.bucket, Key=token)
+        except ClientError as exc:
+            if _is_missing(exc):
+                return None
+            raise
+        return {"size": response["ContentLength"], "etag": response.get("ETag", "")}
+
+    def copy_from(self, source_bucket, token):
+        """Copy one object from another bucket on the same account into
+        this one, keeping the key. Metadata is preserved (``COPY`` is the
+        S3 default), so the copy keeps its content type and the metadata
+        the upload stored with it."""
+        self.client.copy_object(
+            Bucket=self.bucket,
+            Key=token,
+            CopySource={"Bucket": source_bucket, "Key": token},
+        )
 
     def list_objects(self):
         paginator = self.client.get_paginator("list_objects_v2")

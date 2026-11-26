@@ -2,10 +2,11 @@
 # Veilfile container entrypoint.
 #
 # Runs migrations, creates the shared cache table, starts the daily
-# housekeeping loop in the background (sweep expired artifacts, clear expired
-# sessions and OAuth tokens, prune old funnel events, purge expired cache
-# rows; upload traffic also triggers a lazy sweep via maybe_sweep(), so
-# expiry is honored on every layer), then serves with gunicorn.
+# housekeeping loop in the background (sweep expired artifacts, export live
+# artifacts to the backup R2 bucket, clear expired sessions and OAuth
+# tokens, prune old funnel events, purge expired cache rows; upload
+# traffic also triggers a lazy sweep via maybe_sweep(), so expiry is
+# honored on every layer), then serves with gunicorn.
 # exec keeps gunicorn as PID 1 for clean signal handling.
 set -e
 
@@ -27,6 +28,11 @@ python manage.py createcachetable
 (
     while true; do
         timeout 900 python manage.py sweep_expired || echo "sweep pass failed rc=$?"
+        # R2 Option B daily export: copy live objects to the second bucket
+        # (deadrop-artifacts-backup). Copy-only and idempotent; a failure
+        # is logged, never fatal to the loop. Skips itself when the
+        # storage is not S3/R2, so local runs stay green.
+        timeout 900 python manage.py export_to_backup || echo "backup export failed rc=$?"
         python manage.py clearsessions || true
         python manage.py cleartokens || true
         python manage.py prune_funnel_events || true
