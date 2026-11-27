@@ -58,8 +58,8 @@ class ReadingFamilyTests(SimpleTestCase):
 
     def test_the_reading_layout_is_the_docs_the_journal_and_the_legal_pages(self):
         reading = [page.url_name for page in registry.PAGES if page.layout == "reading"]
-        self.assertEqual(reading, ["docs-index", "blog-index", "terms", "privacy", "report-abuse"],
-                         "backend/pages/registry.py: the Docs index, the Journal index and the three legal pages "
+        self.assertEqual(reading, ["docs-index", "blog-index", "terms", "privacy", "security", "report-abuse"],
+                         "backend/pages/registry.py: the Docs index, the Journal index and the four legal pages "
                          "are the registry pages with layout=\"reading\"; give a new reading page the same "
                          f"(found {reading})")
         chapters = [page.url_name for page in registry.PAGES if page.layout == "chapter"]
@@ -76,14 +76,14 @@ class ReadingFamilyTests(SimpleTestCase):
         self.assertEqual(registry.layout_paths(""), (), "backend/pages/registry.py: a page with no layout changes in place to nothing")
         self.assertEqual(registry.layout_paths("no-such-layout"), ())
 
-    def test_the_reading_family_is_the_five_pages_then_every_post_and_every_docs_page(self):
+    def test_the_reading_family_is_the_six_pages_then_every_post_and_every_docs_page(self):
         posts, pages = blog_loader.load_posts(), docs_loader.load_pages()
         self.assertTrue(posts and pages, "backend/blog/posts/ and backend/docs/pages/ should hold the content this test reads")
-        expected = ["/docs/", "/blog/", "/terms/", "/privacy/", "/report-abuse/"]
+        expected = ["/docs/", "/blog/", "/terms/", "/privacy/", "/security/", "/report-abuse/"]
         expected += [f"/blog/{post.slug}/" for post in posts]
         expected += [f"/docs/{page.slug}/" for page in pages]
         self.assertEqual(list(registry.layout_paths("reading")), expected,
-                         "backend/pages/registry.py: layout_paths('reading') lists the five reading pages, then "
+                         "backend/pages/registry.py: layout_paths('reading') lists the six reading pages, then "
                          "/blog/<slug>/ for each published post and /docs/<slug>/ for each Docs page; shell.js changes "
                          f"in place to these addresses only (found {registry.layout_paths('reading')})")
 
@@ -166,13 +166,13 @@ class ReadingEntryTests(TempContentMixin, TestCase):
         self.assertIsNone(entry["article"])
 
     def test_a_registry_page_is_not_an_article(self):
-        for path in ("/about/", "/docs/", "/blog/", "/terms/", "/privacy/", "/report-abuse/"):
+        for path in ("/about/", "/docs/", "/blog/", "/terms/", "/privacy/", "/security/", "/report-abuse/"):
             with self.subTest(path=path):
                 self.assertIsNone(self.entry(path)["article"],
                                   "backend/pages/context_processors.py: an index or legal page is not an Article (spec 6.6)")
 
     def test_the_reading_registry_pages_list_the_whole_family(self):
-        for path in ("/docs/", "/blog/", "/terms/", "/privacy/", "/report-abuse/"):
+        for path in ("/docs/", "/blog/", "/terms/", "/privacy/", "/security/", "/report-abuse/"):
             with self.subTest(path=path):
                 entry = self.entry(path)
                 self.assertEqual(entry["layout"], "reading")
@@ -267,7 +267,7 @@ class ReadingHeadTests(TempContentMixin, TestCase):
         self.assertIn('data-layout="reading"', html, READING_BODY)
 
     def test_the_reading_registry_pages_are_websites_in_the_reading_layout(self):
-        for path in ("/docs/", "/blog/", "/terms/", "/privacy/", "/report-abuse/"):
+        for path in ("/docs/", "/blog/", "/terms/", "/privacy/", "/security/", "/report-abuse/"):
             with self.subTest(path=path):
                 html = render_shell_as(path)
                 self.assertIn('<meta property="og:type" content="website" data-page-meta>', html,

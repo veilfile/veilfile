@@ -77,6 +77,10 @@ PAGES = (
          "Read what Veilfile collects and why, how long it keeps files and metadata, which subprocessors it uses, "
          "and how to request access or deletion.",
          layout="reading"),
+    Page("security", "Security | Veilfile",
+         "What Veilfile does to keep your files private: key storage, abuse checks, encryption, breach "
+         "notification, and what we do not claim.",
+         layout="reading"),
     Page("report-abuse", "Report abuse | Veilfile",
          "Report a file that violates our terms by emailing abuse@veilfile.com with the link "
          "and details. We report apparent child sexual exploitation to NCMEC.",
